@@ -27,11 +27,17 @@ Concluir somente após execução real com banco, API, worker e UI, além de rev
 - [ ] T017 [REQ-015, AC-011] Verificar visualmente a comparação antes/depois nas interfaces de edição e revisão.
 
 - [x] T018 [REQ-016, AC-012] Identificação de artigos publicados semelhantes no mesmo espaço antes da criação por painel ou conversa; prosseguir exige justificativa e gera evento auditável. Testado com PostgreSQL.
-- [ ] T019 [REQ-016, AC-012] Verificar no navegador o fluxo de sugestões e abertura de artigo existente; melhorar similaridade além de títulos quando houver dados reais suficientes.
+- [x] T019 [REQ-016, AC-012] Fluxo de duplicidade e abertura do artigo existente verificado com Chromium, no E2E editorial.
 
 - [ ] T020 [REQ-012, REQ-020] Validar no navegador o envio de PDF corrigido e revisão de documento publicado, incluindo arquivos protegidos, sem texto e maiores que o limite.
 
 - [x] T021 [REQ-025] Avaliação útil/não útil da resposta do agente com comentário opcional no chat, vinculada à mensagem e fontes; isolamento por usuário, autorização vigente e concorrência validados em integração PostgreSQL.
-- [ ] T022 [REQ-025] Avaliar o fluxo de feedback no navegador e medir qualidade do RAG em casos reais antes de uso com informações internas.
+- [x] T022 [REQ-025, AC-017] Fluxo de feedback útil/não útil validado em Chromium com persistência após reload; qualidade real do RAG permanece pendente em T025.
 
-- [ ] T023 [REQ-001, REQ-006, REQ-011, REQ-025] Executar teste Chromium real na CI para login, cadastro, ativação por token, rascunho, conversa e feedback; marcar concluído somente após CI verde.
+- [x] T023 [REQ-001, REQ-006, REQ-011, REQ-025] E2E Chromium em CI verde: login, cadastro, ativação por token, rascunho, conversa, feedback, reload e logout.
+
+- [x] T024 [REQ-017, REQ-018, REQ-019, AC-013, AC-022] Chromium validou autoaprovação autorizada, publicação de artigo, detecção de duplicidade e publicação de PDF com worker real.
+- [ ] T025 [REQ-007..REQ-010; AC-005..AC-007] Avaliação com modelo real e documentos fictícios: referências conversacionais, conflitos, abstenção e tentativas de prompt injection; depende de provedor autorizado e ambiente controlado.
+- [ ] T026 [REQ-016; AC-012] Evoluir similaridade além de títulos quando existirem dados sintéticos/curados suficientes para avaliar falsos positivos e omissões.
+- [ ] T027 [REQ-026; AC-018] Ensaio de backup e restauração em banco vazio, rollback e verificação operacional antes da liberação real.
+- [ ] T028 [REQ-012, REQ-022, AC-009, AC-015] Testes adicionais com PDFs maliciosos, protegidos e malformados em isolamento; não confundir processo-filho com sandbox de sistema operacional.
