@@ -217,6 +217,52 @@ if(!process.env.TEST_DATABASE_URL){
    assert.equal(originalSource.statusCode,200,originalSource.body);
    assert.equal(originalSource.json().isCurrent,true);
 
+   // Updating an existing article by chat must reference the published base version,
+   // present before/after content and never replace the current document before approval.
+   let revisionModelCalls=0;
+   const proposedUpdateContent='Procedimento DNS atualizado: consulte os registros, confira os TTLs e registre os resultados de resolução em homologação.';
+   const chatRevisionModel={chat:{completions:{create:async()=>{
+     revisionModelCalls++;
+     return {choices:[{message:revisionModelCalls===1
+       ? {role:'assistant',content:null,tool_calls:[{
+           id:'revision-preview-1',type:'function',
+           function:{name:'prepare_article',arguments:JSON.stringify({
+             spaceId:shared,documentId:sharedDoc.documentId,title:'Título gerado incorreto',
+             content:proposedUpdateContent
+           })}
+         }]}
+       : {role:'assistant',content:'Atualização preparada; revise as diferenças antes de confirmar.'}
+     }]};
+   }}}} as unknown as OpenAI;
+   const editorForRevision=await actorForSession(reader.cookie.split('=')[1]);
+   assert.ok(editorForRevision);
+   const preparedRevision=await respond(editorForRevision!,conversationId,'Atualize o procedimento de DNS existente',[],chatRevisionModel);
+   assert.equal(preparedRevision.pendingActions.length,1);
+   assert.equal(preparedRevision.pendingActions[0].documentId,sharedDoc.documentId);
+   assert.match(preparedRevision.pendingActions[0].beforeContent||'',/resolução de nomes/i);
+   assert.equal(preparedRevision.pendingActions[0].title,allowedRead.json().title,
+     'Generated titles must not silently rename published documents');
+   const chatRevisionId=preparedRevision.pendingActions[0].id;
+   const restoredRevision=await app.inject({method:'GET',url:'/conversations/'+conversationId,headers:auth(reader.cookie)});
+   assert.equal(restoredRevision.statusCode,200);
+   const revisionPreview=restoredRevision.json().pendingActions.find((p:any)=>p.id===chatRevisionId);
+   assert.equal(revisionPreview.documentId,sharedDoc.documentId);
+   assert.match(revisionPreview.beforeContent,/resolução de nomes/i);
+   assert.equal(revisionPreview.content,proposedUpdateContent);
+   const anotherUserRevision=await app.inject({method:'GET',url:'/conversations/'+conversationId,headers:auth(reviewer.cookie)});
+   assert.equal(anotherUserRevision.statusCode,404);
+   const confirmedRevision=await app.inject({method:'POST',url:'/knowledge/pending/'+chatRevisionId+'/confirm',headers:auth(reader.cookie)});
+   assert.equal(confirmedRevision.statusCode,200,confirmedRevision.body);
+   assert.equal(confirmedRevision.json().documentId,sharedDoc.documentId);
+   const originalStillLive=await app.inject({method:'GET',url:'/knowledge/documents/'+sharedDoc.documentId,headers:auth(reader.cookie)});
+   assert.equal(originalStillLive.json().version.id,sharedDoc.versionId);
+   const chatDraft=await app.inject({method:'GET',url:'/knowledge/drafts/'+confirmedRevision.json().versionId,headers:auth(reader.cookie)});
+   assert.equal(chatDraft.statusCode,200);
+   assert.equal(chatDraft.json().status,'DRAFT');
+   assert.equal(chatDraft.json().content,proposedUpdateContent);
+
+
+
 
    // Creating a similar published procedure requires an explicit human rationale.
    const similarTitle='Procedimento DNS '+id+' - guia alternativo';
