@@ -23,7 +23,7 @@ test('cadastro, primeiro acesso, conhecimento, conversa e feedback sobrevivem ao
  await page.getByLabel('Nome do departamento').fill(deptName);
  await page.getByRole('button',{name:'Criar departamento'}).click();
  await expect(page.locator('section.panel').filter({has:page.getByRole('heading',{name:'Departamentos'})})
-   .getByText(deptName,{exact:true})).toBeVisible();
+   .locator('.item').filter({hasText:deptName})).toBeVisible();
  await expect(page.getByRole('heading',{name:'Operação do SuportAI'})).toBeVisible();
  await page.getByLabel('E-mail').fill(memberEmail);
  // O formulário inicia com perfil Colaborador; não depender do nome acessível das opções.
