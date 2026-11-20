@@ -416,6 +416,15 @@ if(!process.env.TEST_DATABASE_URL){
    // Creating a similar published procedure requires an explicit human rationale.
    // A minor typo in the title must still surface a potentially matching
    // published procedure, without requiring an external embedding provider.
+   const originalContent=await query('SELECT content FROM document_versions WHERE id=$1',[sharedDoc.versionId]);
+   const contentDuplicate=await app.inject({method:'POST',url:'/knowledge/articles',
+     headers:auth(reader.cookie),payload:{spaceId:shared,
+       title:'Catálogo de impressoras do laboratório '+id,
+       content:originalContent.rows[0].content}});
+   assert.equal(contentDuplicate.statusCode,409,contentDuplicate.body);
+   assert.equal(contentDuplicate.json().code,'SIMILAR_ARTICLES');
+   assert.ok(contentDuplicate.json().matches.some((x:any)=>x.id===sharedDoc.documentId),
+     'Duplicate article content must be flagged even if its title differs');
    const typoCandidate=await app.inject({method:'POST',url:'/knowledge/articles',headers:auth(reader.cookie),
      payload:{spaceId:shared,title:'Procedimento DMS '+id,
        content:'Guia alternativo de DNS criado para testar proteção contra títulos digitados incorretamente.'}});
