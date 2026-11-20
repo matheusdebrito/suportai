@@ -36,3 +36,19 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - run: npm run admin:bootstrap
+        env:
+          BOOTSTRAP_ADMIN_EMAIL: e2e-admin@example.test
+          BOOTSTRAP_ADMIN_PASSWORD: E2e-Secure-Password-Example-123!
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e
+        env:
+          NODE_ENV: development
+          E2E_ADMIN_EMAIL: e2e-admin@example.test
+          E2E_ADMIN_PASSWORD: E2e-Secure-Password-Example-123!
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-test-failures
+          path: test-results/
+          retention-days: 5

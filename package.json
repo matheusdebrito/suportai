@@ -12,6 +12,10 @@
     "typecheck": "npm run typecheck -w @suportai/api && npm run typecheck -w @suportai/web",
     "test": "npm run test -w @suportai/api",
     "db:migrate": "npm run migrate -w @suportai/api",
-    "admin:bootstrap": "npm run bootstrap -w @suportai/api"
+    "admin:bootstrap": "npm run bootstrap -w @suportai/api",
+    "e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0"
   }
 }

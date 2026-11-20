@@ -33,3 +33,5 @@ Concluir somente após execução real com banco, API, worker e UI, além de rev
 
 - [x] T021 [REQ-025] Avaliação útil/não útil da resposta do agente com comentário opcional no chat, vinculada à mensagem e fontes; isolamento por usuário, autorização vigente e concorrência validados em integração PostgreSQL.
 - [ ] T022 [REQ-025] Avaliar o fluxo de feedback no navegador e medir qualidade do RAG em casos reais antes de uso com informações internas.
+
+- [ ] T023 [REQ-001, REQ-006, REQ-011, REQ-025] Executar teste Chromium real na CI para login, cadastro, ativação por token, rascunho, conversa e feedback; marcar concluído somente após CI verde.
