@@ -11,15 +11,39 @@ export function registerChat(app:FastifyInstance) {
  });
  app.get('/conversations',async req=>{
    const a=await requireActor(req);
-   const r=await query('SELECT id,created_at FROM conversations WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100',[a.id]);
+   const r=await query(`SELECT c.id,c.created_at,
+    COALESCE(first_question.title,'Nova conversa') AS title,
+    recent.updated_at
+    FROM conversations c
+    JOIN LATERAL (
+      SELECT m.created_at AS updated_at FROM messages m
+      WHERE m.conversation_id=c.id AND m.auth_revision=$2
+      ORDER BY m.created_at DESC,m.id DESC LIMIT 1
+    ) recent ON true
+    LEFT JOIN LATERAL (
+      SELECT left(m.content,90) AS title FROM messages m
+      WHERE m.conversation_id=c.id AND m.auth_revision=$2 AND m.role='user'
+      ORDER BY m.created_at ASC,m.id ASC LIMIT 1
+    ) first_question ON true
+    WHERE c.user_id=$1
+    ORDER BY recent.updated_at DESC,c.id DESC LIMIT 100`,[a.id,a.auth_revision]);
    return {conversations:r.rows};
  });
  app.get('/conversations/:id',async(req,reply)=>{
    const a=await requireActor(req);const id=(req.params as {id:string}).id;
    const r=await query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2',[id,a.id]);
    if(!r.rowCount) return reply.code(404).send({error:'Conversa não encontrada'});
-   const messages=await query('SELECT id,role,content,sources,created_at FROM messages WHERE conversation_id=$1 AND auth_revision=$2 ORDER BY created_at ASC LIMIT 200',[id,a.auth_revision]);
-   return {id,messages:messages.rows};
+   const messages=await query(`SELECT id,role,content,sources,created_at FROM messages
+     WHERE conversation_id=$1 AND auth_revision=$2
+     ORDER BY created_at DESC,id DESC LIMIT 100`,[id,a.auth_revision]);
+   const pending=await query(`SELECT p.id,p.title,p.content,s.name AS "spaceName"
+     FROM pending_actions p JOIN spaces s ON s.id=p.space_id
+     LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2
+     WHERE p.conversation_id=$1 AND p.user_id=$2
+       AND p.result_version_id IS NULL AND p.expires_at>now()
+       AND (s.visibility='SHARED' OR COALESCE(g.can_edit,false))
+     ORDER BY p.expires_at DESC LIMIT 10`,[id,a.id]);
+   return {id,messages:messages.rows.reverse(),pendingActions:pending.rows};
  });
  app.post('/conversations/:id/messages',async(req,reply)=>{
    const a=await requireActor(req);const id=(req.params as {id:string}).id;

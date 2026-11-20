@@ -54,12 +54,44 @@ export function registerKnowledge(app:FastifyInstance) {
    ORDER BY d.created_at DESC LIMIT 150`,[a.id]);
    return {documents:r.rows};
  });
+ app.get('/knowledge/mine',async req=>{
+   const a=await requireActor(req);
+   const r=await query(`SELECT v.id AS version_id,d.id AS document_id,d.title,d.kind,
+      v.version_number,v.status,v.index_status,v.created_at,
+      s.name AS space_name,j.error AS ingestion_error
+     FROM document_versions v
+     JOIN documents d ON d.id=v.document_id
+     JOIN spaces s ON s.id=d.space_id
+     LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$1
+     LEFT JOIN ingestion_jobs j ON j.version_id=v.id
+     WHERE v.authored_by=$1 AND v.status IN ('DRAFT','IN_REVIEW','REJECTED')
+       AND d.archived_at IS NULL
+       AND (s.visibility='SHARED' OR COALESCE(g.can_edit,false))
+     ORDER BY v.created_at DESC,v.id DESC LIMIT 100`,[a.id]);
+   return {drafts:r.rows};
+ });
+ app.get('/knowledge/drafts/:id',async req=>{
+   const a=await requireActor(req);
+   const id=(req.params as {id:string}).id;
+   const r=await query(`SELECT v.id AS version_id,v.document_id,v.version_number,
+      v.status,v.index_status,v.content,d.title,d.kind,d.space_id,s.name AS space_name
+     FROM document_versions v
+     JOIN documents d ON d.id=v.document_id
+     JOIN spaces s ON s.id=d.space_id
+     LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2
+     WHERE v.id=$1 AND v.authored_by=$2
+       AND v.status IN ('DRAFT','IN_REVIEW','REJECTED')
+       AND d.archived_at IS NULL
+       AND (s.visibility='SHARED' OR COALESCE(g.can_edit,false))`,[id,a.id]);
+   if(!r.rowCount) throw Object.assign(new Error('Rascunho não encontrado'),{statusCode:404});
+   return r.rows[0];
+ });
  app.get('/knowledge/documents/:id',async req=>{
    const a=await requireActor(req);
    const {doc}=await authorizedDoc(a,(req.params as {id:string}).id);
    const r=await query("SELECT id,version_number,content,status FROM document_versions WHERE id=$1 AND status='PUBLISHED'",[doc.current_version_id]);
    if(!r.rowCount) throw Object.assign(new Error('Documento não encontrado'),{statusCode:404});
-   return {id:doc.id,title:doc.title,kind:doc.kind,version:r.rows[0]};
+   return {id:doc.id,title:doc.title,kind:doc.kind,space_id:doc.space_id,version:r.rows[0]};
  });
  app.get('/knowledge/documents/:id/versions/:versionId',async req=>{
    const actor=await requireActor(req);
@@ -71,7 +103,7 @@ export function registerKnowledge(app:FastifyInstance) {
      WHERE id=$1 AND document_id=$2 AND status IN ('PUBLISHED','ARCHIVED')`,
      [params.versionId,doc.id]);
    if(!version.rowCount) throw Object.assign(new Error('Versão não encontrada'),{statusCode:404});
-   return {id:doc.id,title:doc.title,kind:doc.kind,version:version.rows[0],
+   return {id:doc.id,title:doc.title,kind:doc.kind,space_id:doc.space_id,version:version.rows[0],
      isCurrent:doc.current_version_id===params.versionId};
  });
  app.post('/knowledge/articles',async(req,reply)=>{
