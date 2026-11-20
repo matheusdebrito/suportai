@@ -15,9 +15,12 @@ async function createVersion(actor:Actor,spaceId:string,title:string,content:str
  const p=await spacePermission(actor,spaceId);
  if(!p?.edit) throw Object.assign(new Error('Sem permissão para escrever neste espaço'),{statusCode:403});
  if(hasSecrets(content)) throw Object.assign(new Error('Possível credencial detectada. Remova-a antes de enviar'),{statusCode:422});
+ if(duplicateReason && hasSecrets(duplicateReason)) throw Object.assign(new Error('Remova credenciais da justificativa'),{statusCode:422});
+ if(kind==='ARTICLE' && !p.read)throw Object.assign(new Error('Permissão de leitura obrigatória para verificar artigos existentes'),{statusCode:403});
  const result=await transaction(async c=>{
    let docId=documentId;
    let versionNo=1;
+   let similarCount=0;
    if(docId){
      const doc=await c.query('SELECT id,space_id,current_version_id FROM documents WHERE id=$1 FOR UPDATE',[docId]);
      if(!doc.rowCount || doc.rows[0].space_id!==spaceId) throw Object.assign(new Error('Documento não encontrado'),{statusCode:404});
@@ -29,6 +32,7 @@ async function createVersion(actor:Actor,spaceId:string,title:string,content:str
        // Serialize checks in this space to avoid stale preflight results.
        await c.query('SELECT id FROM spaces WHERE id=$1 FOR UPDATE',[spaceId]);
        const matches=await findSimilarPublished(spaceId,title,c);
+       similarCount=matches.length;
        if(matches.length && !validDuplicateReason(duplicateReason)) throw new SimilarArticlesError(matches);
      }
      const doc=await c.query('INSERT INTO documents(space_id,title,kind) VALUES($1,$2,$3) RETURNING id',[spaceId,title,kind]);
@@ -37,7 +41,7 @@ async function createVersion(actor:Actor,spaceId:string,title:string,content:str
    const ver=await c.query(`INSERT INTO document_versions(document_id,version_number,status,content,pdf_bytes,authored_by,base_version_id)
     VALUES($1,$2,'DRAFT',$3,$4,$5,$6) RETURNING id`,[docId,versionNo,content,pdfBytes??null,actor.id,baseVersionId??null]);
    await c.query('INSERT INTO ingestion_jobs(version_id) VALUES($1)',[ver.rows[0].id]);
-   if(kind==='ARTICLE' && !documentId && validDuplicateReason(duplicateReason)){
+   if(kind==='ARTICLE' && !documentId && similarCount>0 && validDuplicateReason(duplicateReason)){
      await c.query("INSERT INTO audit_events(actor_id,action,resource_id,metadata) VALUES($1,'KNOWLEDGE_DUPLICATE_ACKNOWLEDGED',$2,$3::jsonb)",
        [actor.id,docId,JSON.stringify({reason:duplicateReason})]);
    }
@@ -309,6 +313,7 @@ export function registerKnowledge(app:FastifyInstance) {
    const id=(req.params as {id:string}).id;
    const body=req.body as {duplicateReason?:unknown}|undefined;
    const duplicateReason=typeof body?.duplicateReason==='string'?body.duplicateReason.trim():undefined;
+   if(duplicateReason && hasSecrets(duplicateReason))return reply.code(422).send({error:'Remova credenciais da justificativa'});
    const result=await transaction(async c=>{
      const r=await c.query('SELECT * FROM pending_actions WHERE id=$1 AND user_id=$2 FOR UPDATE',[id,a.id]);
      const pending=r.rows[0];
@@ -319,6 +324,7 @@ export function registerKnowledge(app:FastifyInstance) {
      if(!p?.edit) return {error:'FORBIDDEN'};
      if(hasSecrets(pending.content)) return {error:'SECRETS'};
      let docId=pending.document_id;let version=1;
+     let similarCount=0;
      if(docId){
        const old=await c.query('SELECT current_version_id FROM documents WHERE id=$1 FOR UPDATE',[docId]);
        if(!old.rowCount||old.rows[0].current_version_id!==pending.base_version_id) return {error:'STALE'};
@@ -328,13 +334,14 @@ export function registerKnowledge(app:FastifyInstance) {
        if(!p.read)return {error:'FORBIDDEN'};
        await c.query('SELECT id FROM spaces WHERE id=$1 FOR UPDATE',[pending.space_id]);
        const matches=await findSimilarPublished(pending.space_id,pending.title,c);
+       similarCount=matches.length;
        if(matches.length && !validDuplicateReason(duplicateReason)) return {error:'SIMILAR_ARTICLES',matches};
        const doc=await c.query("INSERT INTO documents(space_id,title,kind) VALUES($1,$2,'ARTICLE') RETURNING id",[pending.space_id,pending.title]);
        docId=doc.rows[0].id;
      }
      const v=await c.query("INSERT INTO document_versions(document_id,version_number,status,content,authored_by,base_version_id) VALUES($1,$2,'DRAFT',$3,$4,$5) RETURNING id",[docId,version,pending.content,a.id,pending.base_version_id]);
      await c.query('INSERT INTO ingestion_jobs(version_id) VALUES($1)',[v.rows[0].id]);
-     if(!pending.document_id && validDuplicateReason(duplicateReason)){
+     if(!pending.document_id && similarCount>0 && validDuplicateReason(duplicateReason)){
        await c.query("INSERT INTO audit_events(actor_id,action,resource_id,metadata) VALUES($1,'KNOWLEDGE_DUPLICATE_ACKNOWLEDGED',$2,$3::jsonb)",
          [a.id,docId,JSON.stringify({reason:duplicateReason})]);
      }
