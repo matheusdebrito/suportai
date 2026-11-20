@@ -1,11 +1,11 @@
 import React,{useEffect,useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {BrainCircuit,MessageCircle,BookOpen,ShieldCheck,Users,Send,Plus,LogOut,FileUp,Check,RotateCcw,LoaderCircle} from 'lucide-react';
+import {BrainCircuit,MessageCircle,BookOpen,ShieldCheck,Users,Send,Plus,LogOut,FileUp,Check,RotateCcw,LoaderCircle,ThumbsUp,ThumbsDown} from 'lucide-react';
 import './styles.css';
 type User={id:string;email:string;role:'ADMIN'|'APPROVER'|'USER';mustChangePassword:boolean};
 type Space={id:string;name:string;visibility:string;can_read:boolean;can_edit:boolean;can_approve:boolean};
 type Doc={id:string;title:string;kind:string;space_name:string};
-type Message={id?:string;role:'user'|'assistant';content:string;sources?:{documentId:string;versionId:string;versionNumber?:number;title:string}[]};
+type Message={id?:string;role:'user'|'assistant';content:string;sources?:{documentId:string;versionId:string;versionNumber?:number;title:string}[];feedback_rating?:'GOOD'|'BAD'|null;feedback_comment?:string|null};
 type Pending={id:string;title:string;content:string;spaceName?:string};
 type SimilarArticle={id:string;title:string;kind:'ARTICLE'|'PDF'};
 type DuplicatePrompt={source:'panel'|'pending';matches:SimilarArticle[];title:string;spaceId?:string;content?:string;pendingId?:string};
@@ -47,6 +47,8 @@ function App(){
  const [spaces,setSpaces]=useState<Space[]>([]);
  const [docs,setDocs]=useState<Doc[]>([]);
  const [messages,setMessages]=useState<Message[]>([]);
+ const [feedbackEditor,setFeedbackEditor]=useState<{messageId:string;rating:'GOOD'|'BAD';comment:string}|null>(null);
+ const [feedbackSaving,setFeedbackSaving]=useState<string|null>(null);
  const [conversations,setConversations]=useState<Conversation[]>([]);
  const [conversationLoading,setConversationLoading]=useState(false);
  const [conversationId,setConversationId]=useState<string|null>(null);
@@ -120,13 +122,13 @@ function App(){
   setConversationLoading(true);setError('');
   try{
    const result=await api<{messages:Message[];pendingActions:Pending[]}>(`/conversations/${id}`);
-   setConversationId(id);setMessages(result.messages);setPending(result.pendingActions);
+   setConversationId(id);setMessages(result.messages);setPending(result.pendingActions);setFeedbackEditor(null);
    setInput('');setTab('chat');
   }catch(e){failed(e);}finally{setConversationLoading(false);}
  }
  function newConversation(){
   if(busy||conversationLoading)return;
-  setConversationId(null);setMessages([]);setPending([]);setInput('');setError('');setTab('chat');
+  setConversationId(null);setMessages([]);setPending([]);setFeedbackEditor(null);setInput('');setError('');setTab('chat');
  }
  async function viewDraft(versionId:string){
   setError('');
@@ -167,7 +169,7 @@ function App(){
 
  async function login(e:React.FormEvent){e.preventDefault();setError('');try{const r=await api<{user:User}>('/auth/login',{method:'POST',body:JSON.stringify({email,password})});setPassword('');setUser(r.user);}catch(e){failed(e);}}
  async function changePassword(e:React.FormEvent){e.preventDefault();setError('');try{await api('/auth/change-password',{method:'POST',body:JSON.stringify({resetToken,newPassword})});const u=await api<User>('/auth/me');setUser(u);setResetToken('');setNewPassword('');setShowReset(false);}catch(e){failed(e);}}
- async function logout(){await api('/auth/logout',{method:'POST'}).catch(()=>{});setUser(null);setMessages([]);setConversationId(null);setConversations([]);setDrafts([]);setPending([]);setSelectedDoc(null);setCorrectionOf(null);setPdfTarget(null);setReviewNote('');setReviewDecision(null);setDuplicatePrompt(null);}
+ async function logout(){await api('/auth/logout',{method:'POST'}).catch(()=>{});setUser(null);setMessages([]);setConversationId(null);setConversations([]);setDrafts([]);setPending([]);setSelectedDoc(null);setCorrectionOf(null);setPdfTarget(null);setFeedbackEditor(null);setReviewNote('');setReviewDecision(null);setDuplicatePrompt(null);}
  async function send(e:React.FormEvent){
   e.preventDefault();if(!input.trim()||busy||conversationLoading)return;setBusy(true);setError('');
   const text=input;setInput('');setMessages(m=>[...m,{role:'user',content:text}]);
@@ -179,6 +181,19 @@ function App(){
    setPending(m=>[...m,...answer.pendingActions]);
    await refreshConversations();
   }catch(e){failed(e);}finally{setBusy(false);}
+ }
+ async function rateMessage(messageId:string,rating:'GOOD'|'BAD',comment?:string){
+   if(feedbackSaving)return;
+   setFeedbackSaving(messageId);setError('');
+   try{
+     const saved=await api<{ok:true;rating:'GOOD'|'BAD';comment:string|null}>('/feedback',{
+       method:'POST',body:JSON.stringify({messageId,rating,comment:comment??null})
+     });
+     setMessages(current=>current.map(m=>m.id===messageId?{
+       ...m,feedback_rating:saved.rating,feedback_comment:saved.comment
+     }:m));
+     setFeedbackEditor(null);
+   }catch(e){failed(e);}finally{setFeedbackSaving(null);}
  }
  async function confirmPending(id:string){setError('');try{
    const r=await api<{versionId:string}>('/knowledge/pending/'+id+'/confirm',{method:'POST'});
@@ -278,7 +293,21 @@ function App(){
   </form>
  </section>}
  {tab==='chat'&&<div className="chat-layout"><aside className="conversations-panel"><div className="conversations-heading"><strong>Conversas</strong><button className="secondary" disabled={busy||conversationLoading} onClick={()=>void refreshConversations().catch(failed)} aria-label="Atualizar conversas"><RotateCcw size={15}/></button></div>{conversations.length===0?<p className="hint">Suas conversas aparecem aqui depois da primeira mensagem.</p>:conversations.map(c=><button key={c.id} disabled={busy||conversationLoading} className={'conversation-item '+(conversationId===c.id?'selected':'')} onClick={()=>void openConversation(c.id)}><span>{c.title}</span><small>{new Date(c.updated_at).toLocaleDateString('pt-BR',{day:'2-digit',month:'short'})}</small></button>)}</aside><section className="chat"><div className="chat-history">{conversationLoading&&<p className="hint"><LoaderCircle className="spin" size={16}/> Abrindo conversa...</p>}{messages.length===0&&<div className="empty"><BrainCircuit size={40}/><h2>Como posso ajudar?</h2><p>Consulte procedimentos, investigue problemas ou peça para preparar um artigo no cérebro.</p><div className="suggestions">{['Como consultar procedimentos de rede?','Como registrar um procedimento novo?','O que fazer quando um servidor não responde?'].map(x=><button key={x} onClick={()=>setInput(x)}>{x}</button>)}</div></div>}
-  {messages.map((m,i)=><div className={'bubble '+m.role} key={m.id||i}><div className="bubble-role">{m.role==='user'?'Você':'SuportAI'}</div><div className="formatted">{m.content}</div>{Boolean(m.sources?.length)&&<div className="sources"><strong>Fontes consultadas</strong>{m.sources!.map((s,j)=><button key={j} onClick={()=>openSource(s.documentId,s.versionId)}>{s.title} · versão {s.versionNumber??s.versionId.slice(0,8)}</button>)}</div>}</div>)}
+  {messages.map((m,i)=><div className={'bubble '+m.role} key={m.id||i}><div className="bubble-role">{m.role==='user'?'Você':'SuportAI'}</div><div className="formatted">{m.content}</div>{Boolean(m.sources?.length)&&<div className="sources"><strong>Fontes consultadas</strong>{m.sources!.map((s,j)=><button key={j} onClick={()=>openSource(s.documentId,s.versionId)}>{s.title} · versão {s.versionNumber??s.versionId.slice(0,8)}</button>)}</div>}
+ {m.role==='assistant'&&m.id&&<div className="feedback-area">
+  <div className="feedback-controls"><span className="hint">Esta resposta ajudou?</span>
+   <button type="button" aria-label="Resposta útil" title="Resposta útil" aria-pressed={m.feedback_rating==='GOOD'} disabled={feedbackSaving===m.id} className={m.feedback_rating==='GOOD'?'feedback-selected':''} onClick={()=>void rateMessage(m.id!,'GOOD')}><ThumbsUp size={16}/></button>
+   <button type="button" aria-label="Resposta não útil" title="Resposta não útil" aria-pressed={m.feedback_rating==='BAD'} disabled={feedbackSaving===m.id} className={m.feedback_rating==='BAD'?'feedback-selected':''} onClick={()=>void rateMessage(m.id!,'BAD')}><ThumbsDown size={16}/></button>
+   {m.feedback_rating&&<button type="button" className="feedback-comment-action" onClick={()=>setFeedbackEditor({messageId:m.id!,rating:m.feedback_rating!,comment:m.feedback_comment||''})}>{m.feedback_comment?'Editar comentário':'Adicionar comentário'}</button>}
+  </div>
+  {feedbackEditor?.messageId===m.id&&<form className="feedback-editor" onSubmit={e=>{e.preventDefault();void rateMessage(m.id!,feedbackEditor.rating,feedbackEditor.comment);}}>
+   <label>Conte por que esta resposta foi útil ou não
+    <textarea rows={3} maxLength={1000} value={feedbackEditor.comment} onChange={e=>setFeedbackEditor(old=>old?{...old,comment:e.target.value}:old)} placeholder="Comentário opcional, sem senhas ou tokens"/>
+   </label>
+   <div className="actions"><button type="submit" disabled={feedbackSaving===m.id}>Salvar avaliação</button><button className="secondary" type="button" onClick={()=>setFeedbackEditor(null)}>Cancelar</button></div>
+  </form>}
+ </div>}
+ </div>)}
   {busy&&<p className="hint"><LoaderCircle className="spin" size={16}/> Consultando conhecimento...</p>}
   {pending.map(p=><div className="pending" key={p.id}><strong>Prévia: {p.title}</strong><small>Destino: {p.spaceName||'Espaço autorizado'}</small><p>{p.content.slice(0,900)}</p><button onClick={()=>confirmPending(p.id)}><Check size={16}/> Confirmar criação de rascunho</button></div>)}
   </div><form className="composer" onSubmit={send}><textarea placeholder="Digite sua pergunta..." value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();void send(e as unknown as React.FormEvent);}}}/><button disabled={busy||conversationLoading||!input.trim()} aria-label="Enviar mensagem"><Send size={19}/></button></form></section></div>}
