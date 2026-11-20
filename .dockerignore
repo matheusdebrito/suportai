@@ -1,0 +1,14 @@
+.git
+.env
+.env.*
+!.env.example
+node_modules
+**/node_modules
+**/dist
+test-results
+playwright-report
+coverage
+backups
+uploads
+**/*.log
+**/test-fixtures

@@ -1,0 +1,122 @@
+name: suportai
+x-app: &app
+  image: suportai/app:${SUPORTAI_IMAGE_TAG:-local}
+  build:
+    context: ..
+    dockerfile: deploy/Dockerfile
+    target: runtime
+  user: "10001:10001"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  pids_limit: 128
+  mem_limit: 768m
+  cpus: 1.0
+  tmpfs: ["/tmp:rw,noexec,nosuid,size=16m"]
+  restart: unless-stopped
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: suportai
+      POSTGRES_DB: suportai
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets: [db_password]
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    networks: [database]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U suportai -d suportai"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  pdf-parser:
+    <<: *app
+    command: ["node","apps/api/dist/pdf-parser-server.js"]
+    environment:
+      NODE_ENV: production
+      PDF_PARSER_SOCKET: /run/suportai/pdf-parser.sock
+    # Explicitly no DB/API secrets and no network namespace access.
+    network_mode: none
+    volumes:
+      - type: bind
+        source: ${PDF_SOCKET_DIR:?set PDF_SOCKET_DIR}
+        target: /run/suportai
+    pids_limit: 64
+    mem_limit: 384m
+    cpus: 0.75
+    healthcheck:
+      test: ["CMD","node","-e","const fs=require('node:fs');process.exit(fs.existsSync('/run/suportai/pdf-parser.sock')?0:1)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+  api:
+    <<: *app
+    command: ["node","apps/api/dist/server.js"]
+    environment:
+      NODE_ENV: production
+      API_PORT: "4000"
+      DATABASE_URL_FILE: /run/secrets/database_url
+      OPENAI_API_KEY_FILE: /run/secrets/ai_key
+      ALLOW_EXTERNAL_AI_DATA_PROCESSING: ${ALLOW_EXTERNAL_AI_DATA_PROCESSING:-false}
+      APP_ORIGIN: ${APP_ORIGIN:?set APP_ORIGIN}
+    secrets: [database_url,ai_key]
+    networks: [frontend,database]
+    depends_on:
+      db: {condition: service_healthy}
+    expose: ["4000"]
+    healthcheck:
+      test: ["CMD","node","-e","require('node:http').get('http://127.0.0.1:4000/ready',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+  worker:
+    <<: *app
+    command: ["node","apps/api/dist/worker.js"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL_FILE: /run/secrets/database_url
+      OPENAI_API_KEY_FILE: /run/secrets/ai_key
+      ALLOW_EXTERNAL_AI_DATA_PROCESSING: ${ALLOW_EXTERNAL_AI_DATA_PROCESSING:-false}
+      PDF_PARSER_SOCKET: /run/suportai/pdf-parser.sock
+    secrets: [database_url,ai_key]
+    networks: [database]
+    depends_on:
+      db: {condition: service_healthy}
+      pdf-parser: {condition: service_healthy}
+    volumes:
+      - type: bind
+        source: ${PDF_SOCKET_DIR:?set PDF_SOCKET_DIR}
+        target: /run/suportai
+        read_only: true
+  web:
+    image: suportai/web:${SUPORTAI_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: web
+    environment:
+      SUPORTAI_DOMAIN: ${SUPORTAI_DOMAIN:?set SUPORTAI_DOMAIN}
+      SUPORTAI_TLS_CONTACT: ${SUPORTAI_TLS_CONTACT:?set SUPORTAI_TLS_CONTACT}
+    ports: ["80:80","443:443"]
+    networks: [frontend]
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api]
+    restart: unless-stopped
+networks:
+  frontend: {}
+  database:
+    internal: true
+volumes:
+  postgres_data: {}
+  caddy_data: {}
+  caddy_config: {}
+secrets:
+  db_password:
+    file: ${SUPORTAI_DB_PASSWORD_FILE:?set SUPORTAI_DB_PASSWORD_FILE}
+  database_url:
+    file: ${SUPORTAI_DATABASE_URL_FILE:?set SUPORTAI_DATABASE_URL_FILE}
+  ai_key:
+    file: ${SUPORTAI_AI_KEY_FILE:?set SUPORTAI_AI_KEY_FILE}
