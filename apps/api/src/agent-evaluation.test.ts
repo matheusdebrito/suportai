@@ -39,6 +39,18 @@ const fakeSearch=(items:Source[],queries:string[])=>async(_actor:Actor,text:stri
  return items;
 };
 
+test('T025 contract: agent rejects an IP that is only a substring of an approved IP',async()=>{
+ const calls:any[]=[];
+ const fake=model([
+  {role:'assistant',content:null,tool_calls:[toolCall('search_knowledge',{query:'DNS laboratório'},'lookup-1')]},
+  {role:'assistant',content:'Configure 192.0.2.5 no laboratório, conforme a documentação.'}
+ ],calls);
+ const output=await respond(actor,randomUUID(),'Qual DNS do laboratório?',[],fake,fakeSearch([dnsA],[]));
+ assert.equal(output.sources.length,0);
+ assert.match(output.answer,/não consegui validar os endereços/i);
+ assert.doesNotMatch(output.answer,/192\\.0\\.2\\.5/);
+});
+
 test('T025 contract: no evidence causes deterministic abstention, never invented procedures or citations',async()=>{
  const calls:any[]=[],searches:string[]=[];
  const fake=model([

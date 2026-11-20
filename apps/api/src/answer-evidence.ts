@@ -1,14 +1,21 @@
 import type {Source} from './retrieval.js';
 
 /**
- * Syntactic safeguard, not an entailment checker. Source metadata is not
- * sufficient: operational addresses must appear in the cited excerpt.
+ * Only an exact, syntactically recognized network literal counts as support.
+ * Searching for substrings can mistake 192.0.2.5 for 192.0.2.53, or
+ * https://site.test/path for https://site.test/path/unsafe.
+ * This is intentionally NOT a semantic entailment checker.
  */
+const NETWORK_LITERAL=/\bhttps?:\/\/[^\s<>"']+|(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?!\w|\.\d)/gi;
+function networkLiterals(text:string):string[]{
+ const found:string[]=[];
+ for(const match of text.matchAll(NETWORK_LITERAL)){
+   const normalized=match[0].replace(/[),;!?]+$/,'').replace(/\.$/,'').toLowerCase();
+   if(normalized) found.push(normalized);
+ }
+ return found;
+}
 export function unsupportedNetworkLiterals(answer:string,sources:Pick<Source,'content'>[]):string[]{
- const values=[
-   ...answer.matchAll(/\bhttps?:\/\/[^\s<>"']+/gi),
-   ...answer.matchAll(/(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])/g)
- ].map(m=>m[0].replace(/[),.;!?]+$/,''));
- const excerpts=sources.map(s=>s.content.toLowerCase());
- return [...new Set(values)].filter(value=>!excerpts.some(content=>content.includes(value.toLowerCase())));
+ const supported=new Set(sources.flatMap(s=>networkLiterals(s.content)));
+ return [...new Set(networkLiterals(answer))].filter(value=>!supported.has(value));
 }
