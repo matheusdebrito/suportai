@@ -14,5 +14,9 @@ export function shouldForceKnowledgeLookup(message:string):boolean {
 }
 export function groundedReply(answer:string,lookupExpected:boolean,sourceCount:number):string {
  if(!lookupExpected||sourceCount>0)return answer;
- return 'Não há referência publicada do cérebro associada a esta resposta. O texto abaixo é uma orientação geral da IA, não um procedimento interno validado.\n\n'+answer;
+ // Model text is not evidence. Do not relay invented internal procedures,
+ // addresses, secrets or fabricated citations when retrieval found nothing.
+ return 'Não encontrei fontes publicadas e autorizadas para confirmar esse procedimento. '+
+   'Uma orientação sem essas fontes seria apenas uma hipótese da IA, não um procedimento interno validado. '+
+   'Informe o sistema, o ambiente ou mais detalhes para que eu possa tentar uma busca mais específica.';
 }

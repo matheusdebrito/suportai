@@ -16,14 +16,14 @@ const tools:OpenAI.Chat.Completions.ChatCompletionTool[]=[
  {type:'function',function:{name:'prepare_article',description:'Prepara prévia de artigo solicitado explicitamente pelo usuário; requer confirmação humana posterior antes de criar rascunho.',parameters:{type:'object',properties:{spaceId:{type:'string'},title:{type:'string'},content:{type:'string'},documentId:{type:'string',description:'Documento a atualizar se aplicável'}},required:['spaceId','title','content'],additionalProperties:false}}}
 ];
 export type AgentOutput={answer:string;sources:Source[];pendingActions:{id:string;title:string;content:string;spaceName:string;documentId?:string;beforeContent?:string}[]};
-export async function respond(actor:Actor,conversationId:string,userMessage:string,history:{role:'user'|'assistant';content:string}[],provider:OpenAI|null=client):Promise<AgentOutput>{
+export async function respond(actor:Actor,conversationId:string,userMessage:string,history:{role:'user'|'assistant';content:string}[],provider:OpenAI|null=client,knowledgeSearch:typeof searchKnowledge=searchKnowledge):Promise<AgentOutput>{
  const sources:Source[]=[];
  const pendingActions:AgentOutput['pendingActions']=[];
  const allowMutation=allowsKnowledgeMutation(userMessage);
  const forceLookup=shouldForceKnowledgeLookup(userMessage);
  let searchCalls=0;
  if(!provider){
-   const found=await searchKnowledge(actor,userMessage,5);
+   const found=await knowledgeSearch(actor,userMessage,5);
    return {answer:found.length?'Não há modelo de IA configurado. Encontrei estes trechos relevantes no cérebro:\n\n'+found.map((s,i)=>`${i+1}. ${s.title} — ${s.content.slice(0,500)}`).join('\n\n'):'Não encontrei um procedimento confirmado no cérebro. O uso do modelo externo não está habilitado nesta instalação.',sources:found,pendingActions};
  }
  // The user talks about spaces by name; they must not need UUIDs.
@@ -84,7 +84,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          searchCalls++;
          if(typeof args.query!=='string'||args.query.length>500) throw new Error('Consulta inválida');
          if(hasSecrets(args.query))throw new Error('Consulta contém possível credencial; remova dados sensíveis');
-         const results=await searchKnowledge(actor,args.query,5);
+         const results=await knowledgeSearch(actor,args.query,5);
          for(const result of results){
            if(sources.length>=12) break;
            if(!sources.some(s=>s.versionId===result.versionId&&s.ordinal===result.ordinal)) sources.push(result);
