@@ -154,7 +154,7 @@ test('a model cannot invent IP addresses or URLs absent from authorized excerpts
  const output=await respond(actor,randomUUID(),'Qual é o DNS do laboratório A?',[],fake,fakeSearch([dnsA],[]));
  assert.match(output.answer,/Não consegui validar os endereços/i);
  assert.deepEqual(output.sources,[]);
- assert.doesNotMatch(output.answer,/203\\.0\\.113\\.99|vpn\\.evil/);
+ assert.doesNotMatch(output.answer,/203\.0\.113\.99|vpn\.evil/);
 });
 test('valid network literals appear in the returned authorized excerpt',async()=>{
  const calls:any[]=[];
@@ -163,7 +163,7 @@ test('valid network literals appear in the returned authorized excerpt',async()=
   {role:'assistant',content:'Para testes, use 192.0.2.53 no laboratório A.'}
  ],calls);
  const output=await respond(actor,randomUUID(),'Qual o endereço DNS do laboratório A?',[],fake,fakeSearch([dnsA],[]));
- assert.match(output.answer,/192\\.0\\.2\\.53/);
+ assert.match(output.answer,/192\.0\.2\.53/);
  assert.equal(output.sources.length,1);
 });
 test('syntax guard accepts only URLs and IPs present in source content',()=>{
