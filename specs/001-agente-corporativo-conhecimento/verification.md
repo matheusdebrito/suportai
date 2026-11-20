@@ -87,7 +87,7 @@ Os seguintes PRs são evidência de **implementação e CI** (não de homologaç
 | Abstenção, conflito e cenário sintético | #40 [CI](https://github.com/matheusdebrito/suportai/actions/runs/44812178891) | Contratos automatizados, LLM real não verificado |
 | Falha temporária de RAG | #41 [CI](https://github.com/matheusdebrito/suportai/actions/runs/44812686755) | Automatizado |
 | Departamentos e vínculos | #42 [CI](https://github.com/matheusdebrito/suportai/actions/runs/44815140514) | API/PostgreSQL/Chromium |
-| Arquivos PDF adversariais | #43 [CI](https://github.com/matheusdebrito/suportai/actions/runs/44814419734), #47 [CI](https://github.com/matheusdebrito/suportai/actions/runs/44815692387) | Automação sintética; isolamento de SO não verificado |
+| Arquivos PDF adversariais | #43 [CI](https://github.com/matheusdebrito/suportai/actions/runs/44814419734), #47 [CI](https://github.com/matheusdebrito/suportai/actions/runs/44815692387), #49 [CI](https://github.com/matheusdebrito/suportai/actions/runs/44816523735) | Chromium e PDF criptografado real fictício; isolamento de SO não verificado |
 | Literais de rede nas respostas | #44 [CI](https://github.com/matheusdebrito/suportai/actions/runs/44814673043) | Regra sintática, não validação semântica geral |
 | Executor opcional de avaliação com modelo real | #45 [CI](https://github.com/matheusdebrito/suportai/actions/runs/44814988992) | Código testado, chamadas reais não executadas |
 | Comparação de conteúdo duplicado | #46 [CI](https://github.com/matheusdebrito/suportai/actions/runs/44815371840) | PostgreSQL/CI, qualidade de similaridade ainda parcial |
