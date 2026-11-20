@@ -11,6 +11,8 @@ type Operations={
  feedback:{good_7d:number;bad_7d:number};
 };
 type Space={id:string;name:string;visibility:string;can_read:boolean;can_edit:boolean;can_approve:boolean};
+type Department={id:string;name:string;active:boolean;members:number};
+type AdminUser={id:string;email:string;role:string;active:boolean;department_ids:string[]};
 type Doc={id:string;title:string;kind:string;space_name:string};
 type Message={id?:string;role:'user'|'assistant';content:string;sources?:{documentId:string;versionId:string;versionNumber?:number;title:string}[];feedback_rating?:'GOOD'|'BAD'|null;feedback_comment?:string|null};
 type Pending={id:string;title:string;content:string;spaceName?:string;documentId?:string;beforeContent?:string};
@@ -85,7 +87,10 @@ function App(){
  const [correctionOf,setCorrectionOf]=useState<string|null>(null);
  const [reviewDecision,setReviewDecision]=useState<{id:string;action:'reject'|'request-changes'}|null>(null);
  const [reviewNote,setReviewNote]=useState('');
- const [users,setUsers]=useState<Array<{id:string;email:string;role:string;active:boolean}>>([]);
+ const [users,setUsers]=useState<AdminUser[]>([]);
+ const [departments,setDepartments]=useState<Department[]>([]);
+ const [departmentName,setDepartmentName]=useState('');
+ const [editingDepartment,setEditingDepartment]=useState<{id:string;name:string}|null>(null);
  const [operations,setOperations]=useState<Operations|null>(null);
  const [newEmail,setNewEmail]=useState('');
  const [newRole,setNewRole]=useState<'USER'|'APPROVER'|'ADMIN'>('USER');
@@ -100,8 +105,11 @@ function App(){
    setReview(reviews.reviews);setArchived(hidden.documents);
   }
   if(user?.role==='ADMIN'){
-   const [accounts,health]=await Promise.all([api<{users:typeof users}>('/admin/users'),api<Operations>('/admin/operations')]);
-   setUsers(accounts.users);setOperations(health);
+   const [accounts,health,departmentsResponse]=await Promise.all([
+     api<{users:AdminUser[]}>('/admin/users'),api<Operations>('/admin/operations'),
+     api<{departments:Department[]}>('/admin/departments')
+   ]);
+   setUsers(accounts.users);setOperations(health);setDepartments(departmentsResponse.departments);
   }
  }
  function failed(e:unknown){setError(e instanceof Error?e.message:'Falha desconhecida');}
@@ -134,6 +142,30 @@ function App(){
    }catch(error){failed(error);}
  }
 
+ async function createDepartment(event:React.FormEvent){
+   event.preventDefault();setError('');
+   try{
+     await api('/admin/departments',{method:'POST',body:JSON.stringify({name:departmentName})});
+     setDepartmentName('');await refresh();
+   }catch(error){failed(error);}
+ }
+ async function updateDepartment(id:string,updates:{name?:string;active?:boolean}){
+   setError('');
+   try{
+     await api('/admin/departments/'+id,{method:'PATCH',body:JSON.stringify(updates)});
+     setEditingDepartment(null);await refresh();
+   }catch(error){failed(error);}
+ }
+ async function assignDepartments(userId:string,departmentIds:string[]){
+   setError('');
+   try{
+     await api('/admin/users/'+userId+'/departments',{
+       method:'PUT',body:JSON.stringify({departmentIds})
+     });
+     await refresh();
+     if(userId===user?.id){setUser(null);setError('Sua sessão foi encerrada após a alteração de departamentos. Entre novamente.');}
+   }catch(error){failed(error);}
+ }
  async function refreshConversations(){
   const result=await api<{conversations:Conversation[]}>('/conversations');
   setConversations(result.conversations);
@@ -398,7 +430,33 @@ function App(){
   <button className="secondary" onClick={()=>void restoreDoc(item.id)}>Restaurar versão publicada</button>
  </div>)}
  </section>}
- {tab==='admin'&&<div className="columns"><section className="panel"><h2>Cadastrar colaborador</h2><form onSubmit={createUser}><label>E-mail<input required type="email" value={newEmail} onChange={e=>setNewEmail(e.target.value)}/></label><label>Perfil<select value={newRole} onChange={e=>setNewRole(e.target.value as typeof newRole)}><option value="USER">Colaborador</option><option value="APPROVER">Aprovador de conhecimento</option><option value="ADMIN">Administrador</option></select></label><button>Criar usuário</button></form>{temporary&&<div className="pending"><strong>Código temporário (visível apenas agora)</strong><code>{temporary}</code><p className="hint">Entregue ao usuário por canal seguro. Válido por 15 minutos.</p><button className="secondary" onClick={()=>{void navigator.clipboard.writeText(temporary);}}>Copiar</button></div>}</section><section className="panel"><h2>Usuários</h2>{users.map(u=><div className="item user-item" key={u.id}><span>{u.email}<small>{u.active?'Ativo':'Inativo'} · {u.role}</small></span><button className="secondary" onClick={()=>resetUser(u.id)} disabled={u.id===user.id}><RotateCcw size={14}/> Redefinir</button><select aria-label={'Perfil de '+u.email} value={u.role} disabled={u.id===user.id} onChange={e=>void updateUser(u.id,{role:e.target.value as 'USER'|'APPROVER'|'ADMIN'})}><option value="USER">Colaborador</option><option value="APPROVER">Aprovador</option><option value="ADMIN">Administrador</option></select><button className="secondary" disabled={u.id===user.id} onClick={()=>{if(u.active&&!window.confirm('Desativar '+u.email+' e invalidar as sessões existentes?'))return;void updateUser(u.id,{active:!u.active});}}>{u.active?'Desativar':'Ativar'}</button><select aria-label={'Conceder acesso a '+u.email} defaultValue="" onChange={e=>{if(e.target.value){const [space,mode]=e.target.value.split('|');void grant(u.id,space,mode);}e.target.value='';}}><option value="">Alterar permissões do conhecimento...</option>{spaces.flatMap(s=>([['READ','Somente leitura'],['EDIT','Leitura e edição'],['APPROVE','Leitura, edição e aprovação'],['NONE','Revogar acesso']] as const).map(([mode,label])=><option key={s.id+mode} value={s.id+'|'+mode}>{s.name} — {label}</option>))}</select></div>)}</section><section className="panel"><div className="drafts-header"><h2>Operação do SuportAI</h2><button className="secondary" onClick={()=>void refresh().catch(failed)}><RotateCcw size={14}/> Atualizar</button></div>
+ {tab==='admin'&&<div className="columns"><section className="panel"><h2>Cadastrar colaborador</h2><form onSubmit={createUser}><label>E-mail<input required type="email" value={newEmail} onChange={e=>setNewEmail(e.target.value)}/></label><label>Perfil<select value={newRole} onChange={e=>setNewRole(e.target.value as typeof newRole)}><option value="USER">Colaborador</option><option value="APPROVER">Aprovador de conhecimento</option><option value="ADMIN">Administrador</option></select></label><button>Criar usuário</button></form>{temporary&&<div className="pending"><strong>Código temporário (visível apenas agora)</strong><code>{temporary}</code><p className="hint">Entregue ao usuário por canal seguro. Válido por 15 minutos.</p><button className="secondary" onClick={()=>{void navigator.clipboard.writeText(temporary);}}>Copiar</button></div>}</section><section className="panel"><h2>Usuários</h2>{users.map(u=><div className="item user-item" key={u.id}><span>{u.email}<small>{u.active?'Ativo':'Inativo'} · {u.role}</small></span><button className="secondary" onClick={()=>resetUser(u.id)} disabled={u.id===user.id}><RotateCcw size={14}/> Redefinir</button><select aria-label={'Perfil de '+u.email} value={u.role} disabled={u.id===user.id} onChange={e=>void updateUser(u.id,{role:e.target.value as 'USER'|'APPROVER'|'ADMIN'})}><option value="USER">Colaborador</option><option value="APPROVER">Aprovador</option><option value="ADMIN">Administrador</option></select><button className="secondary" disabled={u.id===user.id} onClick={()=>{if(u.active&&!window.confirm('Desativar '+u.email+' e invalidar as sessões existentes?'))return;void updateUser(u.id,{active:!u.active});}}>{u.active?'Desativar':'Ativar'}</button><label>Departamentos (Ctrl/Shift para múltiplos)
+ <select multiple size={Math.min(4,Math.max(2,departments.filter(d=>d.active).length))}
+   aria-label={'Departamentos de '+u.email} value={u.department_ids||[]}
+   onChange={e=>void assignDepartments(u.id,Array.from(e.currentTarget.selectedOptions).map(option=>option.value))}>
+   {departments.filter(d=>d.active||(u.department_ids||[]).includes(d.id))
+     .map(d=><option key={d.id} value={d.id}>{d.name}{d.active?'':' (inativo)'}</option>)}
+ </select></label>
+ <select aria-label={'Conceder acesso a '+u.email} defaultValue="" onChange={e=>{if(e.target.value){const [space,mode]=e.target.value.split('|');void grant(u.id,space,mode);}e.target.value='';}}><option value="">Alterar permissões do conhecimento...</option>{spaces.flatMap(s=>([['READ','Somente leitura'],['EDIT','Leitura e edição'],['APPROVE','Leitura, edição e aprovação'],['NONE','Revogar acesso']] as const).map(([mode,label])=><option key={s.id+mode} value={s.id+'|'+mode}>{s.name} — {label}</option>))}</select></div>)}</section><section className="panel"><h2>Departamentos</h2>
+ <p className="hint">O vínculo com um departamento não concede acesso a conteúdo restrito.</p>
+ <form onSubmit={createDepartment}><label>Nome do departamento
+ <input minLength={3} maxLength={80} required value={departmentName}
+   onChange={e=>setDepartmentName(e.target.value)}/></label><button>Criar departamento</button></form>
+ {departments.map(d=><div className="item" key={d.id}>
+   {editingDepartment?.id===d.id?
+     <form onSubmit={e=>{e.preventDefault();void updateDepartment(d.id,{name:editingDepartment.name});}}>
+       <input aria-label={'Renomear departamento '+d.name} required minLength={3} maxLength={80}
+         value={editingDepartment.name}
+         onChange={e=>setEditingDepartment({id:d.id,name:e.target.value})}/>
+       <button>Salvar</button><button type="button" className="secondary" onClick={()=>setEditingDepartment(null)}>Cancelar</button>
+     </form>:
+     <span>{d.name}<small>{d.members} colaborador(es) · {d.active?'Ativo':'Inativo'}</small></span>}
+   <button className="secondary" type="button" onClick={()=>setEditingDepartment({id:d.id,name:d.name})}>Editar</button>
+   <button className="secondary" type="button" onClick={()=>void updateDepartment(d.id,{active:!d.active})}>
+     {d.active?'Desativar':'Ativar'}
+   </button>
+ </div>)}
+ </section><section className="panel"><div className="drafts-header"><h2>Operação do SuportAI</h2><button className="secondary" onClick={()=>void refresh().catch(failed)}><RotateCcw size={14}/> Atualizar</button></div>
  {operations?<><div className="ops-grid">
   <div><strong>{operations.knowledge.published}</strong><small>Documentos publicados</small></div>
   <div><strong>{operations.knowledge.archived}</strong><small>Arquivados</small></div>

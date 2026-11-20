@@ -79,7 +79,7 @@ jobs:
             -c 'CREATE DATABASE suportai_restore_ci'
           docker exec "$container" pg_restore --exit-on-error --no-owner --no-acl \
             -U suportai --dbname=suportai_restore_ci /tmp/suportai-ci-backup.dump
-          for table in schema_migrations users sessions password_resets spaces space_grants \
+          for table in schema_migrations users sessions password_resets departments user_departments spaces space_grants \
             documents document_versions ingestion_jobs knowledge_chunks \
             conversations messages pending_actions feedback audit_events; do
             source_count="$(docker exec "$container" psql -XAt -U suportai -d suportai_e2e -c "SELECT count(*) FROM $table")"

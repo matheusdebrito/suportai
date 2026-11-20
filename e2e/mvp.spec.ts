@@ -19,10 +19,23 @@ test('cadastro, primeiro acesso, conhecimento, conversa e feedback sobrevivem ao
 
  await page.getByRole('button',{name:'Usuários',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Cadastrar colaborador'})).toBeVisible();
+ const deptName='Suporte E2E '+Date.now();
+ await page.getByLabel('Nome do departamento').fill(deptName);
+ await page.getByRole('button',{name:'Criar departamento'}).click();
+ await expect(page.locator('section.panel').filter({has:page.getByRole('heading',{name:'Departamentos'})})
+   .locator('.item').filter({hasText:deptName})).toBeVisible();
  await expect(page.getByRole('heading',{name:'Operação do SuportAI'})).toBeVisible();
  await page.getByLabel('E-mail').fill(memberEmail);
  // O formulário inicia com perfil Colaborador; não depender do nome acessível das opções.
  await page.getByRole('button',{name:'Criar usuário'}).click();
+ const departmentSelect=page.getByLabel('Departamentos de '+memberEmail);
+ const departmentValue=await departmentSelect.locator('option',{hasText:deptName}).getAttribute('value');
+ expect(departmentValue).toBeTruthy();
+ await Promise.all([
+   page.waitForResponse(r=>r.url().includes('/departments')&&r.request().method()==='PUT'&&r.ok()),
+   departmentSelect.selectOption([departmentValue!])
+ ]);
+ await expect(page.getByLabel('Departamentos de '+memberEmail)).toHaveValues([departmentValue!]);
  const access=page.getByLabel('Conceder acesso a '+memberEmail);
  const grantOption=access.locator('option',{hasText:'Conhecimento geral — Leitura e edição'});
  const grantValue=await grantOption.getAttribute('value');
