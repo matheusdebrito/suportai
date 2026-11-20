@@ -681,6 +681,93 @@ if(!process.env.TEST_DATABASE_URL){
    await app.inject({method:'POST',url:`/admin/spaces/${restricted}/grants`,headers:auth(admin.cookie),payload:{userId:reader.id,read:false,edit:false,approve:false}});
    assert.equal((await searchKnowledge(grantedActor!,'laboratório isolado')).some(x=>x.documentId===privateDoc.documentId),false);
 
+
+   // Archiving requires an explicit reviewer approval grant; restores preserve versions.
+   const archiveId=sharedDoc.documentId;
+   const archiveNoConfirm=await app.inject({method:'POST',url:'/knowledge/documents/'+archiveId+'/archive',
+     headers:auth(reviewer.cookie),payload:{}});
+   assert.equal(archiveNoConfirm.statusCode,400);
+   const unauthorizedArchive=await app.inject({method:'POST',url:'/knowledge/documents/'+archiveId+'/archive',
+     headers:auth(reader.cookie),payload:{confirm:true}});
+   assert.equal(unauthorizedArchive.statusCode,404);
+   const adminArchive=await app.inject({method:'POST',url:'/knowledge/documents/'+archiveId+'/archive',
+     headers:auth(admin.cookie),payload:{confirm:true}});
+   assert.equal(adminArchive.statusCode,404);
+   const archivedDoc=await app.inject({method:'POST',url:'/knowledge/documents/'+archiveId+'/archive',
+     headers:auth(reviewer.cookie),payload:{confirm:true}});
+   assert.equal(archivedDoc.statusCode,200,archivedDoc.body);
+   assert.equal(archivedDoc.json().archived,true);
+
+   const candidate=await query('SELECT c.version_id,c.ordinal,c.content,d.title,v.version_number '+
+     'FROM knowledge_chunks c JOIN document_versions v ON v.id=c.version_id '+
+     'JOIN documents d ON d.id=v.document_id WHERE d.id=$1 AND d.current_version_id=v.id LIMIT 1',
+     [archiveId]);
+   assert.ok(candidate.rowCount,'Archived knowledge must retain its versioned chunks');
+   const oldSource={
+     documentId:archiveId,versionId:candidate.rows[0].version_id,
+     versionNumber:Number(candidate.rows[0].version_number),ordinal:Number(candidate.rows[0].ordinal),
+     title:candidate.rows[0].title,content:candidate.rows[0].content,score:1
+   };
+   const staleSourceApp=await buildApp({agentResponder:async()=>({
+     answer:'I should not return a procedure that was archived during the model response.',
+     sources:[oldSource],pendingActions:[]
+   })});
+   try{
+     const staleConversation=await staleSourceApp.inject({method:'POST',url:'/conversations',
+       headers:auth(reader.cookie)});
+     assert.equal(staleConversation.statusCode,200);
+     const staleResponse=await staleSourceApp.inject({method:'POST',
+       url:'/conversations/'+staleConversation.json().id+'/messages',
+       headers:auth(reader.cookie),payload:{message:'Qual é o procedimento?'}});
+     assert.equal(staleResponse.statusCode,409,staleResponse.body);
+     const count=await query("SELECT count(*)::int AS total FROM messages WHERE conversation_id=$1 AND role='assistant'",
+       [staleConversation.json().id]);
+     assert.equal(count.rows[0].total,0,'Archived sources cannot be persisted as new official answers');
+   }finally{
+     await staleSourceApp.close();
+   }
+
+   const archiveRetry=await app.inject({method:'POST',url:'/knowledge/documents/'+archiveId+'/archive',
+     headers:auth(reviewer.cookie),payload:{confirm:true}});
+   assert.equal(archiveRetry.statusCode,200);
+   const archivedRead=await app.inject({method:'GET',url:'/knowledge/documents/'+archiveId,
+     headers:auth(reader.cookie)});
+   assert.equal(archivedRead.statusCode,404);
+   const archivedSource=await app.inject({method:'GET',
+     url:'/knowledge/documents/'+archiveId+'/versions/'+sharedDoc.versionId,
+     headers:auth(reader.cookie)});
+   assert.equal(archivedSource.statusCode,404);
+   const archivedList=await app.inject({method:'GET',url:'/knowledge/archived',
+     headers:auth(reviewer.cookie)});
+   assert.equal(archivedList.statusCode,200);
+   assert.ok(archivedList.json().documents.some((d:any)=>d.id===archiveId));
+   const hiddenList=await app.inject({method:'GET',url:'/knowledge/archived',
+     headers:auth(reader.cookie)});
+   assert.deepEqual(hiddenList.json().documents,[]);
+   const hiddenChunks=await query('SELECT count(*)::int AS total FROM knowledge_chunks c '+
+     'JOIN documents d ON d.current_version_id=c.version_id WHERE d.id=$1 AND d.archived_at IS NULL',
+     [archiveId]);
+   assert.equal(hiddenChunks.rows[0].total,0);
+   const denyRestore=await app.inject({method:'POST',url:'/knowledge/documents/'+archiveId+'/restore',
+     headers:auth(reader.cookie),payload:{confirm:true}});
+   assert.equal(denyRestore.statusCode,404);
+   const restoredDoc=await app.inject({method:'POST',url:'/knowledge/documents/'+archiveId+'/restore',
+     headers:auth(reviewer.cookie),payload:{confirm:true}});
+   assert.equal(restoredDoc.statusCode,200,restoredDoc.body);
+   assert.equal(restoredDoc.json().archived,false);
+   const afterRestore=await app.inject({method:'GET',url:'/knowledge/documents/'+archiveId,
+     headers:auth(reader.cookie)});
+   assert.equal(afterRestore.statusCode,200);
+   const liveChunks=await query('SELECT count(*)::int AS total FROM knowledge_chunks c '+
+     'JOIN documents d ON d.current_version_id=c.version_id WHERE d.id=$1 AND d.archived_at IS NULL',
+     [archiveId]);
+   assert.ok(liveChunks.rows[0].total>0);
+   const events=await query("SELECT action,count(*)::int AS total FROM audit_events "+
+     "WHERE resource_id=$1 AND action IN ('KNOWLEDGE_ARCHIVED','KNOWLEDGE_RESTORED') GROUP BY action ORDER BY action",
+     [archiveId]);
+   assert.deepEqual(events.rows.map((r:any)=>[r.action,r.total]),
+     [['KNOWLEDGE_ARCHIVED',1],['KNOWLEDGE_RESTORED',1]]);
+
    // Admin onboarding uses a single-use temporary token, never a known initial password.
    const onboardingEmail=`onboarding-${id}@example.test`;
    const created=await app.inject({method:'POST',url:'/admin/users',headers:auth(admin.cookie),payload:{email:onboardingEmail,role:'USER'}});
