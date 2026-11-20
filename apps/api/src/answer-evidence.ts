@@ -6,7 +6,7 @@ import type {Source} from './retrieval.js';
  * https://site.test/path for https://site.test/path/unsafe.
  * This is intentionally NOT a semantic entailment checker.
  */
-const NETWORK_LITERAL=/\bhttps?:\/\/[^\s<>"']+|(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])/gi;
+const NETWORK_LITERAL=/\bhttps?:\/\/[^\s<>"']+|(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?!\w|\.\d)/gi;
 function networkLiterals(text:string):string[]{
  const found:string[]=[];
  for(const match of text.matchAll(NETWORK_LITERAL)){
