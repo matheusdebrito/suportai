@@ -72,11 +72,19 @@ jobs:
           docker build -f deploy/Dockerfile --target runtime -t suportai/runtime:ci .
           docker run --rm --network none --read-only --cap-drop ALL \
             --security-opt no-new-privileges --user 10001:10001 \
-            suportai/runtime:ci node apps/api/dist/pdf-isolation-preflight.js
+            suportai/runtime:ci node apps/api/dist/pdf-isolation-preflight.js | grep -q "Controles básicos do processo: OK"
+          docker run --rm --network none --read-only --user 10001:10001 \
+            -e NODE_ENV=production -e APP_ORIGIN=https://suportai.example.test \
+            -e DATABASE_URL=postgres://synthetic:synthetic@db/suportai \
+            -e ALLOW_EXTERNAL_AI_DATA_PROCESSING=false \
+            suportai/runtime:ci node apps/api/dist/preflight.js | grep -q "Configuração mínima: OK"
           docker build -f deploy/Dockerfile --target web -t suportai/web:ci .
           docker run --rm -e SUPORTAI_DOMAIN=suportai.example.org \
             -e SUPORTAI_TLS_CONTACT=ti@example.org --entrypoint caddy \
             suportai/web:ci validate --config /etc/caddy/Caddyfile
+      - name: Verify real PDF sandbox and Unix-socket fail-closed behavior
+        shell: bash
+        run: bash deploy/test-pdf-isolation.sh
       # Browser tests use a different database from request/integration tests.
       - name: Create isolated browser-test database
         run: |
