@@ -34,8 +34,13 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
    const a=await requireActor(req);const id=(req.params as {id:string}).id;
    const r=await query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2',[id,a.id]);
    if(!r.rowCount) return reply.code(404).send({error:'Conversa não encontrada'});
-   const messages=await query(`SELECT m.id,m.role,m.content,
-       COALESCE(live_sources.items,'[]'::jsonb) AS sources,m.created_at,
+   const messages=await query(`SELECT m.id,m.role,
+       CASE WHEN COALESCE(jsonb_array_length(live_sources.items),0)<>jsonb_array_length(m.sources)
+         THEN 'Esta resposta contém fontes arquivadas ou inacessíveis e não pode mais ser exibida.'
+         ELSE m.content END AS content,
+       CASE WHEN COALESCE(jsonb_array_length(live_sources.items),0)<>jsonb_array_length(m.sources)
+         THEN '[]'::jsonb ELSE COALESCE(live_sources.items,'[]'::jsonb) END AS sources,
+       m.created_at,
        f.rating AS feedback_rating,f.comment AS feedback_comment
      FROM messages m
      -- An archived source can remain in audit storage, but not in historic
@@ -77,7 +82,25 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
    if(hasSecrets(b.message)) return reply.code(422).send({error:'Possível credencial detectada. Remova senhas e tokens antes de enviar.'});
    const conv=await query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2',[id,a.id]);
    if(!conv.rowCount) return reply.code(404).send({error:'Conversa não encontrada'});
-   const previous=await query('SELECT role,content FROM messages WHERE conversation_id=$1 AND auth_revision=$2 ORDER BY created_at DESC LIMIT 8',[id,a.auth_revision]);
+   // Never pass inaccessible cited content back into the model's memory.
+   // This is a read-time projection; the original message is retained for audit.
+   const previous=await query(`SELECT m.role,
+      CASE WHEN EXISTS (
+        SELECT 1 FROM jsonb_array_elements(m.sources) AS source(value)
+        WHERE NOT EXISTS (
+          SELECT 1 FROM documents d
+          JOIN document_versions v ON v.document_id=d.id AND v.id::text=source.value->>'versionId'
+          JOIN spaces s ON s.id=d.space_id
+          LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$3
+          WHERE d.id::text=source.value->>'documentId' AND d.archived_at IS NULL
+            AND v.status IN ('PUBLISHED','ARCHIVED')
+            AND (s.visibility='SHARED' OR COALESCE(g.can_read,false))
+        )
+      ) THEN 'A resposta anterior usava fontes que não estão mais disponíveis.'
+        ELSE m.content END AS content
+    FROM messages m
+    WHERE m.conversation_id=$1 AND m.auth_revision=$2
+    ORDER BY m.created_at DESC,m.id DESC LIMIT 8`,[id,a.auth_revision,a.id]);
    const history=previous.rows.reverse();
    const sent=await query("INSERT INTO messages(conversation_id,role,content,auth_revision) VALUES($1,'user',$2,$3) RETURNING id",[id,b.message,a.auth_revision]);
    try {
