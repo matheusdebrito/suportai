@@ -45,17 +45,27 @@ export function registerAuth(app:FastifyInstance) {
    if(!validEmail(body?.email)||typeof body?.password!=='string') return reply.code(400).send({error:'Credenciais inválidas'});
    const r=await query('SELECT id,email,password_hash,active,must_change_password,role FROM users WHERE email=$1',[body.email.toLowerCase()]);
    const user=r.rows[0];
-   const ok=user?.active && await argon2.verify(user.password_hash,body.password).catch(()=>false);
+   const ok=user?.active && !user.must_change_password &&
+     await argon2.verify(user.password_hash,body.password).catch(()=>false);
    if(!ok) {
      const prev=rate && rate.until>Date.now()?rate.count:0;
      attempts.set(ip,{count:prev+1,until:Date.now()+15*60*1000});
      return reply.code(401).send({error:'Credenciais inválidas'});
    }
-   attempts.delete(ip);
    const raw=token();
-   await query("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '8 hours')",[hashToken(raw),user.id]);
+   // Recheck after hashing while holding the account lock, so an admin reset
+   // cannot race with session creation using the previous password.
+   const current=await transaction(async c=>{
+     const locked=await c.query('SELECT active,must_change_password,email,role FROM users WHERE id=$1 FOR SHARE',[user.id]);
+     const account=locked.rows[0];
+     if(!account?.active||account.must_change_password)return null;
+     await c.query("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '8 hours')",[hashToken(raw),user.id]);
+     return account;
+   });
+   if(!current)return reply.code(401).send({error:'Credenciais inválidas'});
+   attempts.delete(ip);
    setCookie(reply,raw);
-   return {user:{id:user.id,email:user.email,role:user.role,mustChangePassword:user.must_change_password}};
+   return {user:{id:user.id,email:current.email,role:current.role,mustChangePassword:false}};
  });
  app.get('/auth/me',async(req,reply)=> {
    const a=await requireActor(req);
@@ -73,24 +83,24 @@ export function registerAuth(app:FastifyInstance) {
    if(!strongPassword(b?.newPassword)) return reply.code(400).send({error:'Senha deve ter 12 a 256 caracteres'});
    const reset=typeof b?.resetToken==='string'?b.resetToken:'';
    const existing=await query('SELECT user_id FROM password_resets WHERE token_hash=$1 AND expires_at>now() AND used_at IS NULL',[hashToken(reset)]);
-   const sessionActor=await actorForSession(req.cookies?.[COOKIE]);
-   const userId=existing.rows[0]?.user_id??(sessionActor?.must_change_password?sessionActor.id:null);
+   // Password recovery is exclusively token-based; a stale session (or an old
+   // password) must not override a reset initiated by an administrator.
+   const userId=existing.rows[0]?.user_id;
    if(!userId) return reply.code(401).send({error:'Credencial temporária inválida'});
    const hashed=await argon2.hash(b.newPassword);
+   const raw=token();
    await transaction(async c=>{
-     const lock=await c.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[userId]);
-     if(!lock.rowCount) throw Object.assign(new Error('Conta inválida'),{statusCode:401});
-     if(reset){
-       const consume=await c.query("UPDATE password_resets SET used_at=now() WHERE token_hash=$1 AND user_id=$2 AND used_at IS NULL AND expires_at>now() RETURNING user_id",[hashToken(reset),userId]);
-       if(!consume.rowCount) throw Object.assign(new Error('Credencial temporária expirada'),{statusCode:401});
-     }
+     const lock=await c.query('SELECT active,must_change_password FROM users WHERE id=$1 FOR UPDATE',[userId]);
+     if(!lock.rows[0]?.active||!lock.rows[0].must_change_password)
+       throw Object.assign(new Error('Conta inválida'),{statusCode:401});
+     const consume=await c.query("UPDATE password_resets SET used_at=now() WHERE token_hash=$1 AND user_id=$2 AND used_at IS NULL AND expires_at>now() RETURNING user_id",[hashToken(reset),userId]);
+     if(!consume.rowCount) throw Object.assign(new Error('Credencial temporária expirada'),{statusCode:401});
      await c.query('UPDATE users SET password_hash=$2,must_change_password=false,auth_revision=auth_revision+1 WHERE id=$1',[userId,hashed]);
      await c.query('DELETE FROM sessions WHERE user_id=$1',[userId]);
      await c.query('DELETE FROM password_resets WHERE user_id=$1',[userId]);
+     await c.query("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '8 hours')",[hashToken(raw),userId]);
      await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'PASSWORD_CHANGED',$1)",[userId]);
    });
-   const raw=token();
-   await query("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '8 hours')",[hashToken(raw),userId]);
    setCookie(reply,raw);
    return {ok:true};
  });

@@ -7,7 +7,7 @@ import {buildApp} from './server.js';
 import {pool,query} from './db.js';
 import {searchKnowledge} from './retrieval.js';
 import {claimJob,renewLease,storeClaimedResult,failClaimedJob,expireStaleJobs} from './worker-jobs.js';
-import {actorForSession} from './security.js';
+import {actorForSession,hashToken} from './security.js';
 import {respond} from './agent.js';
 import type OpenAI from 'openai';
 import {PDFDocument,StandardFonts} from 'pdf-lib';
@@ -860,6 +860,17 @@ if(!process.env.TEST_DATABASE_URL){
    const previousLogin=await app.inject({method:'POST',url:'/auth/login',
      payload:{email:onboardingEmail,password:'new-Secure-Password-123!'}});
    assert.equal(previousLogin.statusCode,401,'Admin password reset invalidates the old login');
+
+   // Simulate a session that survives a login/reset race; it must not be able
+   // to replace the administrator's one-time code.
+   const residualSessionRaw=randomUUID()+randomUUID();
+   await query("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '1 hour')",
+     [hashToken(residualSessionRaw),created.json().id]);
+   const passwordWithoutToken=await app.inject({method:'POST',url:'/auth/change-password',
+     headers:auth('suportai_session='+residualSessionRaw),
+     payload:{newPassword:'unauthorized-Password-123!'}});
+   assert.equal(passwordWithoutToken.statusCode,401,'A stale session must never replace the admin reset code');
+
    const activatedWithReset=await app.inject({method:'POST',url:'/auth/change-password',
      payload:{resetToken:resetAfterActivation.json().resetToken,newPassword:'rotated-Secure-Password-123!'}});
    assert.equal(activatedWithReset.statusCode,200);
