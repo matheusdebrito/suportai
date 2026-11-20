@@ -1185,6 +1185,33 @@ if(!process.env.TEST_DATABASE_URL){
      headers:auth(changedCookie),payload:{confirm:true}});
    assert.equal(secondDelete.statusCode,404);
 
+   // AC-016: successful privileged transitions are traceable and a denied
+   // operation cannot manufacture an audit event for a separate actor.
+   const requiredAudit:[string,string][]=[
+     ['KNOWLEDGE_DRAFT_CREATED',sharedDoc.documentId],
+     ['KNOWLEDGE_SUBMITTED_REVIEW',sharedDoc.documentId],
+     ['KNOWLEDGE_PUBLISHED',sharedDoc.documentId],
+     ['ASSISTANT_FEEDBACK_SAVED',assistantMessageId],
+     ['USER_CREATED',created.json().id],
+     ['PASSWORD_RESET_STARTED',created.json().id],
+     ['PASSWORD_CHANGED',created.json().id],
+     ['CONVERSATION_DELETED',conversationId]
+   ];
+   for(const [action,resourceId] of requiredAudit){
+     const event=await query(
+       'SELECT actor_id,metadata FROM audit_events WHERE action=$1 AND resource_id=$2 LIMIT 1',
+       [action,resourceId]);
+     assert.equal(event.rowCount,1,'Missing audit event: '+action);
+     assert.ok(event.rows[0].actor_id,'Audit event must identify an actor: '+action);
+     assert.doesNotMatch(JSON.stringify(event.rows[0].metadata),/rotated-Secure-Password-123!|resetToken/i,
+       'Audit metadata must not store password or reset tokens');
+   }
+   const outsiderPublication=await query(
+     "SELECT count(*)::int AS n FROM audit_events WHERE action='KNOWLEDGE_PUBLISHED' AND resource_id=$1 AND actor_id=$2",
+     [sharedDoc.documentId,reader.id]);
+   assert.equal(outsiderPublication.rows[0].n,0,
+     'Unauthorized author cannot be audited as a successful publisher');
+
   } finally {
    worker?.kill('SIGTERM');
    await app.close();
