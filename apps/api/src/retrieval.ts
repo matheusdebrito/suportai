@@ -1,7 +1,12 @@
 import { query } from './db.js';
 import { embedText } from './llm.js';
+import {hasSecrets} from './knowledge.js';
 import type { Actor } from './security.js';
 export type Source={documentId:string;versionId:string;versionNumber:number;title:string;ordinal:number;content:string;score:number};
+// Defense in depth for articles published before secret scanning was tightened.
+export function safeRetrievedSources(sources:Source[],limit:number):Source[]{
+ return sources.filter(x=>!hasSecrets(x.content)).slice(0,Math.max(0,limit));
+}
 export async function searchKnowledge(actor:Actor, text:string, limit=5):Promise<Source[]> {
   const safe=text.trim().slice(0,500);
   if(!safe) return [];
@@ -22,6 +27,9 @@ export async function searchKnowledge(actor:Actor, text:string, limit=5):Promise
      ELSE 1-(embedding <=> $3::vector) END AS semantic
    FROM allowed)
    SELECT *, (lexical*2+GREATEST(semantic,0)) AS score FROM ranked
-   WHERE lexical>0 OR semantic>0.45 ORDER BY score DESC LIMIT $4`,[actor.id,safe,vector,Math.min(Math.max(1,limit),8)]);
-  return r.rows.map(x=>({documentId:x.document_id,versionId:x.version_id,versionNumber:Number(x.version_number),title:x.title,ordinal:x.ordinal,content:x.content,score:Number(x.score)}));
+   WHERE lexical>0 OR semantic>0.45 ORDER BY score DESC LIMIT $4`,[actor.id,safe,vector,Math.min(Math.max(1,limit*3),16)]);
+  return safeRetrievedSources(r.rows.map(x=>({
+   documentId:x.document_id,versionId:x.version_id,versionNumber:Number(x.version_number),
+   title:x.title,ordinal:x.ordinal,content:x.content,score:Number(x.score)
+  })),Math.min(Math.max(1,limit),8));
 }
