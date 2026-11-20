@@ -1,0 +1,58 @@
+name: Optional AI worker egress configuration
+on:
+  pull_request:
+    paths:
+      - 'deploy/compose.production.yml'
+      - 'deploy/compose.external-ai.yml'
+      - '.github/workflows/egress-config.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate default and opt-in topologies without starting containers
+        shell: bash
+        run: |
+          set -euo pipefail
+          temp="$(mktemp -d)"
+          trap 'rm -rf "$temp"' EXIT
+          printf 'synthetic' > "$temp/password"
+          printf 'postgres://synthetic:synthetic@db/suportai' > "$temp/database_url"
+          : > "$temp/ai_key"
+          mkdir -p "$temp/socket"
+          export SUPORTAI_DB_PASSWORD_FILE="$temp/password"
+          export SUPORTAI_DATABASE_URL_FILE="$temp/database_url"
+          export SUPORTAI_AI_KEY_FILE="$temp/ai_key"
+          export PDF_SOCKET_DIR="$temp/socket"
+          export SUPORTAI_DOMAIN=suportai.example.test
+          export SUPORTAI_TLS_CONTACT=ti@example.test
+          export APP_ORIGIN=https://suportai.example.test
+          export ALLOW_EXTERNAL_AI_DATA_PROCESSING=false
+          docker compose -f deploy/compose.production.yml config --format json > "$temp/default.json"
+          export ALLOW_EXTERNAL_AI_DATA_PROCESSING=true
+          docker compose -f deploy/compose.production.yml -f deploy/compose.external-ai.yml config --format json > "$temp/opt-in.json"
+          node - "$temp/default.json" "$temp/opt-in.json" <<'NODE'
+          const fs=require('node:fs');
+          const base=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          const enabled=JSON.parse(fs.readFileSync(process.argv[3],'utf8'));
+          const networks=s=>Object.keys(s.networks||{});
+          const before=networks(base.services.worker),after=networks(enabled.services.worker);
+          if(before.join(',')!=='database')throw new Error('Default worker must be DB-only');
+          if(!after.includes('database')||!after.includes('ai-egress')||after.length!==2)
+            throw new Error('Approved worker must preserve DB and gain only AI egress');
+          if(enabled.networks['ai-egress']?.internal===true)
+            throw new Error('AI egress network must support outgoing connectivity');
+          for(const parser of [base.services['pdf-parser'],enabled.services['pdf-parser']]){
+            if(parser.network_mode!=='none'||networks(parser).length>0||
+               (parser.secrets||[]).length>0||parser.read_only!==true)
+              throw new Error('PDF parser isolation must not change');
+          }
+          if(base.services.worker.environment.ALLOW_EXTERNAL_AI_DATA_PROCESSING!=='false')
+            throw new Error('Default worker must not enable external AI');
+          if(enabled.services.worker.environment.ALLOW_EXTERNAL_AI_DATA_PROCESSING!=='true')
+            throw new Error('Opt-in worker must have explicit external AI approval flag');
+          console.log('Offline and explicit egress topologies validated (no connections opened).');
+          NODE
