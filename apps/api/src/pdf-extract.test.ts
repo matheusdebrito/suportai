@@ -17,16 +17,18 @@ test('invalid and scanned-like PDF inputs fail with actionable messages',async()
  await assert.rejects(()=>extractPdfText(Buffer.from('this is not a PDF')),/PDF inválido/);
  const blank=await PDFDocument.create();
  blank.addPage([600,400]);
+ const blankBytes=Buffer.from(await blank.save({useObjectStreams:false}));
  await assert.rejects(
-   ()=>extractPdfText(Buffer.from(await blank.save({useObjectStreams:false}))),
+   ()=>extractPdfText(blankBytes),
    /PDF sem texto extraível/
  );
 });
 test('page limits are checked before extracting the whole document',async()=>{
  const oversized=await PDFDocument.create();
  for(let i=0;i<201;i++)oversized.addPage([600,400]);
+ const oversizedBytes=Buffer.from(await oversized.save({useObjectStreams:false}));
  await assert.rejects(
-   ()=>extractPdfText(Buffer.from(await oversized.save({useObjectStreams:false}))),
+   ()=>extractPdfText(oversizedBytes),
    /limite de 200 páginas/
  );
 });
