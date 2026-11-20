@@ -14,7 +14,7 @@ test('PDF extraction runs in a subprocess and returns digital text',async()=>{
  assert.match(result,/verificar os backups/);
 });
 test('invalid and scanned-like PDF inputs fail with actionable messages',async()=>{
- await assert.rejects(()=>extractPdfText(Buffer.from('this is not a PDF')),/PDF inválido/);
+ assert.throws(()=>extractPdfText(Buffer.from('this is not a PDF')),/PDF inválido/);
  const blank=await PDFDocument.create();
  blank.addPage([600,400]);
  const blankBytes=Buffer.from(await blank.save({useObjectStreams:false}));
