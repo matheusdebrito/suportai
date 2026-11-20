@@ -22,3 +22,9 @@ Antes de produção com arquivos internos, executar amostras controladas de PDF 
 - [ ] Teste de recuperação de worker sob falha/timeout no ambiente de implantação.
 
 Rastreabilidade: T028/T031, REQ-012/REQ-022, AC-009/AC-015.
+
+## Verificação executável do isolamento real no CI
+
+`deploy/test-pdf-isolation.sh` cria um PDF inteiramente fictício, executa a imagem de produção do leitor com **rede desativada**, usuário não-root, capacidades removidas, filesystem somente leitura e limites de CPU/memória/PIDs. O script comprova que uma segunda instância com montagem **somente leitura** do socket Unix recebe o texto extraído, que o leitor não possui segredos do banco/provedor e que conexões TCP externas falham. Ao encerrar o leitor, o cliente deve falhar de maneira controlada **sem fallback para extração local**. Também exige que os preflights compilados de produção sejam executados de verdade.
+
+Esta evidência é limitada ao kernel/runner de CI: **não comprova automaticamente os controles no host real, antimalware nem adequação do parser para todas as variantes hostis de PDF**. T028 e T031 continuam exigindo validação operacional antes de documentos internos.

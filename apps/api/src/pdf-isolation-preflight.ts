@@ -22,8 +22,11 @@ export function inspectPdfWorkerIsolation(snapshot:IsolationSnapshot):string[]{
  return problems;
 }
 
-const invoked=process.argv[1]?.endsWith('pdf-isolation-preflight.ts');
-if(invoked){
+export function isIsolationPreflightEntrypoint(path:string|undefined):boolean{
+ const filename=path?.replaceAll(String.fromCharCode(92),'/').split('/').pop();
+ return filename==='pdf-isolation-preflight.ts'||filename==='pdf-isolation-preflight.js';
+}
+if(isIsolationPreflightEntrypoint(process.argv[1])){
  let status:string|undefined;
  try{status=readFileSync('/proc/self/status','utf8');}catch{}
  const issues=inspectPdfWorkerIsolation({
