@@ -171,9 +171,14 @@ export function registerKnowledge(app:FastifyInstance) {
    if(doc.archived_at) return reply.code(404).send({error:'Documento não encontrado'});
    if(!doc.current_version_id) return reply.code(409).send({error:'O PDF ainda não possui uma versão publicada'});
    const file=await req.file({limits:{fileSize:8*1024*1024,files:1}});
+   const baseField=file?.fields.baseVersionId;
+   const baseVersionId=baseField && !Array.isArray(baseField) && 'value' in baseField
+     && typeof baseField.value==='string' ? baseField.value : '';
+   if(!baseVersionId)return reply.code(400).send({error:'Versão-base obrigatória'});
+   if(baseVersionId!==doc.current_version_id)return reply.code(409).send({error:'O documento foi atualizado. Abra a versão publicada novamente'});
    const bytes=await readPdfBytes(file);
    return reply.code(201).send(await createVersion(actor,doc.space_id,doc.title,'','PDF',
-     bytes,doc.id,doc.current_version_id));
+     bytes,doc.id,baseVersionId));
  });
  app.get('/knowledge/reviews',async req=>{
    const a=await requireActor(req);
