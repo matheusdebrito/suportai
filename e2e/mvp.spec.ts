@@ -73,6 +73,11 @@ test('cadastro, primeiro acesso, conhecimento, conversa e feedback sobrevivem ao
  await page.locator('.conversations-panel .conversation-item').first().click();
  await expect(page.locator('.bubble.assistant').last()).toContainText('Não encontrei um procedimento confirmado no cérebro');
  await expect(page.getByRole('button',{name:'Resposta útil'})).toHaveAttribute('aria-pressed','true');
+ page.once('dialog',dialog=>{void dialog.accept();});
+ await page.getByRole('button',{name:/Excluir conversa/}).first().click();
+ await expect(page.locator('.conversations-panel .conversation-item')).toHaveCount(0);
+ await page.reload();
+ await expect(page.locator('.conversations-panel .conversation-item')).toHaveCount(0);
 });
 
 
