@@ -125,3 +125,21 @@ test('T025 contract: casual greeting still works without evidence lookup',()=>{
  assert.equal(groundedReply('Olá! Em que posso ajudar?',false,0),'Olá! Em que posso ajudar?');
  assert.equal(groundedReply('Procedimento com fonte.',true,1),'Procedimento com fonte.');
 });
+
+test('T025 contract: lookup failure is not misreported as a missing procedure',async()=>{
+ const calls:any[]=[];
+ const fake=model([
+  {role:'assistant',content:null,tool_calls:[toolCall('search_knowledge',{query:'procedimento interno DNS'},'lookup-error')]},
+  {role:'assistant',content:'O manual oficial recomenda apontar para 203.0.113.50.'}
+ ],calls);
+ const unavailableSearch=async(_actor:Actor,_text:string,_limit=5):Promise<Source[]>=>{
+   throw new Error('SQL connection failed: INTERNAL_DB_PASSWORD=dont-show-me');
+ };
+ const result=await respond(actor,randomUUID(),'Qual o DNS interno?',[],fake,unavailableSearch);
+ assert.match(result.answer,/não foi possível consultar a base de conhecimento/i);
+ assert.doesNotMatch(result.answer,/203\.0\.113\.50|INTERNAL_DB_PASSWORD|manual oficial/);
+ assert.deepEqual(result.sources,[]);
+ const tool=(calls[1].messages as any[]).find(m=>m.role==='tool');
+ assert.match(tool.content,/Falha temporária na consulta/i);
+ assert.doesNotMatch(tool.content,/INTERNAL_DB_PASSWORD|dont-show-me|SQL connection failed/);
+});

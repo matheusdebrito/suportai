@@ -22,6 +22,12 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  const allowMutation=allowsKnowledgeMutation(userMessage);
  const forceLookup=shouldForceKnowledgeLookup(userMessage);
  let searchCalls=0;
+ let lookupUnavailable=false;
+ const unavailableReply=()=>({
+   answer:'Não foi possível consultar a base de conhecimento neste momento. '+
+     'Não posso confirmar um procedimento interno sem verificar as fontes. Tente novamente.',
+   sources:[] as Source[],pendingActions
+ });
  if(!provider){
    const found=await knowledgeSearch(actor,userMessage,5);
    return {answer:found.length?'Não há modelo de IA configurado. Encontrei estes trechos relevantes no cérebro:\n\n'+found.map((s,i)=>`${i+1}. ${s.title} — ${s.content.slice(0,500)}`).join('\n\n'):'Não encontrei um procedimento confirmado no cérebro. O uso do modelo externo não está habilitado nesta instalação.',sources:found,pendingActions};
@@ -68,6 +74,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      if(!message.content?.trim())
        return {answer:'O modelo não conseguiu produzir uma resposta. Reformule a pergunta ou tente novamente.',
          sources:[],pendingActions};
+     if(lookupUnavailable&&forceLookup&&sources.length===0)return unavailableReply();
      return {answer:groundedReply(message.content,forceLookup,sources.length),sources,pendingActions};
    }
    for(const [index,call] of message.tool_calls.entries()){
@@ -84,7 +91,14 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          searchCalls++;
          if(typeof args.query!=='string'||args.query.length>500) throw new Error('Consulta inválida');
          if(hasSecrets(args.query))throw new Error('Consulta contém possível credencial; remova dados sensíveis');
-         const results=await knowledgeSearch(actor,args.query,5);
+         let results:Source[];
+         try{results=await knowledgeSearch(actor,args.query,5);}
+         catch{
+           lookupUnavailable=true;
+           // Do not send connection strings, SQL errors or other backend
+           // diagnostic details back into the model's context.
+           throw new Error('Falha temporária na consulta ao cérebro');
+         }
          for(const result of results){
            if(sources.length>=12) break;
            if(!sources.some(s=>s.versionId===result.versionId&&s.ordinal===result.ordinal)) sources.push(result);
@@ -132,5 +146,6 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify(output)});
    }
  }
+ if(lookupUnavailable&&forceLookup&&sources.length===0)return unavailableReply();
  return {answer:groundedReply('Limite de consultas atingido. Reformule sua pergunta ou tente novamente.',forceLookup,sources.length),sources,pendingActions};
 }
