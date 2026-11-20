@@ -30,3 +30,6 @@ Concluir somente após execução real com banco, API, worker e UI, além de rev
 - [ ] T019 [REQ-016, AC-012] Verificar no navegador o fluxo de sugestões e abertura de artigo existente; melhorar similaridade além de títulos quando houver dados reais suficientes.
 
 - [ ] T020 [REQ-012, REQ-020] Validar no navegador o envio de PDF corrigido e revisão de documento publicado, incluindo arquivos protegidos, sem texto e maiores que o limite.
+
+- [x] T021 [REQ-025] Avaliação útil/não útil da resposta do agente com comentário opcional no chat, vinculada à mensagem e fontes; isolamento por usuário, autorização vigente e concorrência validados em integração PostgreSQL.
+- [ ] T022 [REQ-025] Avaliar o fluxo de feedback no navegador e medir qualidade do RAG em casos reais antes de uso com informações internas.

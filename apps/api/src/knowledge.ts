@@ -433,7 +433,7 @@ export function registerKnowledge(app:FastifyInstance) {
  app.post('/feedback',async(req,reply)=>{
    const actor=await requireActor(req);
    const body=req.body as {messageId?:unknown;rating?:unknown;comment?:unknown}|undefined;
-   if(typeof body?.messageId!=='string'||!['GOOD','BAD'].includes(String(body.rating))
+   if(typeof body?.messageId!=='string'||!(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i).test(body.messageId)||!['GOOD','BAD'].includes(String(body.rating))
      ||(body.comment!==undefined && body.comment!==null && typeof body.comment!=='string'))
      return reply.code(400).send({error:'Feedback inválido'});
    const comment=typeof body.comment==='string'?body.comment.trim():null;

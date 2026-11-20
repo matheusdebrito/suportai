@@ -92,6 +92,9 @@ if(!process.env.TEST_DATABASE_URL){
    // Feedback belongs only to assistant messages the authenticated user can currently see.
    const assistantMessageId=savedMessage.json().id as string;
    const userMessageId=reopened.json().messages.find((m:any)=>m.role==='user').id as string;
+   const malformedId=await app.inject({method:'POST',url:'/feedback',headers:auth(reader.cookie),
+     payload:{messageId:'not-a-uuid',rating:'GOOD'}});
+   assert.equal(malformedId.statusCode,400);
    const invalidRating=await app.inject({method:'POST',url:'/feedback',headers:auth(reader.cookie),
      payload:{messageId:assistantMessageId,rating:'NEUTRAL'}});
    assert.equal(invalidRating.statusCode,400);

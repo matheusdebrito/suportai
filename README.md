@@ -8,7 +8,7 @@ Assistente interno com cérebro de conhecimento baseado em artigos e PDFs, recup
 - Login próprio; administrador cria usuários e redefine senhas por código temporário.
 - Conhecimento compartilhado e restrito com permissões no backend.
 - Busca textual PostgreSQL e embeddings pgvector (quando a API de IA estiver configurada).
-- Conversa com agente, ferramentas de busca e prévias de artigos, sem publicação automática.
+- Conversa com agente, ferramentas de busca, avaliações das respostas e prévias de artigos, sem publicação automática.
 - Fluxo de rascunho, revisão, aprovação humana (inclusive autor-aprovador) e versionamento.
 - Pedidos de ajuste com parecer, versões corrigidas e aviso de artigos semelhantes antes de nova criação.
 - Upload de PDF com worker e processamento assíncrono.
