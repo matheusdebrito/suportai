@@ -41,8 +41,9 @@ Na criação de usuários, o backend retorna um código temporário de 15 minuto
 - `npm run typecheck`
 - `npm run test`
 - `npm run build`
+- `npm run e2e` (requer Playwright/Chromium, PostgreSQL e usuário administrador de teste; a CI inicia API e frontend automaticamente)
 
-Há testes unitários iniciais de permissões e segmentação, mas **testes de integração e E2E, execução real de CI, análise de dependências e restauração de backup são obrigatórios antes de produção**. Não use dados confidenciais reais sem avaliar política de retenção e processamento do fornecedor do LLM/embeddings.
+Há testes de integração com PostgreSQL e testes de ponta a ponta com Chromium na CI. **Esses testes não substituem a validação com modelo de IA real, a análise de dependências nem um ensaio de restauração de backup antes da produção.** Não use dados confidenciais reais sem avaliar política de retenção e processamento do fornecedor do LLM/embeddings.
 
 ## Documentação
 

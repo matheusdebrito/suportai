@@ -28,7 +28,12 @@ function textDiff(before:string,after:string){
  return {removed:oldText.slice(0,4000),added:newText.slice(0,4000),unchanged:oldText===newText};
 }
 async function api<T=any>(path:string,init:RequestInit={}):Promise<T> {
- const response=await fetch(path,{...init,credentials:'include',headers:{...(init.body instanceof FormData?{}:{'Content-Type':'application/json'}),...(init.headers||{})}});
+ const headers=new Headers(init.headers);
+ // Empty POSTs (logout, new conversation, submit for review) must have no
+ // JSON content type, otherwise Fastify rejects an absent request body.
+ if(typeof init.body==='string'&&!headers.has('Content-Type'))
+   headers.set('Content-Type','application/json');
+ const response=await fetch(path,{...init,credentials:'include',headers});
  const result=await response.json().catch(()=>({error:'Resposta inválida do servidor'}));
  if(!response.ok) throw Object.assign(new Error(result.error||'Falha na operação'),
    {code:typeof result.code==='string'?result.code:undefined,
