@@ -10,6 +10,7 @@ Os testes em `apps/api/src/agent-evaluation.test.ts` usam modelos e trechos **si
 | Cenário | Evidência objetiva | Limitação |
 | --- | --- | --- |
 | Sem evidência | Saída fixa de abstenção, sem publicar instruções inventadas | Não mede raciocínio do modelo |
+| Falha na busca | Aviso de indisponibilidade, distinto de ausência de fonte, sem enviar erro interno ao modelo | Não cobre incidentes de infraestrutura reais |
 | Com evidência | IDs, versões e conteúdo retornam corretamente ao modelo e no resultado | Não verifica se a resposta resume corretamente |
 | Fontes conflitantes | Trechos de dois documentos são entregues com identificadores distintos | Simulação reconhece o conflito, não prova que LLM real o reconheça |
 | Prompt injection | Texto hostil não habilita ferramenta de escrita em consulta de leitura | Pode existir manipulação de linguagem na resposta |
