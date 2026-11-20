@@ -14,9 +14,9 @@ const STOP_WORDS=new Set((
  'suas isso isto esse essa esses essas este esta estes estas mais menos '+
  'pode podem posso poderia me explique diga quero gostaria saber sobre '+
  'por favor favor devo deve devemos do seu da sua'
-).split(/\\s+/));
+).split(/\s+/));
 export function relaxedLexicalQuery(text:string):string{
- const words=text.toLowerCase().normalize('NFC').match(/[\\p{L}\\p{N}]{2,}/gu)??[];
+ const words=text.toLowerCase().normalize('NFC').match(/[\p{L}\p{N}]{2,}/gu)??[];
  const unique=new Set<string>();
  for(const word of words){
    if(!STOP_WORDS.has(word)&&word.length<=40)unique.add(word);
