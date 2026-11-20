@@ -2,13 +2,13 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {inspectPdfWorkerIsolation} from './pdf-isolation-preflight.js';
 
-const protectedStatus='Name:\\tnode\\nNoNewPrivs:\\t1\\nCapEff:\\t0000000000000000\\nSeccomp:\\t2\\n';
+const protectedStatus=['Name: node','NoNewPrivs: 1','CapEff: 0000000000000000','Seccomp: 2'].join(String.fromCharCode(10));
 test('worker OS hardening preflight accepts a minimal non-root Linux snapshot',()=>{
  assert.deepEqual(inspectPdfWorkerIsolation({platform:'linux',uid:1000,procStatus:protectedStatus}),[]);
 });
 test('worker OS hardening preflight rejects root, capabilities, disabled seccomp and privileges',()=>{
  const issues=inspectPdfWorkerIsolation({platform:'linux',uid:0,
-   procStatus:'NoNewPrivs:\\t0\\nCapEff:\\t0000000000002000\\nSeccomp:\\t0\\n'});
+   procStatus:['NoNewPrivs: 0','CapEff: 0000000000002000','Seccomp: 0'].join(String.fromCharCode(10))});
  assert.equal(issues.length,4);
  assert.ok(issues.some(x=>x.includes('não-root')));
  assert.ok(issues.some(x=>x.includes('NoNewPrivs')));
