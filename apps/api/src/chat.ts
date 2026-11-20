@@ -36,7 +36,7 @@ export function registerChat(app:FastifyInstance) {
      // Revocation during LLM execution must invalidate the result.
      const latest=await query('SELECT active,auth_revision FROM users WHERE id=$1',[a.id]);
      if(!latest.rows[0]?.active||latest.rows[0].auth_revision!==a.auth_revision) return reply.code(403).send({error:'Permissões alteradas durante a consulta; reinicie a conversa'});
-     const sources=output.sources.map(s=>({documentId:s.documentId,versionId:s.versionId,title:s.title,ordinal:s.ordinal}));
+     const sources=output.sources.map(s=>({documentId:s.documentId,versionId:s.versionId,versionNumber:s.versionNumber,title:s.title,ordinal:s.ordinal}));
      const saved=await query(`INSERT INTO messages(conversation_id,role,content,sources,auth_revision)
        VALUES($1,'assistant',$2,$3,$4) RETURNING id`,[id,output.answer,JSON.stringify(sources),a.auth_revision]);
      return {id:saved.rows[0].id,answer:output.answer,sources,pendingActions:output.pendingActions};

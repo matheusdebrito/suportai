@@ -61,6 +61,19 @@ export function registerKnowledge(app:FastifyInstance) {
    if(!r.rowCount) throw Object.assign(new Error('Documento não encontrado'),{statusCode:404});
    return {id:doc.id,title:doc.title,kind:doc.kind,version:r.rows[0]};
  });
+ app.get('/knowledge/documents/:id/versions/:versionId',async req=>{
+   const actor=await requireActor(req);
+   const params=req.params as {id:string;versionId:string};
+   const {doc}=await authorizedDoc(actor,params.id);
+   // Historical citations remain resolvable only while the reader is authorized.
+   // Drafts, rejected versions and revisions under review are never exposed.
+   const version=await query(`SELECT id,version_number,content,status FROM document_versions
+     WHERE id=$1 AND document_id=$2 AND status IN ('PUBLISHED','ARCHIVED')`,
+     [params.versionId,doc.id]);
+   if(!version.rowCount) throw Object.assign(new Error('Versão não encontrada'),{statusCode:404});
+   return {id:doc.id,title:doc.title,kind:doc.kind,version:version.rows[0],
+     isCurrent:doc.current_version_id===params.versionId};
+ });
  app.post('/knowledge/articles',async(req,reply)=>{
    const a=await requireActor(req);
    const b=req.body as {spaceId?:unknown;title?:unknown;content?:unknown}|undefined;

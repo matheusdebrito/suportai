@@ -5,7 +5,7 @@ import './styles.css';
 type User={id:string;email:string;role:'ADMIN'|'APPROVER'|'USER';mustChangePassword:boolean};
 type Space={id:string;name:string;visibility:string;can_read:boolean;can_edit:boolean;can_approve:boolean};
 type Doc={id:string;title:string;kind:string;space_name:string};
-type Message={id?:string;role:'user'|'assistant';content:string;sources?:{documentId:string;versionId:string;title:string}[]};
+type Message={id?:string;role:'user'|'assistant';content:string;sources?:{documentId:string;versionId:string;versionNumber?:number;title:string}[]};
 type Pending={id:string;title:string;content:string};
 type Review={version_id:string;document_id:string;title:string;space_name:string;status:string;index_status:string;content:string;ingestion_error?:string};
 async function api<T=any>(path:string,init:RequestInit={}):Promise<T> {
@@ -83,7 +83,11 @@ function App(){
  async function retryVersion(id:string){setError('');try{await api(`/knowledge/versions/${id}/retry`,{method:'POST'});await refresh();}catch(e){failed(e);}}
  async function submitVersion(id:string){setError('');try{await api(`/knowledge/versions/${id}/submit-review`,{method:'POST'});setLastDraft(null);await refresh();}catch(e){failed(e);}}
  async function decide(id:string,action:'publish'|'reject'){setError('');try{await api(`/knowledge/versions/${id}/${action}`,{method:'POST',body:JSON.stringify(action==='publish'?{confirm:true}:{})});await refresh();}catch(e){failed(e);}}
- async function openDoc(id:string){try{setSelectedDoc(await api(`/knowledge/documents/${id}`));}catch(e){failed(e);}}
+ async function openDoc(id:string){try{setSelectedDoc(await api(`/knowledge/documents/${id}`));setTab('knowledge');}catch(e){failed(e);}}
+ async function openSource(documentId:string,versionId:string){try{
+  setSelectedDoc(await api(`/knowledge/documents/${documentId}/versions/${versionId}`));
+  setTab('knowledge');
+ }catch(e){failed(e);}}
  async function createUser(e:React.FormEvent){e.preventDefault();setError('');try{
   const r=await api<{resetToken:string}>('/admin/users',{method:'POST',body:JSON.stringify({email:newEmail,role:newRole})});
   setTemporary(r.resetToken);setNewEmail('');await refresh();
@@ -106,7 +110,7 @@ function App(){
  <main className="main"><header><div><strong>{tab==='chat'?'Assistente':tab==='knowledge'?'Base de conhecimento':tab==='reviews'?'Central de revisão':'Administração'}</strong><p>{tab==='chat'?'Pergunte, investigue e registre soluções com segurança.':'Conhecimento revisado, rastreável e acessível.'}</p></div>{tab==='chat'&&<button className="secondary" onClick={()=>{setMessages([]);setConversationId(null);setPending([]);}}> <Plus size={16}/> Nova conversa</button>}</header>
  {error&&<div className="error" role="alert">{error}<button className="ghost" onClick={()=>setError('')}>Fechar</button></div>}
  {tab==='chat'&&<section className="chat"><div className="chat-history">{messages.length===0&&<div className="empty"><BrainCircuit size={40}/><h2>Como posso ajudar?</h2><p>Consulte procedimentos, investigue problemas ou peça para preparar um artigo no cérebro.</p><div className="suggestions">{['Como consultar procedimentos de rede?','Como registrar um procedimento novo?','O que fazer quando um servidor não responde?'].map(x=><button key={x} onClick={()=>setInput(x)}>{x}</button>)}</div></div>}
-  {messages.map((m,i)=><div className={'bubble '+m.role} key={m.id||i}><div className="bubble-role">{m.role==='user'?'Você':'SuportAI'}</div><div className="formatted">{m.content}</div>{Boolean(m.sources?.length)&&<div className="sources"><strong>Fontes consultadas</strong>{m.sources!.map((s,j)=><button key={j} onClick={()=>openDoc(s.documentId)}>{s.title} · versão {s.versionId.slice(0,8)}</button>)}</div>}</div>)}
+  {messages.map((m,i)=><div className={'bubble '+m.role} key={m.id||i}><div className="bubble-role">{m.role==='user'?'Você':'SuportAI'}</div><div className="formatted">{m.content}</div>{Boolean(m.sources?.length)&&<div className="sources"><strong>Fontes consultadas</strong>{m.sources!.map((s,j)=><button key={j} onClick={()=>openSource(s.documentId,s.versionId)}>{s.title} · versão {s.versionNumber??s.versionId.slice(0,8)}</button>)}</div>}</div>)}
   {busy&&<p className="hint"><LoaderCircle className="spin" size={16}/> Consultando conhecimento...</p>}
   {pending.map(p=><div className="pending" key={p.id}><strong>Prévia: {p.title}</strong><p>{p.content.slice(0,900)}</p><button onClick={()=>confirmPending(p.id)}><Check size={16}/> Confirmar criação de rascunho</button></div>)}
   </div><form className="composer" onSubmit={send}><textarea placeholder="Digite sua pergunta..." value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();void send(e as unknown as React.FormEvent);}}}/><button disabled={busy||!input.trim()} aria-label="Enviar mensagem"><Send size={19}/></button></form></section>}

@@ -67,6 +67,31 @@ if(!process.env.TEST_DATABASE_URL){
    assert.equal(published.statusCode,200,published.body);
    const allowedRead=await app.inject({method:'GET',url:`/knowledge/documents/${sharedDoc.documentId}`,headers:auth(reader.cookie)});
    assert.equal(allowedRead.statusCode,200,allowedRead.body);
+   const originalSource=await app.inject({method:'GET',url:`/knowledge/documents/${sharedDoc.documentId}/versions/${sharedDoc.versionId}`,headers:auth(reader.cookie)});
+   assert.equal(originalSource.statusCode,200,originalSource.body);
+   assert.equal(originalSource.json().isCurrent,true);
+   // An unpublished revision must never be retrievable through source links.
+   const revision=await app.inject({method:'POST',url:`/knowledge/documents/${sharedDoc.documentId}/versions`,headers:auth(reader.cookie),payload:{content:'Nova revisão: verificar o DNS usando dig, validar respostas e documentar os testes executados no servidor.',baseVersionId:sharedDoc.versionId}});
+   assert.equal(revision.statusCode,201,revision.body);
+   const revisionId=revision.json().versionId as string;
+   const draftSource=await app.inject({method:'GET',url:`/knowledge/documents/${sharedDoc.documentId}/versions/${revisionId}`,headers:auth(reader.cookie)});
+   assert.equal(draftSource.statusCode,404);
+   await app.inject({method:'POST',url:`/knowledge/versions/${revisionId}/submit-review`,headers:auth(reader.cookie)});
+   let revisionReady=false;
+   for(let i=0;i<45;i++){
+     const index=await query('SELECT index_status FROM document_versions WHERE id=$1',[revisionId]);
+     if(index.rows[0].index_status==='READY'){revisionReady=true;break;}
+     await new Promise(resolve=>setTimeout(resolve,400));
+   }
+   assert.equal(revisionReady,true);
+   const revPublished=await app.inject({method:'POST',url:`/knowledge/versions/${revisionId}/publish`,headers:auth(reviewer.cookie),payload:{confirm:true}});
+   assert.equal(revPublished.statusCode,200,revPublished.body);
+   const historySource=await app.inject({method:'GET',url:`/knowledge/documents/${sharedDoc.documentId}/versions/${sharedDoc.versionId}`,headers:auth(reader.cookie)});
+   assert.equal(historySource.statusCode,200,historySource.body);
+   assert.equal(historySource.json().isCurrent,false);
+   assert.equal(historySource.json().version.status,'ARCHIVED');
+   const newestSource=await app.inject({method:'GET',url:`/knowledge/documents/${sharedDoc.documentId}/versions/${revisionId}`,headers:auth(reader.cookie)});
+   assert.equal(newestSource.statusCode,200);
 
    const rejectMalformedPdf=await app.inject({method:'POST',url:'/knowledge/articles',headers:auth(reader.cookie),payload:{spaceId:shared,title:'x',content:'short'}});
    assert.equal(rejectMalformedPdf.statusCode,400);
@@ -103,6 +128,8 @@ if(!process.env.TEST_DATABASE_URL){
    const privateDoc=privDraft.json() as {documentId:string;versionId:string};
    const leaked=await app.inject({method:'GET',url:`/knowledge/documents/${privateDoc.documentId}`,headers:auth(reader.cookie)});
    assert.equal(leaked.statusCode,404);
+   const leakedVersion=await app.inject({method:'GET',url:`/knowledge/documents/${privateDoc.documentId}/versions/${privateDoc.versionId}`,headers:auth(reader.cookie)});
+   assert.equal(leakedVersion.statusCode,404);
 
    const adminGrant=await app.inject({method:'POST',url:`/admin/spaces/${restricted}/grants`,headers:auth(admin.cookie),payload:{userId:reader.id,read:true,edit:false,approve:false}});
    assert.equal(adminGrant.statusCode,200,adminGrant.body);
