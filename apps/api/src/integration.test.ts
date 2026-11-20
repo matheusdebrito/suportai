@@ -62,9 +62,9 @@ if(!process.env.TEST_DATABASE_URL){
    const adminOnlyWithoutRead=await app.inject({method:'GET',url:'/spaces',headers:auth(admin.cookie)});
    assert.equal(adminOnlyWithoutRead.json().spaces.find((x:any)=>x.id===restricted).can_read,false);
    for(const {userId,approve} of [{userId:reader.id,approve:false},{userId:reviewer.id,approve:true}]){
-     const grant=await app.inject({method:'POST',url:'/admin/spaces/'+shared+'/grants',
+     const grantedAccess: {statusCode:number;body:string}=await app.inject({method:'POST',url:'/admin/spaces/'+shared+'/grants',
        headers:auth(admin.cookie),payload:{userId,read:true,edit:true,approve}});
-     assert.equal(grant.statusCode,200,grant.body);
+     assert.equal(grantedAccess.statusCode,200,grantedAccess.body);
    }
    const grantedSpaces=await app.inject({method:'GET',url:'/spaces',headers:auth(reader.cookie)});
    assert.equal(grantedSpaces.json().spaces.find((x:any)=>x.id===shared).can_edit,true);
