@@ -44,3 +44,7 @@ Uma chave de API não constitui aprovação. O mecanismo `ALLOW_EXTERNAL_AI_DATA
 - Não usa banco, projetos, documentos reais, sessões ou conteúdo do usuário. A busca é injetada e fornece apenas os trechos fictícios codificados no arquivo.
 - Registre modelo, data, resultados, saída completa e avaliação humana. Os critérios automáticos são sinais iniciais e podem classificar incorretamente respostas válidas.
 - Não configure o modo de execução externa em pipelines ou tarefas automáticas. Mantenha a configuração de produção de envio externo inalterada.
+
+## Calibração sintética da duplicidade (T026)
+
+Os testes PostgreSQL de `integration.test.ts` também incluem três perfis curados de similaridade, sem serviço externo: conteúdo longo idêntico com título diferente (**deve sinalizar**), conteúdo longo de assunto diferente (**não deve sinalizar o procedimento DNS**) e texto curto genérico (**não deve sinalizar o procedimento DNS**). Esses casos verificam regressões do limiar conservador de comparação de títulos/corpos. **Não constituem estimativa estatística de precisão/recall**, pois faltam exemplos independentes revisados por usuários do piloto. T026 permanece parcialmente aberta até avaliação com um conjunto maior e autorizado.

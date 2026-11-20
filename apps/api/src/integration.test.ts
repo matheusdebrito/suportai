@@ -6,6 +6,7 @@ import {randomUUID} from 'node:crypto';
 import {buildApp} from './server.js';
 import {pool,query} from './db.js';
 import {searchKnowledge} from './retrieval.js';
+import {findSimilarPublished} from './similar.js';
 import {claimJob,renewLease,storeClaimedResult,failClaimedJob,expireStaleJobs} from './worker-jobs.js';
 import {actorForSession,hashToken} from './security.js';
 import {respond} from './agent.js';
@@ -464,6 +465,28 @@ if(!process.env.TEST_DATABASE_URL){
    assert.equal(contentDuplicate.json().code,'SIMILAR_ARTICLES');
    assert.ok(contentDuplicate.json().matches.some((x:any)=>x.id===sharedDoc.documentId),
      'Duplicate article content must be flagged even if its title differs');
+
+   // Curated synthetic cases: an unrelated long article and short generic
+   // boilerplate must not be treated as this DNS procedure.
+   const unrelatedContent=[
+     'Uma agenda fictícia descreve a higienização de uma sala de reuniões,',
+     'a organização de materiais e os horários de inspeção dos armários.',
+     'Os participantes preparam etiquetas, registram presença e encerram',
+     'o encontro com a conferência dos itens utilizados no inventário.'
+   ].join(' ');
+   const unrelatedMatches=await findSimilarPublished(shared,
+     'Inventário de materiais '+randomUUID(),undefined,unrelatedContent);
+   assert.equal(unrelatedMatches.some(x=>x.id===sharedDoc.documentId),false,
+     'Unrelated content must not be classified as this published DNS procedure');
+   const shortMatches=await findSimilarPublished(shared,
+     'Calendário de reuniões '+randomUUID(),undefined,'Registrar os resultados.');
+   assert.equal(shortMatches.some(x=>x.id===sharedDoc.documentId),false,
+     'Short boilerplate alone must not trigger content duplication');
+   const identicalMatches=await findSimilarPublished(shared,
+     'Catálogo externo de equipamentos '+randomUUID(),undefined,
+     originalContent.rows[0].content as string);
+   assert.equal(identicalMatches.some(x=>x.id===sharedDoc.documentId),true,
+     'Identical long body with an unrelated title must be found');
    const typoCandidate=await app.inject({method:'POST',url:'/knowledge/articles',headers:auth(reader.cookie),
      payload:{spaceId:shared,title:'Procedimento DMS '+id,
        content:'Guia alternativo de DNS criado para testar proteção contra títulos digitados incorretamente.'}});
