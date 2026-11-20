@@ -246,6 +246,30 @@ if(!process.env.TEST_DATABASE_URL){
    assert.equal(active.statusCode,200);
    const badOrigin=await app.inject({method:'POST',url:'/conversations',headers:{cookie:reader.cookie,origin:'https://evil.invalid'}});
    assert.equal(badOrigin.statusCode,403);
+   // Administrator-only role changes and deactivation must revoke active sessions.
+   const deniedRoleChange=await app.inject({method:'PATCH',url:`/admin/users/${admin.id}`,headers:auth(reader.cookie),payload:{role:'USER'}});
+   assert.equal(deniedRoleChange.statusCode,403);
+   const selfChange=await app.inject({method:'PATCH',url:`/admin/users/${admin.id}`,headers:auth(admin.cookie),payload:{active:false}});
+   assert.equal(selfChange.statusCode,400);
+   const disable=await app.inject({method:'PATCH',url:`/admin/users/${reader.id}`,headers:auth(admin.cookie),payload:{active:false}});
+   assert.equal(disable.statusCode,200,disable.body);
+   const sessionAfterDeactivation=await app.inject({method:'GET',url:'/auth/me',headers:auth(reader.cookie)});
+   assert.equal(sessionAfterDeactivation.statusCode,401);
+   const disabledLogin=await app.inject({method:'POST',url:'/auth/login',payload:{email:reader.email,password:reader.password}});
+   assert.equal(disabledLogin.statusCode,401);
+   const enable=await app.inject({method:'PATCH',url:`/admin/users/${reader.id}`,headers:auth(admin.cookie),payload:{active:true}});
+   assert.equal(enable.statusCode,200);
+   const reLogin=await app.inject({method:'POST',url:'/auth/login',payload:{email:reader.email,password:reader.password}});
+   assert.equal(reLogin.statusCode,200,reLogin.body);
+   const newCookie=reLogin.headers['set-cookie']?.toString().split(';')[0];
+   assert.ok(newCookie);
+   const roleChange=await app.inject({method:'PATCH',url:`/admin/users/${reader.id}`,headers:auth(admin.cookie),payload:{role:'APPROVER'}});
+   assert.equal(roleChange.statusCode,200,roleChange.body);
+   const sessionAfterRoleChange=await app.inject({method:'GET',url:'/auth/me',headers:auth(newCookie)});
+   assert.equal(sessionAfterRoleChange.statusCode,401);
+   const changedLogin=await app.inject({method:'POST',url:'/auth/login',payload:{email:reader.email,password:reader.password}});
+   assert.equal(changedLogin.statusCode,200,changedLogin.body);
+   assert.equal(changedLogin.json().user.role,'APPROVER');
   } finally {
    worker?.kill('SIGTERM');
    await app.close();
