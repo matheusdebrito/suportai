@@ -478,7 +478,7 @@ export function registerKnowledge(app:FastifyInstance) {
      let similarCount=0;
      if(docId){
        const old=await c.query('SELECT current_version_id,archived_at FROM documents WHERE id=$1 FOR UPDATE',[docId]);
-       if(!old.rowCount||old.rows[0].current_version_id!==pending.base_version_id) return {error:'STALE'};
+       if(!old.rowCount||old.rows[0].archived_at||old.rows[0].current_version_id!==pending.base_version_id) return {error:'STALE'};
        const count=await c.query('SELECT COALESCE(MAX(version_number),0)+1 AS next FROM document_versions WHERE document_id=$1',[docId]);
        version=Number(count.rows[0].next);
      } else {
