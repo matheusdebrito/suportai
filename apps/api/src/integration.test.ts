@@ -135,6 +135,75 @@ if(!process.env.TEST_DATABASE_URL){
    const originalSource=await app.inject({method:'GET',url:`/knowledge/documents/${sharedDoc.documentId}/versions/${sharedDoc.versionId}`,headers:auth(reader.cookie)});
    assert.equal(originalSource.statusCode,200,originalSource.body);
    assert.equal(originalSource.json().isCurrent,true);
+
+   // A reviewer can request corrections; doing so must never replace live knowledge.
+   const waiting=await app.inject({method:'POST',url:'/knowledge/documents/'+sharedDoc.documentId+'/versions',
+     headers:auth(reader.cookie),payload:{content:'Proposta de correção de DNS. Documente a resolução, compare TTLs e registre os testes de conectividade para validação.',baseVersionId:sharedDoc.versionId}});
+   assert.equal(waiting.statusCode,201,waiting.body);
+   const waitingId=waiting.json().versionId as string;
+   const submit=await app.inject({method:'POST',url:'/knowledge/versions/'+waitingId+'/submit-review',headers:auth(reader.cookie)});
+   assert.equal(submit.statusCode,200);
+   const noNote=await app.inject({method:'POST',url:'/knowledge/versions/'+waitingId+'/request-changes',
+     headers:auth(reviewer.cookie),payload:{note:'curto'}});
+   assert.equal(noNote.statusCode,400);
+   const forbiddenReview=await app.inject({method:'POST',url:'/knowledge/versions/'+waitingId+'/request-changes',
+     headers:auth(reader.cookie),payload:{note:'É necessário especificar um teste mais claro.'}});
+   assert.equal(forbiddenReview.statusCode,403);
+   const requestChanges=await app.inject({method:'POST',url:'/knowledge/versions/'+waitingId+'/request-changes',
+     headers:auth(reviewer.cookie),payload:{note:'Adicione evidências do teste de DNS e explique a validação do resultado.'}});
+   assert.equal(requestChanges.statusCode,200,requestChanges.body);
+   const repeatedRequest=await app.inject({method:'POST',url:'/knowledge/versions/'+waitingId+'/request-changes',
+     headers:auth(reviewer.cookie),payload:{note:'Não deve ser possível solicitar ajustes novamente.'}});
+   assert.equal(repeatedRequest.statusCode,409);
+   const authorReviews=await app.inject({method:'GET',url:'/knowledge/mine',headers:auth(reader.cookie)});
+   const requestedItem=authorReviews.json().drafts.find((v:any)=>v.version_id===waitingId);
+   assert.equal(requestedItem.status,'CHANGES_REQUESTED');
+   assert.match(requestedItem.review_note,/evidências do teste/i);
+   const publishedWhileWaiting=await app.inject({method:'GET',url:'/knowledge/documents/'+sharedDoc.documentId,headers:auth(reader.cookie)});
+   assert.equal(publishedWhileWaiting.json().version.id,sharedDoc.versionId);
+   const correctedByOther=await app.inject({method:'POST',url:'/knowledge/versions/'+waitingId+'/correct',
+     headers:auth(reviewer.cookie),payload:{content:'Uma tentativa de alterar o artigo de outro usuário não deve funcionar.'}});
+   assert.equal(correctedByOther.statusCode,404);
+   const correctionPayload={content:'Use dig para confirmar registros e TTLs, registre os resultados e documente a validação do DNS feita pelo técnico.'};
+   const corrections=await Promise.all([0,1].map(()=>app.inject({
+     method:'POST',url:'/knowledge/versions/'+waitingId+'/correct',
+     headers:auth(reader.cookie),payload:correctionPayload
+   })));
+   assert.deepEqual(corrections.map(x=>x.statusCode).sort(),[201,409],
+     'Two concurrent corrections must create exactly one draft');
+   const correctedId=corrections.find(x=>x.statusCode===201)!.json().versionId as string;
+   const correctedDraft=await app.inject({method:'GET',url:'/knowledge/drafts/'+correctedId,headers:auth(reader.cookie)});
+   assert.equal(correctedDraft.statusCode,200);
+   assert.equal(correctedDraft.json().status,'DRAFT');
+   const superseded=await app.inject({method:'GET',url:'/knowledge/drafts/'+waitingId,headers:auth(reader.cookie)});
+   assert.equal(superseded.statusCode,404);
+   const restoredList=await app.inject({method:'GET',url:'/knowledge/mine',headers:auth(reader.cookie)});
+   assert.equal(restoredList.json().drafts.some((v:any)=>v.version_id===waitingId),false);
+   assert.equal(restoredList.json().drafts.some((v:any)=>v.version_id===correctedId),true);
+   const correctionAudit=await query("SELECT count(*)::int AS count FROM audit_events WHERE action='KNOWLEDGE_CORRECTION_DRAFT_CREATED' AND resource_id=$1",[sharedDoc.documentId]);
+   assert.equal(correctionAudit.rows[0].count,1);
+   const samePublished=await app.inject({method:'GET',url:'/knowledge/documents/'+sharedDoc.documentId,headers:auth(reader.cookie)});
+   assert.equal(samePublished.json().version.id,sharedDoc.versionId);
+
+   // Rejection requires an auditable human explanation.
+   const rejectedDraft=await app.inject({method:'POST',url:'/knowledge/documents/'+sharedDoc.documentId+'/versions',
+     headers:auth(reader.cookie),payload:{content:'Proposta incompleta sobre configuração de DNS, sem descrever como o resultado deve ser validado.',baseVersionId:sharedDoc.versionId}});
+   assert.equal(rejectedDraft.statusCode,201,rejectedDraft.body);
+   const rejectedId=rejectedDraft.json().versionId as string;
+   const toReview=await app.inject({method:'POST',url:'/knowledge/versions/'+rejectedId+'/submit-review',
+     headers:auth(reader.cookie)});
+   assert.equal(toReview.statusCode,200);
+   const emptyReason=await app.inject({method:'POST',url:'/knowledge/versions/'+rejectedId+'/reject',
+     headers:auth(reviewer.cookie),payload:{}});
+   assert.equal(emptyReason.statusCode,400);
+   const rejected=await app.inject({method:'POST',url:'/knowledge/versions/'+rejectedId+'/reject',
+     headers:auth(reviewer.cookie),payload:{note:'O procedimento não informa como validar o resultado antes de sua publicação.'}});
+   assert.equal(rejected.statusCode,200,rejected.body);
+   const rejectedInfo=await app.inject({method:'GET',url:'/knowledge/drafts/'+rejectedId,headers:auth(reader.cookie)});
+   assert.equal(rejectedInfo.statusCode,200);
+   assert.equal(rejectedInfo.json().status,'REJECTED');
+   assert.match(rejectedInfo.json().review_note,/não informa como validar/);
+
    // An unpublished revision must never be retrievable through source links.
    const revision=await app.inject({method:'POST',url:`/knowledge/documents/${sharedDoc.documentId}/versions`,headers:auth(reader.cookie),payload:{content:'Nova revisão: verificar o DNS usando dig, validar respostas e documentar os testes executados no servidor.',baseVersionId:sharedDoc.versionId}});
    assert.equal(revision.statusCode,201,revision.body);
