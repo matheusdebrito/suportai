@@ -526,7 +526,7 @@ if(!process.env.TEST_DATABASE_URL){
    const forgedId=forged.json().versionId as string;
    for(let attempt=0;attempt<50;attempt++){
      const r=await query('SELECT index_status FROM document_versions WHERE id=$1',[forgedId]);
-     if(r.rows[0]?.index_status!=='PENDING')break;
+     if(['FAILED','READY'].includes(r.rows[0]?.index_status))break;
      await new Promise(resolve=>setTimeout(resolve,300));
    }
    const forgedStatus=await query('SELECT index_status FROM document_versions WHERE id=$1',[forgedId]);
