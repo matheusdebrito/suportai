@@ -291,6 +291,32 @@ if(!process.env.TEST_DATABASE_URL){
      'Como posso verificar o DNS da empresa usando o Linux?');
    assert.ok(naturalResults.some(x=>x.documentId===sharedDoc.documentId),
      'Natural language retrieval must find published, relevant knowledge without embeddings');
+   // The title marker deliberately does not appear in the indexed content.
+   // Users must be able to locate an approved procedure by name.
+   const titleMarker='titulo'+id;
+   const titleOnly=await app.inject({method:'POST',url:'/knowledge/articles',
+     headers:auth(reader.cookie),payload:{spaceId:shared,
+       title:'Mapa de suporte '+titleMarker,
+       content:'Antes de iniciar a manutenção, verifique a integridade do ambiente e registre os resultados em homologação.'}});
+   assert.equal(titleOnly.statusCode,201,titleOnly.body);
+   const sendTitleReview=await app.inject({method:'POST',
+     url:'/knowledge/versions/'+titleOnly.json().versionId+'/submit-review',headers:auth(reader.cookie)});
+   assert.equal(sendTitleReview.statusCode,200,sendTitleReview.body);
+   let titleIndexed=false;
+   for(let attempt=0;attempt<45;attempt++){
+     const state=await query('SELECT index_status FROM document_versions WHERE id=$1',[titleOnly.json().versionId]);
+     if(state.rows[0].index_status==='READY'){titleIndexed=true;break;}
+     if(state.rows[0].index_status==='FAILED')break;
+     await new Promise(resolve=>setTimeout(resolve,400));
+   }
+   assert.equal(titleIndexed,true,'Title-only fixture must be fully indexed');
+   const publishTitle=await app.inject({method:'POST',
+     url:'/knowledge/versions/'+titleOnly.json().versionId+'/publish',
+     headers:auth(reviewer.cookie),payload:{confirm:true}});
+   assert.equal(publishTitle.statusCode,200,publishTitle.body);
+   const byTitle=await searchKnowledge(naturalActor!,titleMarker);
+   assert.ok(byTitle.some(x=>x.documentId===titleOnly.json().documentId),
+     'A unique term present only in the published title must be retrievable');
    const originalSource=await app.inject({method:'GET',url:`/knowledge/documents/${sharedDoc.documentId}/versions/${sharedDoc.versionId}`,headers:auth(reader.cookie)});
    assert.equal(originalSource.statusCode,200,originalSource.body);
    assert.equal(originalSource.json().isCurrent,true);
