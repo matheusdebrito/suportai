@@ -12,8 +12,8 @@ trap cleanup EXIT
 mkdir -p "$root/socket" "$root/fixture"
 chmod 0711 "$root"
 chmod 0755 "$root/fixture"
-sudo chown 10001:10001 "$root/socket"
 chmod 0700 "$root/socket"
+sudo chown 10001:10001 "$root/socket"
 node - "$root/fixture/synthetic.pdf" <<'NODE'
 const {PDFDocument,StandardFonts}=require('pdf-lib');
 const fs=require('node:fs');
