@@ -262,6 +262,14 @@ if(!process.env.TEST_DATABASE_URL){
    assert.equal(allowedRead.statusCode,200,allowedRead.body);
    assert.equal(allowedRead.json().space_id,shared);
    assert.equal(allowedRead.json().version.id,sharedDoc.versionId);
+   // Previously plainto_tsquery('simple') required ALL words from this
+   // natural question, including "como" and "empresa", and returned zero.
+   const naturalActor=await actorForSession(reader.cookie.split('=')[1]);
+   assert.ok(naturalActor);
+   const naturalResults=await searchKnowledge(naturalActor!,
+     'Como posso verificar o DNS da empresa usando o Linux?');
+   assert.ok(naturalResults.some(x=>x.documentId===sharedDoc.documentId),
+     'Natural language retrieval must find published, relevant knowledge without embeddings');
    const originalSource=await app.inject({method:'GET',url:`/knowledge/documents/${sharedDoc.documentId}/versions/${sharedDoc.versionId}`,headers:auth(reader.cookie)});
    assert.equal(originalSource.statusCode,200,originalSource.body);
    assert.equal(originalSource.json().isCurrent,true);
