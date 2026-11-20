@@ -1,5 +1,5 @@
 import './env.js';
-import {PDFParse} from 'pdf-parse';
+import {extractPdfText} from './pdf-extract.js';
 import {pool,query} from './db.js';
 import {chunks,hasSecrets} from './knowledge.js';
 import {embedText} from './llm.js';
@@ -15,14 +15,8 @@ async function processNext():Promise<boolean>{
    let text=r.rows[0].content as string;
    if(r.rows[0].pdf_bytes){
      const bytes=r.rows[0].pdf_bytes as Buffer;
-     const parser=new PDFParse({data:new Uint8Array(bytes)});
-     try{
-       const info=await parser.getInfo();
-       if(info.total>200)throw new Error('PDF excede o limite de 200 páginas');
-       const parsed=await parser.getText();
-       text=parsed.text;
-     }finally{await parser.destroy();}
-     if(text.trim().length<40)throw new Error('PDF sem texto extraível; necessário texto digital');
+     // PDF bytes are untrusted. Parse in a subprocess with no inherited secrets.
+     text=await extractPdfText(bytes);
    }
    if(hasSecrets(text))throw new Error('Possível credencial detectada; revisão necessária');
    if(!text.trim())throw new Error('Documento vazio');
