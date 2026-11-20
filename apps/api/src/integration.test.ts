@@ -319,6 +319,23 @@ if(!process.env.TEST_DATABASE_URL){
    assert.match(JSON.stringify(observedRequests[2].messages),/não solicitou a criação/i);
    const pendingAfter=await query('SELECT count(*)::int AS n FROM pending_actions WHERE conversation_id=$1',[conversationId]);
    assert.equal(pendingAfter.rows[0].n,pendingBefore.rows[0].n,'Untrusted article content must not cause writes');
+
+   // Retrieval may have succeeded, but an empty provider response must never
+   // be saved or displayed as a sourced procedure.
+   let blankStep=0;
+   const blankModel={chat:{completions:{create:async()=>{
+     blankStep++;
+     return {choices:[{message:blankStep===1
+       ? {role:'assistant',content:null,tool_calls:[{id:'read-dns',type:'function',
+           function:{name:'search_knowledge',arguments:JSON.stringify({query:'DNS'})}}]}
+       : {role:'assistant',content:''}}]};
+   }}}} as unknown as OpenAI;
+   const blankAnswer=await respond(naturalActor!,conversationId,
+     'Qual é o procedimento de DNS?',[],blankModel);
+   assert.equal(blankStep,2);
+   assert.deepEqual(blankAnswer.sources,[]);
+   assert.match(blankAnswer.answer,/não conseguiu produzir uma resposta/i);
+
    // The title marker deliberately does not appear in the indexed content.
    // Users must be able to locate an approved procedure by name.
    const titleMarker='titulo'+id;

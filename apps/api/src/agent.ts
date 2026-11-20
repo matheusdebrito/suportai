@@ -62,7 +62,14 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
        sources:[],pendingActions};
    }
    messages.push(message);
-   if(!message.tool_calls?.length) return {answer:groundedReply(message.content||'Não consegui concluir a resposta.',forceLookup,sources.length),sources,pendingActions};
+   if(!message.tool_calls?.length){
+     // Retrieved excerpts are not evidence that a usable answer was produced.
+     // Never attach their citations to an empty model response.
+     if(!message.content?.trim())
+       return {answer:'O modelo não conseguiu produzir uma resposta. Reformule a pergunta ou tente novamente.',
+         sources:[],pendingActions};
+     return {answer:groundedReply(message.content,forceLookup,sources.length),sources,pendingActions};
+   }
    for(const [index,call] of message.tool_calls.entries()){
      if(index>=4){
        messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify({error:'Limite de ferramentas da etapa atingido'})});
