@@ -1,6 +1,6 @@
 import React,{useEffect,useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {BrainCircuit,MessageCircle,BookOpen,ShieldCheck,Users,Send,Plus,LogOut,FileUp,Check,RotateCcw,LoaderCircle,ThumbsUp,ThumbsDown} from 'lucide-react';
+import {BrainCircuit,MessageCircle,BookOpen,ShieldCheck,Users,Send,Plus,LogOut,FileUp,Check,RotateCcw,LoaderCircle,ThumbsUp,ThumbsDown,Trash2} from 'lucide-react';
 import './styles.css';
 type User={id:string;email:string;role:'ADMIN'|'APPROVER'|'USER';mustChangePassword:boolean};
 type Operations={
@@ -146,6 +146,18 @@ function App(){
    setConversationId(id);setMessages(result.messages);setPending(result.pendingActions);setFeedbackEditor(null);
    setInput('');setTab('chat');
   }catch(e){failed(e);}finally{setConversationLoading(false);}
+ }
+ async function deleteConversation(id:string){
+   if(busy||conversationLoading)return;
+   if(!window.confirm('Excluir definitivamente esta conversa, as avaliações e as propostas ainda não confirmadas? Artigos criados serão preservados.'))return;
+   setError('');
+   try{
+     await api('/conversations/'+id,{method:'DELETE',body:JSON.stringify({confirm:true})});
+     if(conversationId===id){
+       setConversationId(null);setMessages([]);setPending([]);setFeedbackEditor(null);
+     }
+     await refreshConversations();
+   }catch(e){failed(e);}
  }
  function newConversation(){
   if(busy||conversationLoading)return;
@@ -325,7 +337,7 @@ function App(){
     </div>
   </form>
  </section>}
- {tab==='chat'&&<div className="chat-layout"><aside className="conversations-panel"><div className="conversations-heading"><strong>Conversas</strong><button className="secondary" disabled={busy||conversationLoading} onClick={()=>void refreshConversations().catch(failed)} aria-label="Atualizar conversas"><RotateCcw size={15}/></button></div>{conversations.length===0?<p className="hint">Suas conversas aparecem aqui depois da primeira mensagem.</p>:conversations.map(c=><button key={c.id} disabled={busy||conversationLoading} className={'conversation-item '+(conversationId===c.id?'selected':'')} onClick={()=>void openConversation(c.id)}><span>{c.title}</span><small>{new Date(c.updated_at).toLocaleDateString('pt-BR',{day:'2-digit',month:'short'})}</small></button>)}</aside><section className="chat"><div className="chat-history">{conversationLoading&&<p className="hint"><LoaderCircle className="spin" size={16}/> Abrindo conversa...</p>}{messages.length===0&&<div className="empty"><BrainCircuit size={40}/><h2>Como posso ajudar?</h2><p>Consulte procedimentos, investigue problemas ou peça para preparar um artigo no cérebro.</p><div className="suggestions">{['Como consultar procedimentos de rede?','Como registrar um procedimento novo?','O que fazer quando um servidor não responde?'].map(x=><button key={x} onClick={()=>setInput(x)}>{x}</button>)}</div></div>}
+ {tab==='chat'&&<div className="chat-layout"><aside className="conversations-panel"><div className="conversations-heading"><strong>Conversas</strong><button className="secondary" disabled={busy||conversationLoading} onClick={()=>void refreshConversations().catch(failed)} aria-label="Atualizar conversas"><RotateCcw size={15}/></button></div>{conversations.length===0?<p className="hint">Suas conversas aparecem aqui depois da primeira mensagem.</p>:conversations.map(c=><div className="conversation-row" key={c.id}><button disabled={busy||conversationLoading} className={'conversation-item '+(conversationId===c.id?'selected':'')} onClick={()=>void openConversation(c.id)}><span>{c.title}</span><small>{new Date(c.updated_at).toLocaleDateString('pt-BR',{day:'2-digit',month:'short'})}</small></button><button type="button" className="conversation-remove" disabled={busy||conversationLoading} aria-label={'Excluir conversa '+c.title} title="Excluir conversa" onClick={()=>void deleteConversation(c.id)}><Trash2 size={15}/></button></div>)}</aside><section className="chat"><div className="chat-history">{conversationLoading&&<p className="hint"><LoaderCircle className="spin" size={16}/> Abrindo conversa...</p>}{messages.length===0&&<div className="empty"><BrainCircuit size={40}/><h2>Como posso ajudar?</h2><p>Consulte procedimentos, investigue problemas ou peça para preparar um artigo no cérebro.</p><div className="suggestions">{['Como consultar procedimentos de rede?','Como registrar um procedimento novo?','O que fazer quando um servidor não responde?'].map(x=><button key={x} onClick={()=>setInput(x)}>{x}</button>)}</div></div>}
   {messages.map((m,i)=><div className={'bubble '+m.role} key={m.id||i}><div className="bubble-role">{m.role==='user'?'Você':'SuportAI'}</div><div className="formatted">{m.content}</div>{Boolean(m.sources?.length)&&<div className="sources"><strong>Fontes consultadas</strong>{m.sources!.map((s,j)=><button key={j} onClick={()=>openSource(s.documentId,s.versionId)}>{s.title} · versão {s.versionNumber??s.versionId.slice(0,8)}</button>)}</div>}
  {m.role==='assistant'&&m.id&&<div className="feedback-area">
   <div className="feedback-controls"><span className="hint">Esta resposta ajudou?</span>
