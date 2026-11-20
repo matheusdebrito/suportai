@@ -16,14 +16,14 @@ const tools:OpenAI.Chat.Completions.ChatCompletionTool[]=[
  {type:'function',function:{name:'prepare_article',description:'Prepara prévia de artigo solicitado explicitamente pelo usuário; requer confirmação humana posterior antes de criar rascunho.',parameters:{type:'object',properties:{spaceId:{type:'string'},title:{type:'string'},content:{type:'string'},documentId:{type:'string',description:'Documento a atualizar se aplicável'}},required:['spaceId','title','content'],additionalProperties:false}}}
 ];
 export type AgentOutput={answer:string;sources:Source[];pendingActions:{id:string;title:string;content:string}[]};
-export async function respond(actor:Actor,conversationId:string,userMessage:string,history:{role:'user'|'assistant';content:string}[]):Promise<AgentOutput>{
+export async function respond(actor:Actor,conversationId:string,userMessage:string,history:{role:'user'|'assistant';content:string}[],provider:OpenAI|null=client):Promise<AgentOutput>{
  const sources:Source[]=[];
  const pendingActions:AgentOutput['pendingActions']=[];
  const allowMutation=allowsKnowledgeMutation(userMessage);
  const forceLookup=shouldForceKnowledgeLookup(userMessage);
  let searchCalls=0;
  const availableTools=allowMutation?tools:tools.filter(t=>t.type==='function' && t.function.name==='search_knowledge');
- if(!client){
+ if(!provider){
    const found=await searchKnowledge(actor,userMessage,5);
    return {answer:found.length?'Não há modelo de IA configurado. Encontrei estes trechos relevantes no cérebro:\n\n'+found.map((s,i)=>`${i+1}. ${s.title} — ${s.content.slice(0,500)}`).join('\n\n'):'Não encontrei um procedimento confirmado no cérebro. O uso do modelo externo não está habilitado nesta instalação.',sources:found,pendingActions};
  }
@@ -36,7 +36,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
    const toolChoice=turn===0 && forceLookup
      ? ({type:'function',function:{name:'search_knowledge'}} as const)
      : ('auto' as const);
-   const completion=await client.chat.completions.create({model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',messages,tools:availableTools,tool_choice:toolChoice,temperature:0.2,max_tokens:1400});
+   const completion=await provider.chat.completions.create({model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',messages,tools:availableTools,tool_choice:toolChoice,temperature:0.2,max_tokens:1400});
    const message=completion.choices[0]?.message;
    if(!message) throw new Error('Resposta vazia do provedor');
    messages.push(message);

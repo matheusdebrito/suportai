@@ -7,6 +7,8 @@ import {buildApp} from './server.js';
 import {pool,query} from './db.js';
 import {searchKnowledge} from './retrieval.js';
 import {actorForSession} from './security.js';
+import {respond} from './agent.js';
+import type OpenAI from 'openai';
 import {PDFDocument,StandardFonts} from 'pdf-lib';
 
 if(!process.env.TEST_DATABASE_URL){
@@ -42,6 +44,35 @@ if(!process.env.TEST_DATABASE_URL){
 
    const forbiddenAdmin=await app.inject({method:'POST',url:'/admin/users',headers:auth(reader.cookie),payload:{email:'bad@example.test',role:'ADMIN'}});
    assert.equal(forbiddenAdmin.statusCode,403);
+
+   // An explicit chat request prepares a preview but never publishes anything.
+   const proposed=await app.inject({method:'POST',url:'/conversations',headers:auth(reader.cookie)});
+   assert.equal(proposed.statusCode,200);
+   const conversationId=proposed.json().id as string;
+   const editorActor=await actorForSession(reader.cookie.split('=')[1]);
+   assert.ok(editorActor);
+   let draftCalls=0;
+   const agentMock={chat:{completions:{create:async()=>{
+     draftCalls++;
+     return {choices:[{message:draftCalls===1
+      ? {role:'assistant',content:null,tool_calls:[{id:'prepare-1',type:'function',function:{name:'prepare_article',arguments:JSON.stringify({
+         spaceId:shared,title:'Procedimento NTP '+id,
+         content:'Para verificar sincronização de relógio, consulte chronyc tracking e registre o servidor utilizado.'
+       })}}]}
+      : {role:'assistant',content:'Prévia preparada, confirme no painel para criar o rascunho.'}
+     }]};
+   }}}} as unknown as OpenAI;
+   const generated=await respond(editorActor!,conversationId,'Adicione este procedimento de NTP ao cérebro',[],agentMock);
+   assert.equal(generated.pendingActions.length,1);
+   const pendingId=generated.pendingActions[0].id;
+   const beforeConfirmation=await query('SELECT result_version_id FROM pending_actions WHERE id=$1',[pendingId]);
+   assert.equal(beforeConfirmation.rows[0].result_version_id,null);
+   const confirmed=await app.inject({method:'POST',url:/`/knowledge/pending/${pendingId}/confirm`,headers:auth(reader.cookie)});
+   assert.equal(confirmed.statusCode,200,confirmed.body);
+   const draftDoc=await query('SELECT current_version_id FROM documents WHERE id=$1',[confirmed.json().documentId]);
+   assert.equal(draftDoc.rows[0].current_version_id,null,'A preview must not publish content');
+   const draftHidden=await app.inject({method:'GET',url:/`/knowledge/documents/${confirmed.json().documentId}`,headers:auth(reader.cookie)});
+   assert.equal(draftHidden.statusCode,404);
 
    const sharedDraft=await app.inject({method:'POST',url:'/knowledge/articles',headers:auth(reader.cookie),payload:{spaceId:shared,title:'Procedimento DNS '+id,content:'Para verificar resolução de nomes no Linux utilize dig e confira o servidor DNS autoritativo e o retorno esperado.'}});
    assert.equal(sharedDraft.statusCode,201,sharedDraft.body);
