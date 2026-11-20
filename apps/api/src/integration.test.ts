@@ -300,6 +300,124 @@ if(!process.env.TEST_DATABASE_URL){
    }
    const pdfJob=await query('SELECT error FROM ingestion_jobs WHERE version_id=$1',[pdfUpload.json().versionId]);
    assert.equal(pdfReady,true,'worker must extract valid PDF; '+String(pdfJob.rows[0]?.error??'unknown'));
+
+   // PDF editorial changes are new versions of the same document, never a new document.
+   const pdfDocumentId=pdfUpload.json().documentId as string;
+   const pdfOriginalId=pdfUpload.json().versionId as string;
+   const initialSubmit=await app.inject({method:'POST',url:'/knowledge/versions/'+pdfOriginalId+'/submit-review',
+     headers:auth(reader.cookie)});
+   assert.equal(initialSubmit.statusCode,200,initialSubmit.body);
+   const pdfReview=await app.inject({method:'POST',url:'/knowledge/versions/'+pdfOriginalId+'/request-changes',
+     headers:auth(reviewer.cookie),payload:{note:'O checklist precisa explicar como registrar o resultado de cada verificação.'}});
+   assert.equal(pdfReview.statusCode,200,pdfReview.body);
+   const previousDraft=await app.inject({method:'GET',url:'/knowledge/drafts/'+pdfOriginalId,
+     headers:auth(reader.cookie)});
+   assert.equal(previousDraft.statusCode,200);
+   assert.equal(previousDraft.json().status,'CHANGES_REQUESTED');
+
+   async function makeTestPdf(text:string):Promise<Buffer>{
+     const document=await PDFDocument.create();
+     const page=document.addPage([600,400]);
+     const font=await document.embedFont(StandardFonts.Helvetica);
+     page.drawText(text,{x:40,y:340,size:12,font,maxWidth:500});
+     return Buffer.from(await document.save({useObjectStreams:false}));
+   }
+   function pdfForm(bytes:Buffer,fields:Record<string,string>={}){
+     const boundary='pdf-version-'+randomUUID();
+     const segments:Buffer[]=[];
+     for(const [name,value] of Object.entries(fields)){
+       segments.push(Buffer.from('--'+boundary+'\r\nContent-Disposition: form-data; name="'+name+
+         '"\r\n\r\n'+value+'\r\n'));
+     }
+     segments.push(Buffer.from('--'+boundary+'\r\nContent-Disposition: form-data; name="file"; filename="revisado.pdf"\r\n'+
+       'Content-Type: application/pdf\r\n\r\n'));
+     segments.push(bytes,Buffer.from('\r\n--'+boundary+'--\r\n'));
+     return {body:Buffer.concat(segments),type:'multipart/form-data; boundary='+boundary};
+   }
+   async function indexed(versionId:string){
+     let status='PENDING';
+     for(let i=0;i<45;i++){
+       const r=await query('SELECT index_status FROM document_versions WHERE id=$1',[versionId]);
+       status=r.rows[0]?.index_status;
+       if(status==='READY'||status==='FAILED')break;
+       await new Promise(resolve=>setTimeout(resolve,400));
+     }
+     const r=await query('SELECT error FROM ingestion_jobs WHERE version_id=$1',[versionId]);
+     assert.equal(status,'READY','PDF indexation failed: '+String(r.rows[0]?.error??'unknown'));
+   }
+
+   const wrongActor=pdfForm(await makeTestPdf('An invalid attempted PDF correction from an unrelated actor must never succeed.'));
+   const unauthorizedPdf=await app.inject({method:'POST',url:'/knowledge/versions/'+pdfOriginalId+'/correct-pdf',
+     headers:{...auth(reviewer.cookie),'content-type':wrongActor.type},payload:wrongActor.body});
+   assert.equal(unauthorizedPdf.statusCode,404,'Only the original author may correct a proposed PDF');
+   const invalidBytes=pdfForm(Buffer.from('this is not a valid PDF file at all'));
+   const invalidPdf=await app.inject({method:'POST',url:'/knowledge/versions/'+pdfOriginalId+'/correct-pdf',
+     headers:{...auth(reader.cookie),'content-type':invalidBytes.type},payload:invalidBytes.body});
+   assert.equal(invalidPdf.statusCode,415);
+
+   const correctedBytes=await makeTestPdf('Checklist revisado de seguranca: registre resultados de logs, backups, disponibilidade e validacao de servicos.');
+   const pdfCorrections=await Promise.all([0,1].map(async()=>{
+     const payload=pdfForm(correctedBytes);
+     return app.inject({method:'POST',url:'/knowledge/versions/'+pdfOriginalId+'/correct-pdf',
+       headers:{...auth(reader.cookie),'content-type':payload.type},payload:payload.body});
+   }));
+   assert.deepEqual(pdfCorrections.map(r=>r.statusCode).sort(),[201,409],
+     'Concurrent PDF corrections must generate only one replacement');
+   const newPdfVersion=pdfCorrections.find(r=>r.statusCode===201)!.json() as {documentId:string;versionId:string};
+   assert.equal(newPdfVersion.documentId,pdfDocumentId);
+   assert.notEqual(newPdfVersion.versionId,pdfOriginalId);
+   const obsoletePdf=await app.inject({method:'GET',url:'/knowledge/drafts/'+pdfOriginalId,headers:auth(reader.cookie)});
+   assert.equal(obsoletePdf.statusCode,404);
+   const stillUnpublished=await app.inject({method:'GET',url:'/knowledge/documents/'+pdfDocumentId,headers:auth(reader.cookie)});
+   assert.equal(stillUnpublished.statusCode,404);
+   const pdfAudit=await query("SELECT count(*)::int AS count FROM audit_events WHERE action='KNOWLEDGE_PDF_CORRECTION_DRAFT_CREATED' AND resource_id=$1",[pdfDocumentId]);
+   assert.equal(pdfAudit.rows[0].count,1);
+   await indexed(newPdfVersion.versionId);
+   const correctedExtracted=await app.inject({method:'GET',url:'/knowledge/drafts/'+newPdfVersion.versionId,headers:auth(reader.cookie)});
+   assert.equal(correctedExtracted.statusCode,200);
+   assert.match(correctedExtracted.json().content,/Checklist revisado/);
+
+   const sendPdfReview=await app.inject({method:'POST',url:'/knowledge/versions/'+newPdfVersion.versionId+'/submit-review',
+     headers:auth(reader.cookie)});
+   assert.equal(sendPdfReview.statusCode,200);
+   const publishPdf=await app.inject({method:'POST',url:'/knowledge/versions/'+newPdfVersion.versionId+'/publish',
+     headers:auth(reviewer.cookie),payload:{confirm:true}});
+   assert.equal(publishPdf.statusCode,200,publishPdf.body);
+   const livePdf=await app.inject({method:'GET',url:'/knowledge/documents/'+pdfDocumentId,headers:auth(reader.cookie)});
+   assert.equal(livePdf.statusCode,200);
+   assert.equal(livePdf.json().version.id,newPdfVersion.versionId);
+
+   const replacementBytes=await makeTestPdf('Terceira versao do checklist: valide os backups, confira a disponibilidade do servidor e registre evidencias.');
+   const staleForm=pdfForm(replacementBytes,{baseVersionId:pdfOriginalId});
+   const staleAttempt=await app.inject({method:'POST',url:'/knowledge/documents/'+pdfDocumentId+'/pdf-versions',
+     headers:{...auth(reader.cookie),'content-type':staleForm.type},payload:staleForm.body});
+   assert.equal(staleAttempt.statusCode,409,'A revision must target the current published version');
+   const newForm=pdfForm(replacementBytes,{baseVersionId:newPdfVersion.versionId});
+   const newDraftResponse=await app.inject({method:'POST',url:'/knowledge/documents/'+pdfDocumentId+'/pdf-versions',
+     headers:{...auth(reader.cookie),'content-type':newForm.type},payload:newForm.body});
+   assert.equal(newDraftResponse.statusCode,201,newDraftResponse.body);
+   const newestDraft=newDraftResponse.json() as {documentId:string;versionId:string};
+   assert.equal(newestDraft.documentId,pdfDocumentId);
+   const stillLivePdf=await app.inject({method:'GET',url:'/knowledge/documents/'+pdfDocumentId,headers:auth(reader.cookie)});
+   assert.equal(stillLivePdf.json().version.id,newPdfVersion.versionId,
+     'An unreviewed PDF revision cannot replace published knowledge');
+   const privatePdfRevision=await app.inject({method:'GET',url:'/knowledge/drafts/'+newestDraft.versionId,
+     headers:auth(reviewer.cookie)});
+   assert.equal(privatePdfRevision.statusCode,404,'Draft bytes/text must not be shown to another user');
+   await indexed(newestDraft.versionId);
+   const readyPdfReview=await app.inject({method:'POST',url:'/knowledge/versions/'+newestDraft.versionId+'/submit-review',
+     headers:auth(reader.cookie)});
+   assert.equal(readyPdfReview.statusCode,200,readyPdfReview.body);
+   const publishedPdfRevision=await app.inject({method:'POST',url:'/knowledge/versions/'+newestDraft.versionId+'/publish',
+     headers:auth(reviewer.cookie),payload:{confirm:true}});
+   assert.equal(publishedPdfRevision.statusCode,200,publishedPdfRevision.body);
+   const latestPdf=await app.inject({method:'GET',url:'/knowledge/documents/'+pdfDocumentId,headers:auth(reader.cookie)});
+   assert.equal(latestPdf.json().version.id,newestDraft.versionId);
+   const historicalPdf=await app.inject({method:'GET',url:'/knowledge/documents/'+pdfDocumentId+
+     '/versions/'+newPdfVersion.versionId,headers:auth(reader.cookie)});
+   assert.equal(historicalPdf.statusCode,200);
+   assert.equal(historicalPdf.json().version.status,'ARCHIVED');
+
    const restrictedDenied=await app.inject({method:'POST',url:'/knowledge/articles',headers:auth(reader.cookie),payload:{spaceId:restricted,title:'Restrito '+id,content:'Este texto somente deve ser acessado por leitores especificamente autorizados.'}});
    assert.equal(restrictedDenied.statusCode,403);
 

@@ -6,6 +6,15 @@ import {findSimilarPublished, validDuplicateReason, SimilarArticlesError} from '
 export function hasSecrets(text:string) {
  return /-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----|(?:api[_-]?key|secret|senha|password|token|authorization)\s*[:=]\s*(?:bearer\s+)?["']?[a-z0-9_\-/+=]{12,}|(?:ghp|gho|ghu|ghs|ghr)_[a-z0-9]{30,}|github_pat_[a-z0-9_]{25,}|sk-[a-z0-9_-]{20,}|AKIA[0-9A-Z]{16}/i.test(text);
 }
+async function readPdfBytes(file:{mimetype:string;filename:string;toBuffer:()=>Promise<Buffer>}|undefined):Promise<Buffer>{
+ if(!file) throw Object.assign(new Error('PDF obrigatório'),{statusCode:400});
+ if(file.mimetype!=='application/pdf'||!file.filename.toLowerCase().endsWith('.pdf'))
+   throw Object.assign(new Error('Formato não suportado'),{statusCode:415});
+ const bytes=await file.toBuffer();
+ if(bytes.length<8||bytes.subarray(0,5).toString()!=='%PDF-')
+   throw Object.assign(new Error('PDF inválido'),{statusCode:415});
+ return bytes;
+}
 export function chunks(text:string,size=1100,overlap=150) {
  const out:string[]=[];
  for(let start=0;start<text.length;start+=size-overlap){out.push(text.slice(start,start+size)); if(start+size>=text.length)break;}
@@ -22,8 +31,8 @@ async function createVersion(actor:Actor,spaceId:string,title:string,content:str
    let versionNo=1;
    let similarCount=0;
    if(docId){
-     const doc=await c.query('SELECT id,space_id,current_version_id FROM documents WHERE id=$1 FOR UPDATE',[docId]);
-     if(!doc.rowCount || doc.rows[0].space_id!==spaceId) throw Object.assign(new Error('Documento não encontrado'),{statusCode:404});
+     const doc=await c.query('SELECT id,space_id,kind,current_version_id,archived_at FROM documents WHERE id=$1 FOR UPDATE',[docId]);
+     if(!doc.rowCount || doc.rows[0].space_id!==spaceId || doc.rows[0].kind!==kind || doc.rows[0].archived_at) throw Object.assign(new Error('Documento não encontrado'),{statusCode:404});
      if(doc.rows[0].current_version_id!==baseVersionId) throw Object.assign(new Error('O documento foi alterado. Atualize a prévia'),{statusCode:409});
      const count=await c.query('SELECT COALESCE(MAX(version_number),0)+1 AS next FROM document_versions WHERE document_id=$1',[docId]);
      versionNo=Number(count.rows[0].next);
@@ -149,11 +158,27 @@ export function registerKnowledge(app:FastifyInstance) {
    const spaceId=field && !Array.isArray(field) && 'value' in field && typeof field.value==='string' ? field.value : '';
    const p=await spacePermission(a,spaceId);
    if(!p?.edit) return reply.code(403).send({error:'Sem permissão'});
-   if(pdf.mimetype!=='application/pdf'||!pdf.filename.toLowerCase().endsWith('.pdf')) return reply.code(415).send({error:'Formato não suportado'});
-   const bytes=await pdf.toBuffer();
-   if(bytes.length<8||bytes.subarray(0,5).toString()!=='%PDF-') return reply.code(415).send({error:'PDF inválido'});
+   const bytes=await readPdfBytes(pdf);
    const title=pdf.filename.slice(0,160);
    return reply.code(201).send(await createVersion(a,spaceId,title,'','PDF',bytes));
+ });
+ app.post('/knowledge/documents/:id/pdf-versions',async(req,reply)=>{
+   const actor=await requireActor(req);
+   const documentId=(req.params as {id:string}).id;
+   const {doc,p}=await authorizedDoc(actor,documentId);
+   if(!p.edit) return reply.code(403).send({error:'Sem permissão de edição'});
+   if(doc.kind!=='PDF') return reply.code(415).send({error:'Documento não é um PDF'});
+   if(doc.archived_at) return reply.code(404).send({error:'Documento não encontrado'});
+   if(!doc.current_version_id) return reply.code(409).send({error:'O PDF ainda não possui uma versão publicada'});
+   const file=await req.file({limits:{fileSize:8*1024*1024,files:1}});
+   const baseField=file?.fields.baseVersionId;
+   const baseVersionId=baseField && !Array.isArray(baseField) && 'value' in baseField
+     && typeof baseField.value==='string' ? baseField.value : '';
+   if(!baseVersionId)return reply.code(400).send({error:'Versão-base obrigatória'});
+   if(baseVersionId!==doc.current_version_id)return reply.code(409).send({error:'O documento foi atualizado. Abra a versão publicada novamente'});
+   const bytes=await readPdfBytes(file);
+   return reply.code(201).send(await createVersion(actor,doc.space_id,doc.title,'','PDF',
+     bytes,doc.id,baseVersionId));
  });
  app.get('/knowledge/reviews',async req=>{
    const a=await requireActor(req);
@@ -280,6 +305,56 @@ export function registerKnowledge(app:FastifyInstance) {
      if(result.error==='FORBIDDEN')return reply.code(403).send({error:'Permissão de edição revogada'});
      if(result.error==='UNSUPPORTED')return reply.code(415).send({error:'Reenvie um PDF corrigido como novo documento'});
      return reply.code(409).send({error:result.error==='STALE'?'O artigo publicado mudou. Reabra a revisão':'A proposta já foi corrigida ou não está aguardando ajustes'});
+   }
+   return reply.code(201).send(result);
+ });
+ // PDF corrections replace the bytes in a new draft, never in an approved version.
+ app.post('/knowledge/versions/:id/correct-pdf',async(req,reply)=>{
+   const actor=await requireActor(req);
+   const id=(req.params as {id:string}).id;
+   const preflight=await query('SELECT v.authored_by,v.status,v.superseded_by,d.kind,d.space_id,d.archived_at '+
+     'FROM document_versions v JOIN documents d ON d.id=v.document_id WHERE v.id=$1',[id]);
+   const check=preflight.rows[0];
+   if(!check||check.authored_by!==actor.id||check.archived_at)
+     return reply.code(404).send({error:'Proposta não encontrada'});
+   const authorized=await spacePermission(actor,check.space_id);
+   if(!authorized?.edit)return reply.code(403).send({error:'Permissão de edição revogada'});
+   if(check.kind!=='PDF')return reply.code(415).send({error:'Esta proposta não é um PDF'});
+   if(check.status!=='CHANGES_REQUESTED'||check.superseded_by)
+     return reply.code(409).send({error:'A proposta não está aguardando correções'});
+   const file=await req.file({limits:{fileSize:8*1024*1024,files:1}});
+   const bytes=await readPdfBytes(file);
+   const result=await transaction(async c=>{
+     const r=await c.query('SELECT v.id,v.document_id,v.authored_by,v.status,v.superseded_by,v.base_version_id,'+
+       'd.space_id,d.kind,d.current_version_id,d.archived_at FROM document_versions v '+
+       'JOIN documents d ON d.id=v.document_id WHERE v.id=$1 FOR UPDATE OF v,d',[id]);
+     const ver=r.rows[0];
+     if(!ver||ver.authored_by!==actor.id||ver.archived_at)return {error:'NOT_FOUND'};
+     const perm=await c.query('SELECT s.visibility,g.can_edit FROM spaces s '+
+       'LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2 WHERE s.id=$1',[ver.space_id,actor.id]);
+     const p=perm.rows[0];
+     if(!(p && (p.visibility==='SHARED'||p.can_edit)))return {error:'FORBIDDEN'};
+     if(ver.kind!=='PDF')return {error:'UNSUPPORTED'};
+     if(ver.status!=='CHANGES_REQUESTED'||ver.superseded_by)return {error:'CONFLICT'};
+     if(ver.current_version_id!==ver.base_version_id)return {error:'STALE'};
+     const next=await c.query('SELECT COALESCE(MAX(version_number),0)+1 AS number '+
+       'FROM document_versions WHERE document_id=$1',[ver.document_id]);
+     const draft=await c.query("INSERT INTO document_versions(document_id,version_number,status,content,pdf_bytes,authored_by,base_version_id) "+
+       "VALUES($1,$2,'DRAFT','',$3,$4,$5) RETURNING id",
+       [ver.document_id,Number(next.rows[0].number),bytes,actor.id,ver.base_version_id]);
+     await c.query('UPDATE document_versions SET superseded_by=$2 WHERE id=$1',[id,draft.rows[0].id]);
+     await c.query('INSERT INTO ingestion_jobs(version_id) VALUES($1)',[draft.rows[0].id]);
+     await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'KNOWLEDGE_PDF_CORRECTION_DRAFT_CREATED',$2)",
+       [actor.id,ver.document_id]);
+     return {documentId:ver.document_id,versionId:draft.rows[0].id};
+   });
+   if('error' in result){
+     if(result.error==='NOT_FOUND')return reply.code(404).send({error:'Proposta não encontrada'});
+     if(result.error==='FORBIDDEN')return reply.code(403).send({error:'Permissão de edição revogada'});
+     if(result.error==='UNSUPPORTED')return reply.code(415).send({error:'A proposta não é um PDF'});
+     return reply.code(409).send({error:result.error==='STALE'
+       ? 'O documento publicado mudou; crie uma nova revisão'
+       : 'A proposta já foi corrigida ou não está aguardando ajustes'});
    }
    return reply.code(201).send(result);
  });

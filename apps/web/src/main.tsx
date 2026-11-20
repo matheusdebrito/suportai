@@ -15,6 +15,7 @@ type Draft={version_id:string;document_id:string;title:string;kind:'ARTICLE'|'PD
 type DraftDetail=Draft&{content:string;space_id:string};
 type DocDetail={id:string;title:string;kind:'ARTICLE'|'PDF';space_id:string;isCurrent?:boolean;version:{id:string;content:string;version_number:number;status:string}};
 type Editing={documentId:string;baseVersionId:string};
+type PdfTarget={kind:'revision'|'correction';id:string;baseVersionId?:string;title:string};
 type Review={version_id:string;document_id:string;title:string;space_name:string;status:string;index_status:string;content:string;base_content?:string|null;ingestion_error?:string};
 function textDiff(before:string,after:string){
  const a=before.replace(/\r\n/g,'\n').split('\n'),b=after.replace(/\r\n/g,'\n').split('\n');
@@ -64,6 +65,7 @@ function App(){
  const [draftView,setDraftView]=useState<DraftDetail|null>(null);
  const [selectedDoc,setSelectedDoc]=useState<DocDetail|null>(null);
  const [editing,setEditing]=useState<Editing|null>(null);
+ const [pdfTarget,setPdfTarget]=useState<PdfTarget|null>(null);
  const [correctionOf,setCorrectionOf]=useState<string|null>(null);
  const [reviewDecision,setReviewDecision]=useState<{id:string;action:'reject'|'request-changes'}|null>(null);
  const [reviewNote,setReviewNote]=useState('');
@@ -134,26 +136,38 @@ function App(){
  function startEditing(){
   if(!selectedDoc||selectedDoc.kind!=='ARTICLE'||selectedDoc.isCurrent===false)return;
   if(!spaces.some(s=>s.id===selectedDoc.space_id&&s.can_edit))return;
-  setCorrectionOf(null);
+  setPdfTarget(null);setCorrectionOf(null);
   setEditing({documentId:selectedDoc.id,baseVersionId:selectedDoc.version.id});
   setTitle(selectedDoc.title);setContent(selectedDoc.version.content);setSpaceId(selectedDoc.space_id);
   setLastDraft(null);
+ }
+ function startPdfRevision(){
+   if(!selectedDoc||selectedDoc.kind!=='PDF'||selectedDoc.isCurrent===false
+     ||!spaces.some(s=>s.id===selectedDoc.space_id&&s.can_edit))return;
+   setEditing(null);setCorrectionOf(null);setLastDraft(null);
+   setSpaceId(selectedDoc.space_id);
+   setPdfTarget({kind:'revision',id:selectedDoc.id,baseVersionId:selectedDoc.version.id,title:selectedDoc.title});
+ }
+ function startPdfCorrection(draft:Draft){
+   if(draft.kind!=='PDF'||draft.status!=='CHANGES_REQUESTED')return;
+   setEditing(null);setCorrectionOf(null);setLastDraft(null);
+   setPdfTarget({kind:'correction',id:draft.version_id,title:draft.title});
  }
  async function startCorrection(versionId:string){
    setError('');
    try{
      const original=await api<DraftDetail>('/knowledge/drafts/'+versionId);
      if(original.status!=='CHANGES_REQUESTED'||original.kind!=='ARTICLE')throw new Error('Este artigo não está disponível para correção');
-     setEditing(null);setCorrectionOf(original.version_id);
+     setPdfTarget(null);setEditing(null);setCorrectionOf(original.version_id);
      setTitle(original.title);setContent(original.content);setSpaceId(original.space_id);
      setTab('knowledge');setLastDraft(null);
    }catch(e){failed(e);}
  }
- function cancelEditing(){setEditing(null);setCorrectionOf(null);setTitle('');setContent('');setLastDraft(null);}
+ function cancelEditing(){setEditing(null);setCorrectionOf(null);setPdfTarget(null);setTitle('');setContent('');setLastDraft(null);}
 
  async function login(e:React.FormEvent){e.preventDefault();setError('');try{const r=await api<{user:User}>('/auth/login',{method:'POST',body:JSON.stringify({email,password})});setPassword('');setUser(r.user);}catch(e){failed(e);}}
  async function changePassword(e:React.FormEvent){e.preventDefault();setError('');try{await api('/auth/change-password',{method:'POST',body:JSON.stringify({resetToken,newPassword})});const u=await api<User>('/auth/me');setUser(u);setResetToken('');setNewPassword('');setShowReset(false);}catch(e){failed(e);}}
- async function logout(){await api('/auth/logout',{method:'POST'}).catch(()=>{});setUser(null);setMessages([]);setConversationId(null);setConversations([]);setDrafts([]);setPending([]);setSelectedDoc(null);setCorrectionOf(null);setReviewNote('');setReviewDecision(null);setDuplicatePrompt(null);}
+ async function logout(){await api('/auth/logout',{method:'POST'}).catch(()=>{});setUser(null);setMessages([]);setConversationId(null);setConversations([]);setDrafts([]);setPending([]);setSelectedDoc(null);setCorrectionOf(null);setPdfTarget(null);setReviewNote('');setReviewDecision(null);setDuplicatePrompt(null);}
  async function send(e:React.FormEvent){
   e.preventDefault();if(!input.trim()||busy||conversationLoading)return;setBusy(true);setError('');
   const text=input;setInput('');setMessages(m=>[...m,{role:'user',content:text}]);
@@ -186,11 +200,19 @@ function App(){
    failed(error);
  }}
  async function uploadPdf(e:React.ChangeEvent<HTMLInputElement>){
-  const file=e.target.files?.[0];if(!file)return;setError('');
-  try{const form=new FormData();form.append('spaceId',spaceId);form.append('file',file);
-   const r=await api<{versionId:string}>('/knowledge/pdfs',{method:'POST',body:form});
-   setLastDraft(r.versionId);await refresh();
-  }catch(err){failed(err);}finally{e.target.value='';}
+   const file=e.target.files?.[0];if(!file)return;setError('');
+   try{
+     const form=new FormData();
+     if(pdfTarget?.kind==='revision')form.append('baseVersionId',pdfTarget.baseVersionId||'');
+     else if(!pdfTarget)form.append('spaceId',spaceId);
+     form.append('file',file);
+     const url=!pdfTarget?'/knowledge/pdfs':pdfTarget.kind==='revision'
+       ? '/knowledge/documents/'+pdfTarget.id+'/pdf-versions'
+       : '/knowledge/versions/'+pdfTarget.id+'/correct-pdf';
+     const result=await api<{versionId:string}>(url,{method:'POST',body:form});
+     setPdfTarget(null);setLastDraft(result.versionId);
+     await refresh();
+   }catch(err){failed(err);}finally{e.target.value='';}
  }
  async function retryVersion(id:string){setError('');try{await api(`/knowledge/versions/${id}/retry`,{method:'POST'});await refresh();}catch(e){failed(e);}}
  async function submitVersion(id:string){setError('');try{await api(`/knowledge/versions/${id}/submit-review`,{method:'POST'});setLastDraft(null);await refresh();}catch(e){failed(e);}}
@@ -261,18 +283,18 @@ function App(){
   {pending.map(p=><div className="pending" key={p.id}><strong>Prévia: {p.title}</strong><small>Destino: {p.spaceName||'Espaço autorizado'}</small><p>{p.content.slice(0,900)}</p><button onClick={()=>confirmPending(p.id)}><Check size={16}/> Confirmar criação de rascunho</button></div>)}
   </div><form className="composer" onSubmit={send}><textarea placeholder="Digite sua pergunta..." value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();void send(e as unknown as React.FormEvent);}}}/><button disabled={busy||conversationLoading||!input.trim()} aria-label="Enviar mensagem"><Send size={19}/></button></form></section></div>}
  {tab==='knowledge'&&<div className="columns"><section className="panel"><h2>Artigos e documentos publicados</h2>{docs.length===0?<p className="hint">Nenhum documento publicado ainda.</p>:docs.map(d=><button className="item" key={d.id} onClick={()=>openDoc(d.id)}><BookOpen size={17}/><span>{d.title}<small>{d.space_name} · {d.kind}</small></span></button>)}
- {selectedDoc&&<article className="document"><h3>{selectedDoc.title}</h3><small>Versão {selectedDoc.version.version_number}</small><div className="formatted">{selectedDoc.version.content}</div>{selectedDoc.kind==='ARTICLE'&&selectedDoc.isCurrent!==false&&spaces.some(s=>s.id===selectedDoc.space_id&&s.can_edit)&&<button className="secondary" onClick={startEditing}>Criar revisão deste artigo</button>}</article>}
+ {selectedDoc&&<article className="document"><h3>{selectedDoc.title}</h3><small>Versão {selectedDoc.version.version_number}</small><div className="formatted">{selectedDoc.version.content}</div>{selectedDoc.kind==='ARTICLE'&&selectedDoc.isCurrent!==false&&spaces.some(s=>s.id===selectedDoc.space_id&&s.can_edit)&&<button className="secondary" onClick={startEditing}>Criar revisão deste artigo</button>}{selectedDoc.kind==='PDF'&&selectedDoc.isCurrent!==false&&spaces.some(s=>s.id===selectedDoc.space_id&&s.can_edit)&&<button className="secondary" onClick={startPdfRevision}>Enviar nova versão deste PDF</button>}</article>}
   <div className="drafts-header"><h2>Meus rascunhos</h2><button className="secondary" onClick={()=>void refresh().catch(failed)}><RotateCcw size={14}/> Atualizar</button></div>
-  {drafts.length===0?<p className="hint">Nenhum rascunho ou revisão pendente.</p>:drafts.map(d=><div className="draft-item" key={d.version_id}><strong>{d.title}</strong><small>{d.space_name} · v{d.version_number} · {d.status==='DRAFT'?'Rascunho':d.status==='IN_REVIEW'?'Em revisão':d.status==='CHANGES_REQUESTED'?'Ajustes solicitados':'Rejeitado'} · Índice: {d.index_status}</small>{d.ingestion_error&&<p className="error">{d.ingestion_error}</p>}{d.review_note&&<p className="review-note"><strong>Parecer:</strong> {d.review_note}</p>}<div className="actions"><button className="secondary" onClick={()=>void viewDraft(d.version_id)}>Ver texto</button>{d.status==='DRAFT'&&d.index_status==='READY'&&<button className="secondary" onClick={()=>void submitVersion(d.version_id)}>Enviar para revisão</button>}{d.status==='CHANGES_REQUESTED'&&d.kind==='ARTICLE'&&<button className="secondary" onClick={()=>void startCorrection(d.version_id)}>Preparar correção</button>}{d.status==='CHANGES_REQUESTED'&&d.kind==='PDF'&&<span className="hint">Reenvie o PDF corrigido.</span>}{d.index_status==='FAILED'&&d.status!=='REJECTED'&&d.status!=='CHANGES_REQUESTED'&&<button className="secondary" onClick={()=>void retryVersion(d.version_id)}>Reprocessar</button>}</div></div>)}
+  {drafts.length===0?<p className="hint">Nenhum rascunho ou revisão pendente.</p>:drafts.map(d=><div className="draft-item" key={d.version_id}><strong>{d.title}</strong><small>{d.space_name} · v{d.version_number} · {d.status==='DRAFT'?'Rascunho':d.status==='IN_REVIEW'?'Em revisão':d.status==='CHANGES_REQUESTED'?'Ajustes solicitados':'Rejeitado'} · Índice: {d.index_status}</small>{d.ingestion_error&&<p className="error">{d.ingestion_error}</p>}{d.review_note&&<p className="review-note"><strong>Parecer:</strong> {d.review_note}</p>}<div className="actions"><button className="secondary" onClick={()=>void viewDraft(d.version_id)}>Ver texto</button>{d.status==='DRAFT'&&d.index_status==='READY'&&<button className="secondary" onClick={()=>void submitVersion(d.version_id)}>Enviar para revisão</button>}{d.status==='CHANGES_REQUESTED'&&d.kind==='ARTICLE'&&<button className="secondary" onClick={()=>void startCorrection(d.version_id)}>Preparar correção</button>}{d.status==='CHANGES_REQUESTED'&&d.kind==='PDF'&&<button className="secondary" onClick={()=>startPdfCorrection(d)}>Enviar PDF corrigido</button>}{d.index_status==='FAILED'&&d.status!=='REJECTED'&&d.status!=='CHANGES_REQUESTED'&&<button className="secondary" onClick={()=>void retryVersion(d.version_id)}>Reprocessar</button>}</div></div>)}
   {draftView&&<article className="document"><div className="drafts-header"><h3>{draftView.title} · v{draftView.version_number}</h3><button className="ghost" onClick={()=>setDraftView(null)}>Fechar</button></div><small>{draftView.status}</small><div className="formatted">{draftView.content||'Aguardando extração do PDF.'}</div></article>}
-  </section><section className="panel"><h2>{correctionOf?'Corrigir proposta':editing?'Propor atualização':'Adicionar conhecimento'}</h2><p className="hint">{correctionOf?'A correção será uma nova versão em rascunho.':editing?'A revisão só substituirá o artigo publicado após aprovação.':'Crie um artigo ou importe um PDF. O conteúdo só ficará público após revisão.'}</p>
- {editable.length===0?<p>Você não possui permissão de edição.</p>:<><label>Espaço<select value={spaceId} disabled={Boolean(editing||correctionOf)} onChange={e=>setSpaceId(e.target.value)}>{editable.map(s=><option value={s.id} key={s.id}>{s.name}</option>)}</select></label>
- <form onSubmit={saveArticle}><label>Título<input required minLength={3} value={title} readOnly={Boolean(editing||correctionOf)} onChange={e=>setTitle(e.target.value)}/></label><label>Procedimento<textarea required minLength={20} value={content} onChange={e=>setContent(e.target.value)} rows={7}/></label><button><Plus size={17}/> {correctionOf?'Salvar correção em novo rascunho':editing?'Salvar proposta de revisão':'Criar rascunho'}</button>{(editing||correctionOf)&&<button type="button" className="secondary" onClick={cancelEditing}>Cancelar edição</button>}</form>
+  </section><section className="panel"><h2>{pdfTarget?'Enviar versão de PDF':correctionOf?'Corrigir proposta':editing?'Propor atualização':'Adicionar conhecimento'}</h2><p className="hint">{pdfTarget?'O novo arquivo será processado como rascunho. O PDF publicado continuará disponível até a aprovação.':correctionOf?'A correção será uma nova versão em rascunho.':editing?'A revisão só substituirá o artigo publicado após aprovação.':'Crie um artigo ou importe um PDF. O conteúdo só ficará público após revisão.'}</p>
+ {editable.length===0?<p>Você não possui permissão de edição.</p>:<><label>Espaço<select value={spaceId} disabled={Boolean(editing||correctionOf||pdfTarget)} onChange={e=>setSpaceId(e.target.value)}>{editable.map(s=><option value={s.id} key={s.id}>{s.name}</option>)}</select></label>
+ {!pdfTarget&&<form onSubmit={saveArticle}><label>Título<input required minLength={3} value={title} readOnly={Boolean(editing||correctionOf)} onChange={e=>setTitle(e.target.value)}/></label><label>Procedimento<textarea required minLength={20} value={content} onChange={e=>setContent(e.target.value)} rows={7}/></label><button><Plus size={17}/> {correctionOf?'Salvar correção em novo rascunho':editing?'Salvar proposta de revisão':'Criar rascunho'}</button>{(editing||correctionOf)&&<button type="button" className="secondary" onClick={cancelEditing}>Cancelar edição</button>}</form>}
  {editing&&<details className="diff-preview"><summary>Comparar alterações com a versão publicada</summary>{(()=>{
    const changes=textDiff(selectedDoc?.version.content||'',content);
    return changes.unchanged?<p className="hint">Nenhuma mudança detectada.</p>:<div className="diff-columns"><div><strong>Removido</strong><pre className="diff-removed">{changes.removed||'Nenhum trecho removido'}</pre></div><div><strong>Adicionado</strong><pre className="diff-added">{changes.added||'Nenhum trecho adicionado'}</pre></div></div>;
  })()}</details>}
- <label className="upload"><FileUp size={19}/> Enviar PDF<input type="file" accept="application/pdf,.pdf" onChange={uploadPdf}/></label>
+ {!editing&&!correctionOf&&<><label className="upload"><FileUp size={19}/> {pdfTarget?`Selecionar arquivo corrigido: ${pdfTarget.title}`:'Enviar PDF'}<input type="file" accept="application/pdf,.pdf" onChange={uploadPdf}/></label>{pdfTarget&&<button type="button" className="secondary" onClick={()=>setPdfTarget(null)}>Cancelar envio</button>}</>}
  {lastDraft&&<div className="pending"><p>Rascunho salvo. Aguarde o processamento; consulte “Meus rascunhos” para enviar para revisão quando estiver pronto.</p><button className="secondary" onClick={()=>{setLastDraft(null);void refresh().catch(failed);}}>Atualizar rascunhos</button></div>}</>}</section></div>}
  {tab==='reviews'&&<section className="panel"><h2>Conteúdos em revisão</h2>{review.length===0?<p className="hint">Nenhum conteúdo pendente.</p>:review.map(r=><div className="review" key={r.version_id}>
   <h3>{r.title}</h3><small>{r.space_name} · {r.status} · Indexação: {r.index_status}</small>
