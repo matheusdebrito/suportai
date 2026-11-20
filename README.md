@@ -6,6 +6,7 @@ Assistente interno com cérebro de conhecimento baseado em artigos e PDFs, recup
 
 - Piloto para TI, preparado para outros setores sem multiempresa.
 - Login próprio; administrador cria usuários e redefine senhas por código temporário.
+- Administração simples de departamentos e vínculos de colaboradores (não altera concessões de leitura).
 - Conhecimento compartilhado e restrito com permissões no backend.
 - Busca textual PostgreSQL e embeddings pgvector (quando a API de IA estiver configurada).
 - Conversa com agente, ferramentas de busca, avaliações das respostas e prévias de artigos, sem publicação automática.
@@ -52,7 +53,15 @@ Há testes de integração com PostgreSQL, testes de ponta a ponta com Chromium 
 - [Tarefas de validação](specs/001-agente-corporativo-conhecimento/tasks.md)
 - [Verificação de critérios do MVP](specs/001-agente-corporativo-conhecimento/verification.md)
 - [Runbook de operação e recuperação](docs/operacao.md)
+- [Avaliação sintética do RAG](docs/avaliacao-rag.md)
+- [Testes e riscos residuais de PDFs](docs/avaliacao-pdf.md)
 
 ## Limitações atuais
 
 Não há OCR de PDFs digitalizados. Não execute comandos ou acesso SSH com o agente. A persistência de PDFs em bytea é um compromisso temporário para o piloto; recomenda-se armazenamento isolado antes de escalar. A busca e indexação suportam fallback textual; a avaliação de RAG ainda precisa ser realizada com casos reais.
+
+## Validação adicional
+
+- `npm run rag:evaluate -w @suportai/api`: lista cenários fictícios, sem chamadas externas.
+- `NODE_ENV=production npm run preflight -w @suportai/api`: verifica configuração sem expor segredos; **não é autorização de produção**.
+- A avaliação com modelo real requer `EVAL_SYNTHETIC_LLM_APPROVED=true`, chave própria e aprovação para custos. Nenhuma CI habilita essa configuração.
