@@ -88,6 +88,54 @@ if(!process.env.TEST_DATABASE_URL){
    const reopened=await app.inject({method:'GET',url:`/conversations/${conversationId}`,headers:auth(reader.cookie)});
    assert.equal(reopened.json().messages.length,2);
    assert.equal(reopened.json().pendingActions.length,1);
+
+   // Feedback belongs only to assistant messages the authenticated user can currently see.
+   const assistantMessageId=savedMessage.json().id as string;
+   const userMessageId=reopened.json().messages.find((m:any)=>m.role==='user').id as string;
+   const malformedId=await app.inject({method:'POST',url:'/feedback',headers:auth(reader.cookie),
+     payload:{messageId:'not-a-uuid',rating:'GOOD'}});
+   assert.equal(malformedId.statusCode,400);
+   const invalidRating=await app.inject({method:'POST',url:'/feedback',headers:auth(reader.cookie),
+     payload:{messageId:assistantMessageId,rating:'NEUTRAL'}});
+   assert.equal(invalidRating.statusCode,400);
+   const wrongOwner=await app.inject({method:'POST',url:'/feedback',headers:auth(reviewer.cookie),
+     payload:{messageId:assistantMessageId,rating:'GOOD'}});
+   assert.equal(wrongOwner.statusCode,404);
+   const userMessageFeedback=await app.inject({method:'POST',url:'/feedback',headers:auth(reader.cookie),
+     payload:{messageId:userMessageId,rating:'GOOD'}});
+   assert.equal(userMessageFeedback.statusCode,404);
+   const secretFeedback=await app.inject({method:'POST',url:'/feedback',headers:auth(reader.cookie),
+     payload:{messageId:assistantMessageId,rating:'BAD',comment:'api_key=abcdefghijklmnop'}});
+   assert.equal(secretFeedback.statusCode,422);
+   const tooLongFeedback=await app.inject({method:'POST',url:'/feedback',headers:auth(reader.cookie),
+     payload:{messageId:assistantMessageId,rating:'BAD',comment:'a'.repeat(1001)}});
+   assert.equal(tooLongFeedback.statusCode,400);
+   const helpful=await app.inject({method:'POST',url:'/feedback',headers:auth(reader.cookie),
+     payload:{messageId:assistantMessageId,rating:'GOOD',comment:'A resposta explicou os próximos passos.'}});
+   assert.equal(helpful.statusCode,200,helpful.body);
+   assert.equal(helpful.json().rating,'GOOD');
+   const persistedFeedback=await app.inject({method:'GET',url:'/conversations/'+conversationId,
+     headers:auth(reader.cookie)});
+   const persistedAssistant=persistedFeedback.json().messages.find((m:any)=>m.id===assistantMessageId);
+   assert.equal(persistedAssistant.feedback_rating,'GOOD');
+   assert.match(persistedAssistant.feedback_comment,/próximos passos/);
+   const repeated=await Promise.all(['BAD','GOOD'].map(rating=>app.inject({
+     method:'POST',url:'/feedback',headers:auth(reader.cookie),
+     payload:{messageId:assistantMessageId,rating}
+   })));
+   assert.deepEqual(repeated.map(x=>x.statusCode),[200,200]);
+   const feedbackRows=await query('SELECT count(*)::int AS total FROM feedback WHERE user_id=$1 AND message_id=$2',
+     [reader.id,assistantMessageId]);
+   assert.equal(feedbackRows.rows[0].total,1,'Concurrent rating updates must not create duplicates');
+   const responseFeedback=await app.inject({method:'GET',url:'/conversations/'+conversationId,
+     headers:auth(reader.cookie)});
+   const finalAssistant=responseFeedback.json().messages.find((m:any)=>m.id===assistantMessageId);
+   assert.ok(['GOOD','BAD'].includes(finalAssistant.feedback_rating));
+   assert.equal(finalAssistant.feedback_comment,null);
+   const feedbackAudit=await query("SELECT count(*)::int AS total FROM audit_events WHERE action='ASSISTANT_FEEDBACK_SAVED' AND resource_id=$1",
+     [assistantMessageId]);
+   assert.equal(feedbackAudit.rows[0].total,3);
+
    const confirmed=await app.inject({method:'POST',url:`/knowledge/pending/${pendingId}/confirm`,headers:auth(reader.cookie)});
    assert.equal(confirmed.statusCode,200,confirmed.body);
    const draftDoc=await query('SELECT current_version_id FROM documents WHERE id=$1',[confirmed.json().documentId]);
@@ -499,6 +547,12 @@ if(!process.env.TEST_DATABASE_URL){
    const changedLogin=await app.inject({method:'POST',url:'/auth/login',payload:{email:reader.email,password:reader.password}});
    assert.equal(changedLogin.statusCode,200,changedLogin.body);
    assert.equal(changedLogin.json().user.role,'APPROVER');
+   const changedCookie=changedLogin.headers['set-cookie']?.toString().split(';')[0];
+   assert.ok(changedCookie);
+   const obsoleteFeedback=await app.inject({method:'POST',url:'/feedback',headers:auth(changedCookie),
+     payload:{messageId:assistantMessageId,rating:'GOOD'}});
+   assert.equal(obsoleteFeedback.statusCode,404,'Old conversation must not remain rateable after a permission revision');
+
   } finally {
    worker?.kill('SIGTERM');
    await app.close();
