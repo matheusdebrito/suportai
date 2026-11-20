@@ -208,8 +208,9 @@ test.describe('fluxo editorial com worker real',()=>{
    await expect(page.getByText('Selecionar arquivo corrigido: '+pdfName)).toBeVisible();
    const finalPdf=await PDFDocument.create();
    const finalPage=finalPdf.addPage([600,400]);
+   const finalFont=await finalPdf.embedFont(StandardFonts.Helvetica);
    finalPage.drawText('Checklist atualizado: valide a integridade dos backups, analise logs e registre evidencias de cada verificacao.',{
-     x:30,y:330,size:12,font:pdfFont,maxWidth:540
+     x:30,y:330,size:12,font:finalFont,maxWidth:540
    });
    await page.locator('label.upload input[type=file]').setInputFiles({
      name:'versao-final.pdf',mimeType:'application/pdf',
