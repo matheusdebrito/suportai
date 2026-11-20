@@ -697,6 +697,36 @@ if(!process.env.TEST_DATABASE_URL){
      headers:auth(reviewer.cookie),payload:{confirm:true}});
    assert.equal(archivedDoc.statusCode,200,archivedDoc.body);
    assert.equal(archivedDoc.json().archived,true);
+
+   const candidate=await query('SELECT c.version_id,c.ordinal,c.content,d.title,v.version_number '+
+     'FROM knowledge_chunks c JOIN document_versions v ON v.id=c.version_id '+
+     'JOIN documents d ON d.id=v.document_id WHERE d.id=$1 AND d.current_version_id=v.id LIMIT 1',
+     [archiveId]);
+   assert.ok(candidate.rowCount,'Archived knowledge must retain its versioned chunks');
+   const oldSource={
+     documentId:archiveId,versionId:candidate.rows[0].version_id,
+     versionNumber:Number(candidate.rows[0].version_number),ordinal:Number(candidate.rows[0].ordinal),
+     title:candidate.rows[0].title,content:candidate.rows[0].content,score:1
+   };
+   const staleSourceApp=await buildApp({agentResponder:async()=>({
+     answer:'I should not return a procedure that was archived during the model response.',
+     sources:[oldSource],pendingActions:[]
+   })});
+   try{
+     const staleConversation=await staleSourceApp.inject({method:'POST',url:'/conversations',
+       headers:auth(reader.cookie)});
+     assert.equal(staleConversation.statusCode,200);
+     const staleResponse=await staleSourceApp.inject({method:'POST',
+       url:'/conversations/'+staleConversation.json().id+'/messages',
+       headers:auth(reader.cookie),payload:{message:'Qual é o procedimento?'}});
+     assert.equal(staleResponse.statusCode,409,staleResponse.body);
+     const count=await query("SELECT count(*)::int AS total FROM messages WHERE conversation_id=$1 AND role='assistant'",
+       [staleConversation.json().id]);
+     assert.equal(count.rows[0].total,0,'Archived sources cannot be persisted as new official answers');
+   }finally{
+     await staleSourceApp.close();
+   }
+
    const archiveRetry=await app.inject({method:'POST',url:'/knowledge/documents/'+archiveId+'/archive',
      headers:auth(reviewer.cookie),payload:{confirm:true}});
    assert.equal(archiveRetry.statusCode,200);
