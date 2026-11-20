@@ -26,9 +26,10 @@ export async function buildApp(){
  registerKnowledge(app);
  registerChat(app);
  app.setErrorHandler((error,req,reply)=>{
-   const code=typeof error.statusCode==='number' && error.statusCode>=400 && error.statusCode<500?error.statusCode:500;
-   if(code===500) req.log.error({err:error.message},'Request failed');
-   reply.code(code).send({error:code===500?'Erro interno':error.message});
+   const err=error as Error & {statusCode?:number};
+   const code=typeof err.statusCode==='number' && err.statusCode>=400 && err.statusCode<500?err.statusCode:500;
+   if(code===500) req.log.error({err:err.message},'Request failed');
+   reply.code(code).send({error:code===500?'Erro interno':err.message});
  });
  return app;
 }

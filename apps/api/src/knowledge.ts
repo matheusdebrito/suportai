@@ -80,7 +80,8 @@ export function registerKnowledge(app:FastifyInstance) {
    const a=await requireActor(req);
    const pdf=await req.file({limits:{fileSize:8*1024*1024,files:1}});
    if(!pdf) return reply.code(400).send({error:'PDF obrigatório'});
-   const spaceId=typeof pdf.fields.spaceId?.value==='string'?pdf.fields.spaceId.value:'';
+   const field=pdf.fields.spaceId;
+   const spaceId=field && !Array.isArray(field) && 'value' in field && typeof field.value==='string' ? field.value : '';
    const p=await spacePermission(a,spaceId);
    if(!p?.edit) return reply.code(403).send({error:'Sem permissão'});
    if(pdf.mimetype!=='application/pdf'||!pdf.filename.toLowerCase().endsWith('.pdf')) return reply.code(415).send({error:'Formato não suportado'});
