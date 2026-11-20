@@ -6,6 +6,7 @@ import {respond} from './agent.js';
 import {groundedReply} from './llm-policy.js';
 import type {Actor} from './security.js';
 import type {Source} from './retrieval.js';
+import {unsupportedNetworkLiterals} from './answer-evidence.js';
 
 // Contract tests with fictional knowledge. These do NOT score a real LLM's
 // reasoning, factual accuracy or resistance to prompt injection.
@@ -142,4 +143,31 @@ test('T025 contract: lookup failure is not misreported as a missing procedure',a
  const tool=(calls[1].messages as any[]).find(m=>m.role==='tool');
  assert.match(tool.content,/Falha temporária na consulta/i);
  assert.doesNotMatch(tool.content,/INTERNAL_DB_PASSWORD|dont-show-me|SQL connection failed/);
+});
+
+test('a model cannot invent IP addresses or URLs absent from authorized excerpts',async()=>{
+ const calls:any[]=[];
+ const fake=model([
+  {role:'assistant',content:null,tool_calls:[toolCall('search_knowledge',{query:'DNS laboratório A'},'lookup')]},
+  {role:'assistant',content:'No laboratório A, use 203.0.113.99 e acesse https://vpn.evil.test.'}
+ ],calls);
+ const output=await respond(actor,randomUUID(),'Qual é o DNS do laboratório A?',[],fake,fakeSearch([dnsA],[]));
+ assert.match(output.answer,/Não consegui validar os endereços/i);
+ assert.deepEqual(output.sources,[]);
+ assert.doesNotMatch(output.answer,/203\.0\.113\.99|vpn\.evil/);
+});
+test('valid network literals appear in the returned authorized excerpt',async()=>{
+ const calls:any[]=[];
+ const fake=model([
+  {role:'assistant',content:null,tool_calls:[toolCall('search_knowledge',{query:'DNS laboratório A'},'lookup')]},
+  {role:'assistant',content:'Para testes, use 192.0.2.53 no laboratório A.'}
+ ],calls);
+ const output=await respond(actor,randomUUID(),'Qual o endereço DNS do laboratório A?',[],fake,fakeSearch([dnsA],[]));
+ assert.match(output.answer,/192\.0\.2\.53/);
+ assert.equal(output.sources.length,1);
+});
+test('syntax guard accepts only URLs and IPs present in source content',()=>{
+ assert.deepEqual(unsupportedNetworkLiterals('Abra https://inexistente.example.test e 203.0.113.10',[dnsA]),
+   ['https://inexistente.example.test','203.0.113.10']);
+ assert.deepEqual(unsupportedNetworkLiterals('Consulte 192.0.2.53.',[dnsA]),[]);
 });
