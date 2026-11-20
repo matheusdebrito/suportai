@@ -68,6 +68,13 @@ if(!process.env.TEST_DATABASE_URL){
    }
    const grantedSpaces=await app.inject({method:'GET',url:'/spaces',headers:auth(reader.cookie)});
    assert.equal(grantedSpaces.json().spaces.find((x:any)=>x.id===shared).can_edit,true);
+   // A secret in metadata is just as sensitive as a secret in article content.
+   const secretTitle=await app.inject({method:'POST',url:'/knowledge/articles',
+     headers:auth(reader.cookie),payload:{spaceId:shared,
+       title:'Acesso VPN password=Senha#Segura2026!',
+       content:'Este procedimento fictício não deve ser armazenado porque o título contém uma credencial.'}});
+   assert.equal(secretTitle.statusCode,422,secretTitle.body);
+   assert.doesNotMatch(secretTitle.body,/Senha#Segura2026!/);
    const reviewerSpaces=await app.inject({method:'GET',url:'/spaces',headers:auth(reviewer.cookie)});
    assert.equal(reviewerSpaces.json().spaces.find((x:any)=>x.id===shared).can_approve,true);
 
@@ -615,6 +622,9 @@ if(!process.env.TEST_DATABASE_URL){
      return app.inject({method:'POST',url:'/knowledge/pdfs',
        headers:{...auth(reader.cookie),'content-type':'multipart/form-data; boundary='+b},payload});
    }
+   const secretPdfFilename=await negativePdfUpload(pdfBytes,'password=Senha#Segura2026!.pdf');
+   assert.equal(secretPdfFilename.statusCode,422,secretPdfFilename.body);
+   assert.doesNotMatch(secretPdfFilename.body,/Senha#Segura2026!/);
    const fakePdf=await negativePdfUpload(Buffer.from('not a pdf at all'));
    assert.equal(fakePdf.statusCode,415,'A file extension and MIME cannot bypass header validation');
    const wrongMime=await negativePdfUpload(pdfBytes,'documento.pdf','application/octet-stream');

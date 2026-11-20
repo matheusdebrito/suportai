@@ -75,7 +75,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          if(!allowMutation) throw new Error('O usuário não solicitou a criação ou atualização de conhecimento nesta mensagem');
          if(pendingActions.length>0) throw new Error('Apenas uma prévia por mensagem; confirme a proposta existente');
          if(typeof args.spaceId!=='string'||typeof args.title!=='string'||typeof args.content!=='string'||args.title.length<3||args.title.length>200||args.content.length<20||args.content.length>10000) throw new Error('Artigo inválido');
-         if(hasSecrets(args.content)) throw new Error('Possíveis credenciais no artigo');
+         if(hasSecrets(args.title)||hasSecrets(args.content)) throw new Error('Possíveis credenciais no título ou conteúdo do artigo');
          const p=await spacePermission(actor,args.spaceId);
          if(!p?.edit) throw new Error('Espaço não autorizado');
          let baseVersionId:string|null=null;
