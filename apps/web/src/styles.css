@@ -17,3 +17,14 @@
 .draft-item .actions button{font-size:12px}
 .document>button{margin-top:16px}
 @media(max-width:850px){.chat-layout{display:grid;grid-template-columns:1fr;height:auto;min-height:0}.conversations-panel{max-height:155px}.chat-layout .chat{height:65vh;min-height:410px}.conversations-panel .conversation-item{padding:8px}}
+
+
+.diff-preview{margin-top:16px;padding:12px;border:1px solid #d8e3f1;border-radius:9px}
+.diff-preview summary{cursor:pointer;font-weight:600;color:#295a96}
+.diff-columns{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.diff-columns pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:250px;overflow:auto;padding:12px;border-radius:8px;font-size:12px}
+.diff-added{background:#e7f5ec;color:#225a3e}
+.diff-removed{background:#ffebed;color:#893645}
+.review-note{background:#fef7e8;color:#6a521e;padding:10px;border-radius:8px;white-space:pre-wrap}
+.review-decision-form{margin-top:16px;padding:14px;background:#f6f8fc;border-radius:10px}
+@media(max-width:700px){.diff-columns{grid-template-columns:1fr}}

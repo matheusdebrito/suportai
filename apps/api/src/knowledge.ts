@@ -57,14 +57,14 @@ export function registerKnowledge(app:FastifyInstance) {
  app.get('/knowledge/mine',async req=>{
    const a=await requireActor(req);
    const r=await query(`SELECT v.id AS version_id,d.id AS document_id,d.title,d.kind,
-      v.version_number,v.status,v.index_status,v.created_at,
+      v.version_number,v.status,v.index_status,v.review_note,v.created_at,
       s.name AS space_name,j.error AS ingestion_error
      FROM document_versions v
      JOIN documents d ON d.id=v.document_id
      JOIN spaces s ON s.id=d.space_id
      LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$1
      LEFT JOIN ingestion_jobs j ON j.version_id=v.id
-     WHERE v.authored_by=$1 AND v.status IN ('DRAFT','IN_REVIEW','REJECTED')
+     WHERE v.authored_by=$1 AND v.status IN ('DRAFT','IN_REVIEW','CHANGES_REQUESTED','REJECTED') AND v.superseded_by IS NULL
        AND d.archived_at IS NULL
        AND (s.visibility='SHARED' OR COALESCE(g.can_edit,false))
      ORDER BY v.created_at DESC,v.id DESC LIMIT 100`,[a.id]);
@@ -74,13 +74,13 @@ export function registerKnowledge(app:FastifyInstance) {
    const a=await requireActor(req);
    const id=(req.params as {id:string}).id;
    const r=await query(`SELECT v.id AS version_id,v.document_id,v.version_number,
-      v.status,v.index_status,v.content,d.title,d.kind,d.space_id,s.name AS space_name
+      v.status,v.index_status,v.review_note,v.content,d.title,d.kind,d.space_id,s.name AS space_name
      FROM document_versions v
      JOIN documents d ON d.id=v.document_id
      JOIN spaces s ON s.id=d.space_id
      LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2
      WHERE v.id=$1 AND v.authored_by=$2
-       AND v.status IN ('DRAFT','IN_REVIEW','REJECTED')
+       AND v.status IN ('DRAFT','IN_REVIEW','CHANGES_REQUESTED','REJECTED') AND v.superseded_by IS NULL
        AND d.archived_at IS NULL
        AND (s.visibility='SHARED' OR COALESCE(g.can_edit,false))`,[id,a.id]);
    if(!r.rowCount) throw Object.assign(new Error('Rascunho não encontrado'),{statusCode:404});
@@ -138,11 +138,12 @@ export function registerKnowledge(app:FastifyInstance) {
  app.get('/knowledge/reviews',async req=>{
    const a=await requireActor(req);
    if(a.role!=='APPROVER') return {reviews:[]};
-   const r=await query(`SELECT v.id AS version_id,v.status,v.index_status,v.content,j.error AS ingestion_error,d.id AS document_id,d.title,s.name AS space_name
+   const r=await query(`SELECT v.id AS version_id,v.status,v.index_status,v.content,base.content AS base_content,j.error AS ingestion_error,d.id AS document_id,d.title,s.name AS space_name
     FROM document_versions v JOIN documents d ON d.id=v.document_id JOIN spaces s ON s.id=d.space_id
+    LEFT JOIN document_versions base ON base.id=v.base_version_id
     LEFT JOIN ingestion_jobs j ON j.version_id=v.id
     LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$1
-    WHERE v.status IN ('DRAFT','IN_REVIEW') AND (s.visibility='SHARED' OR COALESCE(g.can_approve,false))
+    WHERE v.status='IN_REVIEW' AND v.superseded_by IS NULL AND (s.visibility='SHARED' OR COALESCE(g.can_approve,false))
     ORDER BY v.created_at DESC LIMIT 100`,[a.id]);
    return {reviews:r.rows};
  });
@@ -198,16 +199,93 @@ export function registerKnowledge(app:FastifyInstance) {
    if(outcome==='STALE') return reply.code(409).send({error:'Outra versão foi publicada. Atualize a revisão antes de publicar'});
    return {ok:true};
  });
- app.post('/knowledge/versions/:id/reject',async(req,reply)=>{
-   const a=await requireActor(req);
+
+ // Requesting corrections preserves the reviewed version and never edits the published one.
+ app.post('/knowledge/versions/:id/request-changes',async(req,reply)=>{
+   const actor=await requireActor(req);
    const id=(req.params as {id:string}).id;
-   const r=await query(`SELECT d.space_id FROM document_versions v JOIN documents d ON d.id=v.document_id WHERE v.id=$1`,[id]);
-   if(!r.rowCount) return reply.code(404).send({error:'Versão não encontrada'});
-   const p=await spacePermission(a,r.rows[0].space_id);
-   if(!p?.approve) return reply.code(403).send({error:'Sem permissão'});
-   const updated=await query("UPDATE document_versions SET status='REJECTED',reviewed_by=$2,reviewed_at=now() WHERE id=$1 AND status IN ('DRAFT','IN_REVIEW') RETURNING document_id",[id,a.id]);
-   if(!updated.rowCount) return reply.code(409).send({error:'Estado inválido'});
-   await audit(a.id,'KNOWLEDGE_REJECTED',updated.rows[0].document_id);
+   const b=req.body as {note?:unknown}|undefined;
+   const note=typeof b?.note==='string'?b.note.trim():'';
+   if(note.length<10||note.length>2000||hasSecrets(note))
+     return reply.code(400).send({error:'Justificativa obrigatória (10 a 2.000 caracteres, sem credenciais)'});
+   const state=await transaction(async c=>{
+     const r=await c.query('SELECT v.document_id,v.status,s.visibility,g.can_approve FROM document_versions v '+
+       'JOIN documents d ON d.id=v.document_id JOIN spaces s ON s.id=d.space_id '+
+       'LEFT JOIN space_grants g ON g.user_id=$2 AND g.space_id=s.id '+
+       'WHERE v.id=$1 FOR UPDATE OF v,d',[id,actor.id]);
+     const item=r.rows[0];
+     if(!item)return 'NOT_FOUND';
+     if(actor.role!=='APPROVER'||!(item.visibility==='SHARED'||item.can_approve))return 'FORBIDDEN';
+     if(item.status!=='IN_REVIEW')return 'CONFLICT';
+     await c.query("UPDATE document_versions SET status='CHANGES_REQUESTED',reviewed_by=$2,reviewed_at=now(),review_note=$3 WHERE id=$1",[id,actor.id,note]);
+     await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'KNOWLEDGE_CHANGES_REQUESTED',$2)",[actor.id,item.document_id]);
+     return 'OK';
+   });
+   if(state==='NOT_FOUND')return reply.code(404).send({error:'Versão não encontrada'});
+   if(state==='FORBIDDEN')return reply.code(403).send({error:'Aprovação não autorizada'});
+   if(state==='CONFLICT')return reply.code(409).send({error:'A versão não está em revisão'});
+   return {ok:true};
+ });
+ // A correction is an immutable new draft. Lock both rows for concurrent requests.
+ app.post('/knowledge/versions/:id/correct',async(req,reply)=>{
+   const actor=await requireActor(req);
+   const id=(req.params as {id:string}).id;
+   const b=req.body as {content?:unknown}|undefined;
+   const content=typeof b?.content==='string'?b.content.trim():'';
+   if(content.length<20||content.length>100000||hasSecrets(content))
+     return reply.code(400).send({error:'Artigo corrigido inválido ou contém possível credencial'});
+   const result=await transaction(async c=>{
+     const r=await c.query('SELECT v.id,v.document_id,v.authored_by,v.status,v.superseded_by,v.base_version_id,'+
+       'd.space_id,d.kind,d.current_version_id,d.archived_at FROM document_versions v '+
+       'JOIN documents d ON d.id=v.document_id WHERE v.id=$1 FOR UPDATE OF v,d',[id]);
+     const ver=r.rows[0];
+     if(!ver||ver.authored_by!==actor.id||ver.archived_at)return {error:'NOT_FOUND'};
+     const perm=await c.query('SELECT s.visibility,g.can_edit FROM spaces s '+
+       'LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2 WHERE s.id=$1',[ver.space_id,actor.id]);
+     const p=perm.rows[0];
+     if(!(p && (p.visibility==='SHARED'||p.can_edit)))return {error:'FORBIDDEN'};
+     if(ver.kind!=='ARTICLE')return {error:'UNSUPPORTED'};
+     if(ver.status!=='CHANGES_REQUESTED'||ver.superseded_by)return {error:'CONFLICT'};
+     if(ver.current_version_id!==ver.base_version_id)return {error:'STALE'};
+     const next=await c.query('SELECT COALESCE(MAX(version_number),0)+1 AS number FROM document_versions WHERE document_id=$1',[ver.document_id]);
+     const created=await c.query("INSERT INTO document_versions(document_id,version_number,status,content,authored_by,base_version_id) VALUES($1,$2,'DRAFT',$3,$4,$5) RETURNING id",
+       [ver.document_id,Number(next.rows[0].number),content,actor.id,ver.base_version_id]);
+     await c.query('UPDATE document_versions SET superseded_by=$2 WHERE id=$1',[id,created.rows[0].id]);
+     await c.query('INSERT INTO ingestion_jobs(version_id) VALUES($1)',[created.rows[0].id]);
+     await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'KNOWLEDGE_CORRECTION_DRAFT_CREATED',$2)",[actor.id,ver.document_id]);
+     return {documentId:ver.document_id,versionId:created.rows[0].id};
+   });
+   if('error' in result){
+     if(result.error==='NOT_FOUND')return reply.code(404).send({error:'Proposta não encontrada'});
+     if(result.error==='FORBIDDEN')return reply.code(403).send({error:'Permissão de edição revogada'});
+     if(result.error==='UNSUPPORTED')return reply.code(415).send({error:'Reenvie um PDF corrigido como novo documento'});
+     return reply.code(409).send({error:result.error==='STALE'?'O artigo publicado mudou. Reabra a revisão':'A proposta já foi corrigida ou não está aguardando ajustes'});
+   }
+   return reply.code(201).send(result);
+ });
+ app.post('/knowledge/versions/:id/reject',async(req,reply)=>{
+   const actor=await requireActor(req);
+   const id=(req.params as {id:string}).id;
+   const b=req.body as {note?:unknown}|undefined;
+   const note=typeof b?.note==='string'?b.note.trim():'';
+   if(note.length<10||note.length>2000||hasSecrets(note))
+     return reply.code(400).send({error:'Informe a justificativa (10 a 2.000 caracteres, sem credenciais)'});
+   const state=await transaction(async c=>{
+     const r=await c.query('SELECT v.status,v.document_id,s.visibility,g.can_approve FROM document_versions v '+
+       'JOIN documents d ON d.id=v.document_id JOIN spaces s ON s.id=d.space_id '+
+       'LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2 '+
+       'WHERE v.id=$1 FOR UPDATE OF v,d',[id,actor.id]);
+     const ver=r.rows[0];
+     if(!ver)return 'NOT_FOUND';
+     if(actor.role!=='APPROVER'||!(ver.visibility==='SHARED'||ver.can_approve))return 'FORBIDDEN';
+     if(ver.status!=='IN_REVIEW')return 'CONFLICT';
+     await c.query("UPDATE document_versions SET status='REJECTED',review_note=$3,reviewed_by=$2,reviewed_at=now() WHERE id=$1",[id,actor.id,note]);
+     await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'KNOWLEDGE_REJECTED',$2)",[actor.id,ver.document_id]);
+     return 'OK';
+   });
+   if(state==='NOT_FOUND')return reply.code(404).send({error:'Versão não encontrada'});
+   if(state==='FORBIDDEN')return reply.code(403).send({error:'Aprovação não autorizada'});
+   if(state==='CONFLICT')return reply.code(409).send({error:'A versão não está em revisão'});
    return {ok:true};
  });
  app.post('/knowledge/pending/:id/confirm',async(req,reply)=>{
