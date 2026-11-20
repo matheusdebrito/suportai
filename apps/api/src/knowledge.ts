@@ -202,7 +202,7 @@ export function registerKnowledge(app:FastifyInstance) {
    if(!['DRAFT','IN_REVIEW'].includes(r.rows[0].status)||r.rows[0].index_status!=='FAILED') return reply.code(409).send({error:'Não há falha pendente de reprocessamento'});
    await transaction(async c=>{
       await requireCurrentActor(c,a);
-      const updated=await c.query("UPDATE ingestion_jobs SET status='PENDING',error=NULL,updated_at=now() WHERE version_id=$1 AND status='FAILED' RETURNING version_id",[id]);
+      const updated=await c.query("UPDATE ingestion_jobs SET status='PENDING',error=NULL,attempts=0,lease_token=NULL,updated_at=now() WHERE version_id=$1 AND status='FAILED' RETURNING version_id",[id]);
       if(!updated.rowCount) throw Object.assign(new Error('Job não pode ser reprocessado'),{statusCode:409});
       await c.query("UPDATE document_versions SET index_status='PENDING' WHERE id=$1",[id]);
       await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'KNOWLEDGE_REINDEX_REQUESTED',$2)",[a.id,id]);
