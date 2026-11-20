@@ -114,3 +114,19 @@ Os seguintes PRs são evidência de **implementação e CI** (não de homologaç
 | [#57](https://github.com/matheusdebrito/suportai/pull/57) | [CI #44824923174](https://github.com/matheusdebrito/suportai/actions/runs/44824923174) | Casos sintéticos de similaridade positivos e negativos; precisão/recall real não medidos |
 
 **Parecer atualizado: APROVADO COM RESSALVAS apenas para integrar essas mudanças de código.** T007 tem verificação automatizada de seus cenários sintéticos, mas o aplicativo **permanece NÃO APROVADO para dados internos reais e produção**, pelos bloqueios de fornecedor, avaliação adversarial com modelo real, isolamento PDF no SO, operação e recuperação em ambiente de destino e piloto humano de TI. Nenhum deploy ou migração de produção ocorreu nesta rodada.
+
+## Evidência adicional — PRs #59–#65
+
+| PR | Evidência observável | Resultado / limite |
+| --- | --- | --- |
+| [#59](https://github.com/matheusdebrito/suportai/pull/59) | [CI #44828392842](https://github.com/matheusdebrito/suportai/actions/runs/44828392842) | Transporte IPC Unix e falha fechada quando socket não configurado em produção; sem sandbox de host real |
+| [#60](https://github.com/matheusdebrito/suportai/pull/60) | [CI #44829723138](https://github.com/matheusdebrito/suportai/actions/runs/44829723138) | Build de contêineres, HTTPS/Caddy e validação da topologia; sem deploy |
+| [#61](https://github.com/matheusdebrito/suportai/pull/61) | [CI #44830308954](https://github.com/matheusdebrito/suportai/actions/runs/44830308954) | Executado script de restauração sobre backup **fictício** em contêiner PostgreSQL separado e sem rede |
+| [#62](https://github.com/matheusdebrito/suportai/pull/62) | [Auditoria #44830779456](https://github.com/matheusdebrito/suportai/actions/runs/44830779456) | Nenhum alerta alto/crítico na resolução de dependências executada; auditoria futura dependerá da data das versões |
+| [#63](https://github.com/matheusdebrito/suportai/pull/63) | [CI #44834957130](https://github.com/matheusdebrito/suportai/actions/runs/44834957130) | Parser real dentro de Docker sem rede: sem segredos, acesso TCP negado, socket de cliente read-only, extração fictícia e falha fechada quando parado; testes de CLI compilada |
+| [#64](https://github.com/matheusdebrito/suportai/pull/64) | [CI #44835446428](https://github.com/matheusdebrito/suportai/actions/runs/44835446428) | Avaliação RAG offline com validação mais rigorosa de citação, IP e desambiguação; não utiliza LLM real |
+| [#65](https://github.com/matheusdebrito/suportai/pull/65) | [CI #44835861529](https://github.com/matheusdebrito/suportai/actions/runs/44835861529) e [rede #44835861539](https://github.com/matheusdebrito/suportai/actions/runs/44835861539) | Network egress do worker somente por overlay opt-in; parser permanece isolado e não houve transmissão externa de dados |
+
+**Parecer nesta atualização: APROVADO COM RESSALVAS para estas integrações de código; NÃO VERIFICADO/SEM APROVAÇÃO PARA DADOS INTERNOS REAIS OU PRODUÇÃO.** O CI não substitui validação no host de destino, avaliação semântica com modelo real autorizado, backup off-host, RPO/RTO, política de retenção, testes humanos e aprovação do fornecedor.
+
+**T009:** OCR de PDFs escaneados não foi incluído, por ser opcional e não aprovado no escopo do MVP. Nunca tratar ausência de OCR como processamento válido de imagem sem texto.
