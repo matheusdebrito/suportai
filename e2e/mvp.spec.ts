@@ -195,7 +195,7 @@ test.describe('fluxo editorial com worker real',()=>{
    await expect(blankDraft.getByRole('button',{name:'Enviar para revisão'})).toHaveCount(0);
 
    const encryptedName='protegido-'+Date.now()+'.pdf';
-   const encrypted=await readFile(new URL('../apps/api/test-fixtures/encrypted-lab.pdf',import.meta.url));
+   const encrypted=await readFile('apps/api/test-fixtures/encrypted-lab.pdf');
    await chooser.setInputFiles({name:encryptedName,mimeType:'application/pdf',buffer:encrypted});
    await expect.poll(async()=>{
      const response=await page.request.get('http://localhost:5173/knowledge/mine');
