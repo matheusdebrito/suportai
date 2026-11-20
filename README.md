@@ -10,6 +10,7 @@ Assistente interno com cérebro de conhecimento baseado em artigos e PDFs, recup
 - Busca textual PostgreSQL e embeddings pgvector (quando a API de IA estiver configurada).
 - Conversa com agente, ferramentas de busca e prévias de artigos, sem publicação automática.
 - Fluxo de rascunho, revisão, aprovação humana (inclusive autor-aprovador) e versionamento.
+- Pedidos de ajuste com parecer, versões corrigidas e aviso de artigos semelhantes antes de nova criação.
 - Upload de PDF com worker e processamento assíncrono.
 
 ## Requisitos

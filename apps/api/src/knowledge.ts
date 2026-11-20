@@ -2,6 +2,7 @@ import type {FastifyInstance} from 'fastify';
 import {query,transaction,audit} from './db.js';
 import {requireActor} from './auth.js';
 import {spacePermission,type Actor} from './security.js';
+import {findSimilarPublished, validDuplicateReason, SimilarArticlesError} from './similar.js';
 export function hasSecrets(text:string) {
  return /-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----|(?:api[_-]?key|secret|senha|password|token|authorization)\s*[:=]\s*(?:bearer\s+)?["']?[a-z0-9_\-/+=]{12,}|(?:ghp|gho|ghu|ghs|ghr)_[a-z0-9]{30,}|github_pat_[a-z0-9_]{25,}|sk-[a-z0-9_-]{20,}|AKIA[0-9A-Z]{16}/i.test(text);
 }
@@ -10,13 +11,16 @@ export function chunks(text:string,size=1100,overlap=150) {
  for(let start=0;start<text.length;start+=size-overlap){out.push(text.slice(start,start+size)); if(start+size>=text.length)break;}
  return out;
 }
-async function createVersion(actor:Actor,spaceId:string,title:string,content:string,kind:'ARTICLE'|'PDF',pdfBytes?:Buffer,documentId?:string,baseVersionId?:string) {
+async function createVersion(actor:Actor,spaceId:string,title:string,content:string,kind:'ARTICLE'|'PDF',pdfBytes?:Buffer,documentId?:string,baseVersionId?:string,duplicateReason?:string) {
  const p=await spacePermission(actor,spaceId);
  if(!p?.edit) throw Object.assign(new Error('Sem permissão para escrever neste espaço'),{statusCode:403});
  if(hasSecrets(content)) throw Object.assign(new Error('Possível credencial detectada. Remova-a antes de enviar'),{statusCode:422});
+ if(duplicateReason && hasSecrets(duplicateReason)) throw Object.assign(new Error('Remova credenciais da justificativa'),{statusCode:422});
+ if(kind==='ARTICLE' && !p.read)throw Object.assign(new Error('Permissão de leitura obrigatória para verificar artigos existentes'),{statusCode:403});
  const result=await transaction(async c=>{
    let docId=documentId;
    let versionNo=1;
+   let similarCount=0;
    if(docId){
      const doc=await c.query('SELECT id,space_id,current_version_id FROM documents WHERE id=$1 FOR UPDATE',[docId]);
      if(!doc.rowCount || doc.rows[0].space_id!==spaceId) throw Object.assign(new Error('Documento não encontrado'),{statusCode:404});
@@ -24,12 +28,23 @@ async function createVersion(actor:Actor,spaceId:string,title:string,content:str
      const count=await c.query('SELECT COALESCE(MAX(version_number),0)+1 AS next FROM document_versions WHERE document_id=$1',[docId]);
      versionNo=Number(count.rows[0].next);
    } else {
+     if(kind==='ARTICLE'){
+       // Serialize checks in this space to avoid stale preflight results.
+       await c.query('SELECT id FROM spaces WHERE id=$1 FOR UPDATE',[spaceId]);
+       const matches=await findSimilarPublished(spaceId,title,c);
+       similarCount=matches.length;
+       if(matches.length && !validDuplicateReason(duplicateReason)) throw new SimilarArticlesError(matches);
+     }
      const doc=await c.query('INSERT INTO documents(space_id,title,kind) VALUES($1,$2,$3) RETURNING id',[spaceId,title,kind]);
      docId=doc.rows[0].id;
    }
    const ver=await c.query(`INSERT INTO document_versions(document_id,version_number,status,content,pdf_bytes,authored_by,base_version_id)
     VALUES($1,$2,'DRAFT',$3,$4,$5,$6) RETURNING id`,[docId,versionNo,content,pdfBytes??null,actor.id,baseVersionId??null]);
    await c.query('INSERT INTO ingestion_jobs(version_id) VALUES($1)',[ver.rows[0].id]);
+   if(kind==='ARTICLE' && !documentId && similarCount>0 && validDuplicateReason(duplicateReason)){
+     await c.query("INSERT INTO audit_events(actor_id,action,resource_id,metadata) VALUES($1,'KNOWLEDGE_DUPLICATE_ACKNOWLEDGED',$2,$3::jsonb)",
+       [actor.id,docId,JSON.stringify({reason:duplicateReason})]);
+   }
    await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'KNOWLEDGE_DRAFT_CREATED',$2)",[actor.id,docId]);
    return {documentId:docId!,versionId:ver.rows[0].id};
  });
@@ -108,9 +123,14 @@ export function registerKnowledge(app:FastifyInstance) {
  });
  app.post('/knowledge/articles',async(req,reply)=>{
    const a=await requireActor(req);
-   const b=req.body as {spaceId?:unknown;title?:unknown;content?:unknown}|undefined;
+   const b=req.body as {spaceId?:unknown;title?:unknown;content?:unknown;duplicateReason?:unknown}|undefined;
    if(typeof b?.spaceId!=='string'||typeof b.title!=='string'||typeof b.content!=='string'||b.title.length<3||b.title.length>200||b.content.length<20||b.content.length>100000) return reply.code(400).send({error:'Artigo inválido'});
-   return reply.code(201).send(await createVersion(a,b.spaceId,b.title,b.content,'ARTICLE'));
+   const reason=typeof b.duplicateReason==='string'?b.duplicateReason.trim():undefined;
+   try{return reply.code(201).send(await createVersion(a,b.spaceId,b.title,b.content,'ARTICLE',undefined,undefined,undefined,reason));}
+   catch(error){
+     if(error instanceof SimilarArticlesError)return reply.code(409).send({error:'Há artigos semelhantes. Abra o existente ou justifique a criação de outro.',code:'SIMILAR_ARTICLES',matches:error.matches});
+     throw error;
+   }
  });
  app.post('/knowledge/documents/:id/versions',async(req,reply)=>{
    const a=await requireActor(req);
@@ -291,6 +311,9 @@ export function registerKnowledge(app:FastifyInstance) {
  app.post('/knowledge/pending/:id/confirm',async(req,reply)=>{
    const a=await requireActor(req);
    const id=(req.params as {id:string}).id;
+   const body=req.body as {duplicateReason?:unknown}|undefined;
+   const duplicateReason=typeof body?.duplicateReason==='string'?body.duplicateReason.trim():undefined;
+   if(duplicateReason && hasSecrets(duplicateReason))return reply.code(422).send({error:'Remova credenciais da justificativa'});
    const result=await transaction(async c=>{
      const r=await c.query('SELECT * FROM pending_actions WHERE id=$1 AND user_id=$2 FOR UPDATE',[id,a.id]);
      const pending=r.rows[0];
@@ -301,22 +324,35 @@ export function registerKnowledge(app:FastifyInstance) {
      if(!p?.edit) return {error:'FORBIDDEN'};
      if(hasSecrets(pending.content)) return {error:'SECRETS'};
      let docId=pending.document_id;let version=1;
+     let similarCount=0;
      if(docId){
        const old=await c.query('SELECT current_version_id FROM documents WHERE id=$1 FOR UPDATE',[docId]);
        if(!old.rowCount||old.rows[0].current_version_id!==pending.base_version_id) return {error:'STALE'};
        const count=await c.query('SELECT COALESCE(MAX(version_number),0)+1 AS next FROM document_versions WHERE document_id=$1',[docId]);
        version=Number(count.rows[0].next);
      } else {
+       if(!p.read)return {error:'FORBIDDEN'};
+       await c.query('SELECT id FROM spaces WHERE id=$1 FOR UPDATE',[pending.space_id]);
+       const matches=await findSimilarPublished(pending.space_id,pending.title,c);
+       similarCount=matches.length;
+       if(matches.length && !validDuplicateReason(duplicateReason)) return {error:'SIMILAR_ARTICLES',matches};
        const doc=await c.query("INSERT INTO documents(space_id,title,kind) VALUES($1,$2,'ARTICLE') RETURNING id",[pending.space_id,pending.title]);
        docId=doc.rows[0].id;
      }
      const v=await c.query("INSERT INTO document_versions(document_id,version_number,status,content,authored_by,base_version_id) VALUES($1,$2,'DRAFT',$3,$4,$5) RETURNING id",[docId,version,pending.content,a.id,pending.base_version_id]);
      await c.query('INSERT INTO ingestion_jobs(version_id) VALUES($1)',[v.rows[0].id]);
-     await c.query('UPDATE pending_actions SET result_version_id=$2,confirmed_at=now() WHERE id=$1',[id,v.rows[0].id]);
+     if(!pending.document_id && similarCount>0 && validDuplicateReason(duplicateReason)){
+       await c.query("INSERT INTO audit_events(actor_id,action,resource_id,metadata) VALUES($1,'KNOWLEDGE_DUPLICATE_ACKNOWLEDGED',$2,$3::jsonb)",
+         [a.id,docId,JSON.stringify({reason:duplicateReason})]);
+     }
+     await c.query('UPDATE pending_actions SET result_version_id=$2,document_id=$3,confirmed_at=now() WHERE id=$1',[id,v.rows[0].id,docId]);
      await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'KNOWLEDGE_DRAFT_CREATED',$2)",[a.id,docId]);
      return {documentId:docId,versionId:v.rows[0].id};
    });
-   if('error' in result) return reply.code(result.error==='FORBIDDEN'?403:result.error==='NOT_FOUND'?404:409).send({error:result.error});
+   if('error' in result){
+     if(result.error==='SIMILAR_ARTICLES' && 'matches' in result)return reply.code(409).send({error:'Há artigos semelhantes. Abra o existente ou justifique a criação de outro.',code:'SIMILAR_ARTICLES',matches:result.matches});
+     return reply.code(result.error==='FORBIDDEN'?403:result.error==='NOT_FOUND'?404:409).send({error:result.error});
+   }
    return result;
  });
  app.post('/feedback',async(req,reply)=>{

@@ -7,6 +7,9 @@ type Space={id:string;name:string;visibility:string;can_read:boolean;can_edit:bo
 type Doc={id:string;title:string;kind:string;space_name:string};
 type Message={id?:string;role:'user'|'assistant';content:string;sources?:{documentId:string;versionId:string;versionNumber?:number;title:string}[]};
 type Pending={id:string;title:string;content:string;spaceName?:string};
+type SimilarArticle={id:string;title:string;kind:'ARTICLE'|'PDF'};
+type DuplicatePrompt={source:'panel'|'pending';matches:SimilarArticle[];title:string;spaceId?:string;content?:string;pendingId?:string};
+type DuplicateResponseError=Error&{code?:string;matches?:SimilarArticle[]};
 type Conversation={id:string;title:string;updated_at:string};
 type Draft={version_id:string;document_id:string;title:string;kind:'ARTICLE'|'PDF';version_number:number;status:'DRAFT'|'IN_REVIEW'|'CHANGES_REQUESTED'|'REJECTED';index_status:'READY'|'PENDING'|'FAILED';space_name:string;ingestion_error?:string;review_note?:string};
 type DraftDetail=Draft&{content:string;space_id:string};
@@ -26,7 +29,9 @@ function textDiff(before:string,after:string){
 async function api<T=any>(path:string,init:RequestInit={}):Promise<T> {
  const response=await fetch(path,{...init,credentials:'include',headers:{...(init.body instanceof FormData?{}:{'Content-Type':'application/json'}),...(init.headers||{})}});
  const result=await response.json().catch(()=>({error:'Resposta inválida do servidor'}));
- if(!response.ok) throw new Error(result.error||'Falha na operação');
+ if(!response.ok) throw Object.assign(new Error(result.error||'Falha na operação'),
+   {code:typeof result.code==='string'?result.code:undefined,
+    matches:Array.isArray(result.matches)?result.matches:undefined});
  return result;
 }
 function App(){
@@ -53,6 +58,8 @@ function App(){
  const [content,setContent]=useState('');
  const [spaceId,setSpaceId]=useState('');
  const [lastDraft,setLastDraft]=useState<string|null>(null);
+ const [duplicatePrompt,setDuplicatePrompt]=useState<DuplicatePrompt|null>(null);
+ const [duplicateReason,setDuplicateReason]=useState('');
  const [drafts,setDrafts]=useState<Draft[]>([]);
  const [draftView,setDraftView]=useState<DraftDetail|null>(null);
  const [selectedDoc,setSelectedDoc]=useState<DocDetail|null>(null);
@@ -73,6 +80,35 @@ function App(){
   if(user?.role==='ADMIN'){const result=await api<{users:typeof users}>('/admin/users');setUsers(result.users);}
  }
  function failed(e:unknown){setError(e instanceof Error?e.message:'Falha desconhecida');}
+ function duplicateDetected(e:unknown,prompt:Omit<DuplicatePrompt,'matches'>):boolean{
+   const error=e as DuplicateResponseError;
+   if(error?.code!=='SIMILAR_ARTICLES'||!Array.isArray(error.matches))return false;
+   setDuplicatePrompt({...prompt,matches:error.matches});setDuplicateReason('');return true;
+ }
+ async function continueDuplicate(e:React.FormEvent){
+   e.preventDefault();if(!duplicatePrompt)return;
+   setError('');
+   try{
+     if(duplicatePrompt.source==='panel'){
+       const created=await api<{versionId:string}>('/knowledge/articles',{
+         method:'POST',body:JSON.stringify({
+          spaceId:duplicatePrompt.spaceId,title:duplicatePrompt.title,content:duplicatePrompt.content,
+          duplicateReason:duplicateReason.trim()
+         })
+       });
+       setTitle('');setContent('');setLastDraft(created.versionId);
+     }else{
+       const created=await api<{versionId:string}>('/knowledge/pending/'+duplicatePrompt.pendingId+'/confirm',{
+         method:'POST',body:JSON.stringify({duplicateReason:duplicateReason.trim()})
+       });
+       setPending(items=>items.filter(x=>x.id!==duplicatePrompt.pendingId));
+       setLastDraft(created.versionId);setTab('knowledge');
+     }
+     setDuplicatePrompt(null);setDuplicateReason('');
+     await refresh();
+   }catch(error){failed(error);}
+ }
+
  async function refreshConversations(){
   const result=await api<{conversations:Conversation[]}>('/conversations');
   setConversations(result.conversations);
@@ -117,7 +153,7 @@ function App(){
 
  async function login(e:React.FormEvent){e.preventDefault();setError('');try{const r=await api<{user:User}>('/auth/login',{method:'POST',body:JSON.stringify({email,password})});setPassword('');setUser(r.user);}catch(e){failed(e);}}
  async function changePassword(e:React.FormEvent){e.preventDefault();setError('');try{await api('/auth/change-password',{method:'POST',body:JSON.stringify({resetToken,newPassword})});const u=await api<User>('/auth/me');setUser(u);setResetToken('');setNewPassword('');setShowReset(false);}catch(e){failed(e);}}
- async function logout(){await api('/auth/logout',{method:'POST'}).catch(()=>{});setUser(null);setMessages([]);setConversationId(null);setConversations([]);setDrafts([]);setPending([]);setSelectedDoc(null);setCorrectionOf(null);setReviewNote('');setReviewDecision(null);}
+ async function logout(){await api('/auth/logout',{method:'POST'}).catch(()=>{});setUser(null);setMessages([]);setConversationId(null);setConversations([]);setDrafts([]);setPending([]);setSelectedDoc(null);setCorrectionOf(null);setReviewNote('');setReviewDecision(null);setDuplicatePrompt(null);}
  async function send(e:React.FormEvent){
   e.preventDefault();if(!input.trim()||busy||conversationLoading)return;setBusy(true);setError('');
   const text=input;setInput('');setMessages(m=>[...m,{role:'user',content:text}]);
@@ -131,10 +167,13 @@ function App(){
   }catch(e){failed(e);}finally{setBusy(false);}
  }
  async function confirmPending(id:string){setError('');try{
-  const r=await api<{versionId:string}>(`/knowledge/pending/${id}/confirm`,{method:'POST'});
-  setPending(p=>p.filter(x=>x.id!==id));setLastDraft(r.versionId);
-  setTab('knowledge');await refresh();
- }catch(e){failed(e);}}
+   const r=await api<{versionId:string}>('/knowledge/pending/'+id+'/confirm',{method:'POST'});
+   setPending(p=>p.filter(x=>x.id!==id));setLastDraft(r.versionId);
+   setTab('knowledge');await refresh();
+ }catch(error){
+   const pendingAction=pending.find(p=>p.id===id);
+   if(!duplicateDetected(error,{source:'pending',pendingId:id,title:pendingAction?.title||'Proposta de artigo'}))failed(error);
+ }}
  async function saveArticle(e:React.FormEvent){e.preventDefault();setError('');try{
    const r=correctionOf
      ? await api<{versionId:string}>('/knowledge/versions/'+correctionOf+'/correct',{method:'POST',body:JSON.stringify({content})})
@@ -142,8 +181,10 @@ function App(){
        ? await api<{versionId:string}>('/knowledge/documents/'+editing.documentId+'/versions',{method:'POST',body:JSON.stringify({content,baseVersionId:editing.baseVersionId})})
        : await api<{versionId:string}>('/knowledge/articles',{method:'POST',body:JSON.stringify({spaceId,title,content})});
    setLastDraft(r.versionId);setEditing(null);setCorrectionOf(null);setTitle('');setContent('');await refresh();
- }catch(e){failed(e);}
- }
+ }catch(error){
+   if(!editing&&!correctionOf&&duplicateDetected(error,{source:'panel',spaceId,title,content}))return;
+   failed(error);
+ }}
  async function uploadPdf(e:React.ChangeEvent<HTMLInputElement>){
   const file=e.target.files?.[0];if(!file)return;setError('');
   try{const form=new FormData();form.append('spaceId',spaceId);form.append('file',file);
@@ -200,6 +241,20 @@ function App(){
   </nav><div className="sidebar-footer"><div className="identity">{user.email}<small>{user.role}</small></div><button onClick={logout}><LogOut size={17}/> Sair</button></div></aside>
  <main className="main"><header><div><strong>{tab==='chat'?'Assistente':tab==='knowledge'?'Base de conhecimento':tab==='reviews'?'Central de revisão':'Administração'}</strong><p>{tab==='chat'?'Pergunte, investigue e registre soluções com segurança.':'Conhecimento revisado, rastreável e acessível.'}</p></div>{tab==='chat'&&<button className="secondary" disabled={busy||conversationLoading} onClick={newConversation}><Plus size={16}/> Nova conversa</button>}</header>
  {error&&<div className="error" role="alert">{error}<button className="ghost" onClick={()=>setError('')}>Fechar</button></div>}
+ {duplicatePrompt&&<section className="panel duplicate-panel" aria-label="Possíveis artigos duplicados">
+  <h3>Encontramos artigos semelhantes a “{duplicatePrompt.title}”</h3>
+  <p className="hint">Evite criar um procedimento duplicado. Você pode abrir o conteúdo existente e propor uma atualização, ou justificar a criação de um artigo diferente.</p>
+  <div className="duplicates-list">{duplicatePrompt.matches.map(match=><div key={match.id} className="duplicate-item"><span><BookOpen size={16}/>{match.title}</span><button className="secondary" onClick={()=>{void openDoc(match.id);setDuplicatePrompt(null);}}>Abrir artigo</button></div>)}</div>
+  <form onSubmit={continueDuplicate}>
+    <label>Por que é necessário criar outro artigo?
+      <textarea required minLength={15} maxLength={500} rows={2} value={duplicateReason}
+        onChange={e=>setDuplicateReason(e.target.value)} placeholder="Explique a diferença do novo procedimento..."/>
+    </label>
+    <div className="actions"><button>Criar novo artigo com justificativa</button>
+      <button type="button" className="secondary" onClick={()=>{setDuplicatePrompt(null);setDuplicateReason('');}}>Cancelar</button>
+    </div>
+  </form>
+ </section>}
  {tab==='chat'&&<div className="chat-layout"><aside className="conversations-panel"><div className="conversations-heading"><strong>Conversas</strong><button className="secondary" disabled={busy||conversationLoading} onClick={()=>void refreshConversations().catch(failed)} aria-label="Atualizar conversas"><RotateCcw size={15}/></button></div>{conversations.length===0?<p className="hint">Suas conversas aparecem aqui depois da primeira mensagem.</p>:conversations.map(c=><button key={c.id} disabled={busy||conversationLoading} className={'conversation-item '+(conversationId===c.id?'selected':'')} onClick={()=>void openConversation(c.id)}><span>{c.title}</span><small>{new Date(c.updated_at).toLocaleDateString('pt-BR',{day:'2-digit',month:'short'})}</small></button>)}</aside><section className="chat"><div className="chat-history">{conversationLoading&&<p className="hint"><LoaderCircle className="spin" size={16}/> Abrindo conversa...</p>}{messages.length===0&&<div className="empty"><BrainCircuit size={40}/><h2>Como posso ajudar?</h2><p>Consulte procedimentos, investigue problemas ou peça para preparar um artigo no cérebro.</p><div className="suggestions">{['Como consultar procedimentos de rede?','Como registrar um procedimento novo?','O que fazer quando um servidor não responde?'].map(x=><button key={x} onClick={()=>setInput(x)}>{x}</button>)}</div></div>}
   {messages.map((m,i)=><div className={'bubble '+m.role} key={m.id||i}><div className="bubble-role">{m.role==='user'?'Você':'SuportAI'}</div><div className="formatted">{m.content}</div>{Boolean(m.sources?.length)&&<div className="sources"><strong>Fontes consultadas</strong>{m.sources!.map((s,j)=><button key={j} onClick={()=>openSource(s.documentId,s.versionId)}>{s.title} · versão {s.versionNumber??s.versionId.slice(0,8)}</button>)}</div>}</div>)}
   {busy&&<p className="hint"><LoaderCircle className="spin" size={16}/> Consultando conhecimento...</p>}

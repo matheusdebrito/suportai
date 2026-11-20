@@ -136,6 +136,48 @@ if(!process.env.TEST_DATABASE_URL){
    assert.equal(originalSource.statusCode,200,originalSource.body);
    assert.equal(originalSource.json().isCurrent,true);
 
+
+   // Creating a similar published procedure requires an explicit human rationale.
+   const similarTitle='Procedimento DNS '+id+' - guia alternativo';
+   const potentialDuplicate=await app.inject({method:'POST',url:'/knowledge/articles',headers:auth(reader.cookie),
+     payload:{spaceId:shared,title:similarTitle,content:'Outro procedimento de DNS para demonstrar a criação justificada após verificação de duplicidade.'}});
+   assert.equal(potentialDuplicate.statusCode,409,potentialDuplicate.body);
+   assert.equal(potentialDuplicate.json().code,'SIMILAR_ARTICLES');
+   assert.ok(potentialDuplicate.json().matches.some((d:any)=>d.id===sharedDoc.documentId));
+   const noDuplicateCreated=await query('SELECT count(*)::int AS total FROM documents WHERE title=$1',[similarTitle]);
+   assert.equal(noDuplicateCreated.rows[0].total,0);
+   const shortReason=await app.inject({method:'POST',url:'/knowledge/articles',headers:auth(reader.cookie),
+     payload:{spaceId:shared,title:similarTitle,content:'Outro procedimento de DNS, sem motivo suficiente para permitir a duplicação.',duplicateReason:'insuficiente'}});
+   assert.equal(shortReason.statusCode,409);
+   const secretReason=await app.inject({method:'POST',url:'/knowledge/articles',headers:auth(reader.cookie),
+     payload:{spaceId:shared,title:similarTitle,content:'Outro procedimento de DNS, com motivo inválido por credencial.',duplicateReason:'api_key=abcdefghijklmnop'}});
+   assert.equal(secretReason.statusCode,422);
+   const acknowledged=await app.inject({method:'POST',url:'/knowledge/articles',headers:auth(reader.cookie),
+     payload:{spaceId:shared,title:similarTitle,
+       content:'Este procedimento aplica-se especificamente a uma configuração de DNS isolada do laboratório de testes.',
+       duplicateReason:'É um procedimento diferente para uma rede de laboratório isolada.'}});
+   assert.equal(acknowledged.statusCode,201,acknowledged.body);
+   const auditDuplicate=await query("SELECT metadata->>'reason' AS reason FROM audit_events WHERE action='KNOWLEDGE_DUPLICATE_ACKNOWLEDGED' AND resource_id=$1",[acknowledged.json().documentId]);
+   assert.match(auditDuplicate.rows[0].reason,/laboratório isolada/);
+
+   // The conversational confirmation path enforces the same duplicate review.
+   const pendingDuplicate=await query('INSERT INTO pending_actions(user_id,conversation_id,space_id,title,content) VALUES($1,$2,$3,$4,$5) RETURNING id',
+     [reader.id,conversationId,shared,'Procedimento DNS '+id+' - chat alternativo',
+      'Procedimento sugerido pelo chat para resolver falhas de DNS em um ambiente de homologação isolado.']);
+   const pendingDuplicateId=pendingDuplicate.rows[0].id as string;
+   const blockedPending=await app.inject({method:'POST',url:'/knowledge/pending/'+pendingDuplicateId+'/confirm',headers:auth(reader.cookie)});
+   assert.equal(blockedPending.statusCode,409,blockedPending.body);
+   assert.equal(blockedPending.json().code,'SIMILAR_ARTICLES');
+   assert.ok(blockedPending.json().matches.some((d:any)=>d.id===sharedDoc.documentId));
+   const approvedPending=await app.inject({method:'POST',url:'/knowledge/pending/'+pendingDuplicateId+'/confirm',
+     headers:auth(reader.cookie),payload:{duplicateReason:'O procedimento descreve um ambiente de homologação independente.'}});
+   assert.equal(approvedPending.statusCode,200,approvedPending.body);
+   assert.ok(approvedPending.json().documentId);
+   const repeatedPending=await app.inject({method:'POST',url:'/knowledge/pending/'+pendingDuplicateId+'/confirm',
+     headers:auth(reader.cookie),payload:{duplicateReason:'O procedimento descreve um ambiente de homologação independente.'}});
+   assert.equal(repeatedPending.statusCode,200,repeatedPending.body);
+   assert.deepEqual(repeatedPending.json(),approvedPending.json(),'Repeated confirmation must be idempotent');
+
    // A reviewer can request corrections; doing so must never replace live knowledge.
    const waiting=await app.inject({method:'POST',url:'/knowledge/documents/'+sharedDoc.documentId+'/versions',
      headers:auth(reader.cookie),payload:{content:'Proposta de correção de DNS. Documente a resolução, compare TTLs e registre os testes de conectividade para validação.',baseVersionId:sharedDoc.versionId}});
