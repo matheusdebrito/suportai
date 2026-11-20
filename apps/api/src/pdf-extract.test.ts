@@ -1,4 +1,5 @@
 import {test} from 'node:test';
+import {readFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {PDFDocument,StandardFonts} from 'pdf-lib';
 import {extractPdfText} from './pdf-extract.js';
@@ -56,4 +57,12 @@ test('a PDF JavaScript action is never executed by text extraction',async()=>{
  const extracted=await extractPdfText(Buffer.from(await pdf.save({useObjectStreams:false})));
  assert.match(extracted,/registrar resultado do teste/);
  assert.doesNotMatch(extracted,/PDF_JAVASCRIPT_EXECUTED/);
+});
+
+test('a password-encrypted PDF is rejected without exposing parser internals',async()=>{
+ const encrypted=await readFile(new URL('../test-fixtures/encrypted-lab.pdf',import.meta.url));
+ assert.equal(encrypted.subarray(0,5).toString(),'%PDF-');
+ assert.ok(encrypted.includes(Buffer.from('/Encrypt')));
+ await assert.rejects(()=>extractPdfText(encrypted),
+   /PDF inválido|PDF sem texto extraível|Não foi possível extrair/);
 });
