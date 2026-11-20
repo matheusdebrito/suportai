@@ -3,7 +3,7 @@ import {query,transaction,audit} from './db.js';
 import {requireActor} from './auth.js';
 import {spacePermission,type Actor} from './security.js';
 export function hasSecrets(text:string) {
- return /-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----|(?:api[_-]?key|secret|password|token)\s*[:=]\s*["']?[a-z0-9_\-]{12,}/i.test(text);
+ return /-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----|(?:api[_-]?key|secret|senha|password|token|authorization)\s*[:=]\s*(?:bearer\s+)?["']?[a-z0-9_\-/+=]{12,}|(?:ghp|gho|ghu|ghs|ghr)_[a-z0-9]{30,}|github_pat_[a-z0-9_]{25,}|sk-[a-z0-9_-]{20,}|AKIA[0-9A-Z]{16}/i.test(text);
 }
 export function chunks(text:string,size=1100,overlap=150) {
  const out:string[]=[];
