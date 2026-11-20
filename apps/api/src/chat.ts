@@ -34,9 +34,22 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
    const a=await requireActor(req);const id=(req.params as {id:string}).id;
    const r=await query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2',[id,a.id]);
    if(!r.rowCount) return reply.code(404).send({error:'Conversa não encontrada'});
-   const messages=await query(`SELECT m.id,m.role,m.content,m.sources,m.created_at,
+   const messages=await query(`SELECT m.id,m.role,m.content,
+       COALESCE(live_sources.items,'[]'::jsonb) AS sources,m.created_at,
        f.rating AS feedback_rating,f.comment AS feedback_comment
      FROM messages m
+     -- An archived source can remain in audit storage, but not in historic
+     -- citation links. Check the reader's current authorization as well.
+     LEFT JOIN LATERAL (
+       SELECT jsonb_agg(source.value ORDER BY source.position) AS items
+       FROM jsonb_array_elements(m.sources) WITH ORDINALITY AS source(value,position)
+       JOIN documents d ON d.id::text=source.value->>'documentId'
+       JOIN document_versions v ON v.id::text=source.value->>'versionId' AND v.document_id=d.id
+       JOIN spaces s ON s.id=d.space_id
+       LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$3
+       WHERE d.archived_at IS NULL AND v.status IN ('PUBLISHED','ARCHIVED')
+         AND (s.visibility='SHARED' OR COALESCE(g.can_read,false))
+     ) live_sources ON true
      LEFT JOIN LATERAL (
        SELECT rating,comment FROM feedback
        WHERE user_id=$3 AND message_id=m.id AND m.role='assistant'
@@ -47,10 +60,12 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
    const pending=await query(`SELECT p.id,p.title,p.content,p.document_id AS "documentId",
        base.content AS "beforeContent",s.name AS "spaceName"
      FROM pending_actions p JOIN spaces s ON s.id=p.space_id
+     LEFT JOIN documents target ON target.id=p.document_id
      LEFT JOIN document_versions base ON base.id=p.base_version_id
      LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2
      WHERE p.conversation_id=$1 AND p.user_id=$2
        AND p.result_version_id IS NULL AND p.expires_at>now()
+       AND (p.document_id IS NULL OR target.archived_at IS NULL)
        AND (s.visibility='SHARED' OR COALESCE(g.can_read,false)) AND COALESCE(g.can_edit,false)
      ORDER BY p.expires_at DESC LIMIT 10`,[id,a.id]);
    return {id,messages:messages.rows.reverse(),pendingActions:pending.rows};
