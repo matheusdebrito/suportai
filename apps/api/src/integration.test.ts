@@ -708,6 +708,27 @@ if(!process.env.TEST_DATABASE_URL){
      versionNumber:Number(candidate.rows[0].version_number),ordinal:Number(candidate.rows[0].ordinal),
      title:candidate.rows[0].title,content:candidate.rows[0].content,score:1
    };
+   // Existing conversation metadata must no longer expose archived documents,
+   // even though the original response and citations stay in the audit database.
+   const historicalConversation=await app.inject({method:'POST',url:'/conversations',
+     headers:auth(reader.cookie)});
+   assert.equal(historicalConversation.statusCode,200);
+   const currentReader=await actorForSession(reader.cookie.split('=')[1]);
+   assert.ok(currentReader);
+   const historicalMessage=await query(
+     "INSERT INTO messages(conversation_id,role,content,sources,auth_revision) "+
+     "VALUES($1,'assistant',$2,$3::jsonb,$4) RETURNING id",
+     [historicalConversation.json().id,'Resposta histórica com documento publicado',
+       JSON.stringify([{documentId:oldSource.documentId,versionId:oldSource.versionId,
+         versionNumber:oldSource.versionNumber,title:oldSource.title,ordinal:oldSource.ordinal}]),
+       currentReader!.auth_revision]);
+   const archivedHistory=await app.inject({method:'GET',
+     url:'/conversations/'+historicalConversation.json().id,headers:auth(reader.cookie)});
+   assert.equal(archivedHistory.statusCode,200);
+   assert.deepEqual(archivedHistory.json().messages.find((m:any)=>m.id===historicalMessage.rows[0].id).sources,[]);
+   const retainedAudit=await query('SELECT sources FROM messages WHERE id=$1',[historicalMessage.rows[0].id]);
+   assert.equal(retainedAudit.rows[0].sources.length,1,'Audit must retain original citations');
+
    const staleSourceApp=await buildApp({agentResponder:async()=>({
      answer:'I should not return a procedure that was archived during the model response.',
      sources:[oldSource],pendingActions:[]
@@ -755,6 +776,9 @@ if(!process.env.TEST_DATABASE_URL){
      headers:auth(reviewer.cookie),payload:{confirm:true}});
    assert.equal(restoredDoc.statusCode,200,restoredDoc.body);
    assert.equal(restoredDoc.json().archived,false);
+   const restoredHistory=await app.inject({method:'GET',
+     url:'/conversations/'+historicalConversation.json().id,headers:auth(reader.cookie)});
+   assert.equal(restoredHistory.json().messages.find((m:any)=>m.id===historicalMessage.rows[0].id).sources.length,1);
    const afterRestore=await app.inject({method:'GET',url:'/knowledge/documents/'+archiveId,
      headers:auth(reader.cookie)});
    assert.equal(afterRestore.statusCode,200);
