@@ -120,8 +120,9 @@ test.describe('fluxo editorial com worker real',()=>{
    const waitIndexed=async(documentTitle:string)=>{
      await expect.poll(async()=>{
        const response=await page.request.get('http://localhost:5173/knowledge/mine');
-       const data=await response.json() as {drafts:{title:string;index_status:string}[]};
-       return data.drafts.find(d=>d.title===documentTitle)?.index_status||'MISSING';
+       const data=await response.json() as {drafts:{title:string;status:string;index_status:string}[]};
+       // Multiple versions can share a title; only wait for the new DRAFT.
+       return data.drafts.find(d=>d.title===documentTitle&&d.status==='DRAFT')?.index_status||'MISSING';
      },{timeout:60_000,intervals:[500,1000,1500]}).toBe('READY');
    };
 
