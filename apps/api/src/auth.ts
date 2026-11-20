@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import argon2 from 'argon2';
-import { pool, query, transaction, audit } from './db.js';
+import { query, transaction } from './db.js';
 import { actorForSession, requireCurrentActor, token, hashToken, type Actor } from './security.js';
 export const COOKIE = 'suportai_session';
 const isProd = process.env.NODE_ENV==='production';
@@ -108,8 +108,9 @@ export function registerAuth(app:FastifyInstance) {
    const resetToken=token();
    const newId=await transaction(async c=>{
      await requireCurrentActor(c,a);
-     const created=await c.query('INSERT INTO users(email,password_hash,role,must_change_password) VALUES($1,$2,$3,true) RETURNING id',
+     const created=await c.query('INSERT INTO users(email,password_hash,role,must_change_password) VALUES($1,$2,$3,true) ON CONFLICT (email) DO NOTHING RETURNING id',
        [b.email.toLowerCase(),password,b.role]);
+     if(!created.rowCount)return null;
      const id=created.rows[0].id as string;
      await c.query("INSERT INTO password_resets(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '15 minutes')",
        [hashToken(resetToken),id]);
@@ -117,6 +118,7 @@ export function registerAuth(app:FastifyInstance) {
      await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'USER_CREATED',$2)",[a.id,id]);
      return id;
    });
+   if(!newId)return reply.code(409).send({error:'Já existe uma conta com esse e-mail'});
    return reply.code(201).send({id:newId,resetToken,expiresInMinutes:15});
  });
  app.post('/admin/users/:id/reset-password',async(req,reply)=>{
@@ -148,15 +150,19 @@ export function registerAuth(app:FastifyInstance) {
    const a=await requireActor(req);requireAdmin(a);
    const spaceId=(req.params as {id:string}).id;
    const b=req.body as {userId?:unknown;read?:unknown;edit?:unknown;approve?:unknown}|undefined;
-   if(typeof b?.userId!=='string'||typeof b.read!=='boolean'||typeof b.edit!=='boolean'||typeof b.approve!=='boolean'||((b.edit||b.approve)&&!b.read)) return reply.code(400).send({error:'Permissões inválidas: edição e aprovação exigem leitura'});
-   await transaction(async c=>{
+   if(typeof b?.userId!=='string'||!(/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i).test(b.userId)||typeof b.read!=='boolean'||typeof b.edit!=='boolean'||typeof b.approve!=='boolean'||((b.edit||b.approve)&&!b.read)) return reply.code(400).send({error:'Permissões inválidas: edição e aprovação exigem leitura'});
+   const updated=await transaction(async c=>{
      await requireCurrentActor(c,a);
-     await c.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[b.userId]);
+     const account=await c.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[b.userId]);
+     const space=await c.query('SELECT id FROM spaces WHERE id=$1 FOR SHARE',[spaceId]);
+     if(!account.rowCount||!space.rowCount)return false;
      await c.query(`INSERT INTO space_grants(user_id,space_id,can_read,can_edit,can_approve) VALUES($1,$2,$3,$4,$5)
        ON CONFLICT (user_id,space_id) DO UPDATE SET can_read=$3,can_edit=$4,can_approve=$5`,[b.userId,spaceId,b.read,b.edit,b.approve]);
      await c.query('UPDATE users SET auth_revision=auth_revision+1 WHERE id=$1',[b.userId]);
      await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'PERMISSIONS_UPDATED',$2)",[a.id,spaceId]);
+     return true;
    });
+   if(!updated)return reply.code(404).send({error:'Usuário ou espaço não encontrado'});
    return {ok:true};
  });
  app.get('/spaces',async req=>{
