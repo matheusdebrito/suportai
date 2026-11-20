@@ -5,6 +5,8 @@ import argon2 from 'argon2';
 import {randomUUID} from 'node:crypto';
 import {buildApp} from './server.js';
 import {pool,query} from './db.js';
+import {searchKnowledge} from './retrieval.js';
+import {actorForSession} from './security.js';
 
 if(!process.env.TEST_DATABASE_URL){
   test('integration requires TEST_DATABASE_URL', {skip:'No isolated PostgreSQL test database configured'},()=>{});
@@ -85,6 +87,41 @@ if(!process.env.TEST_DATABASE_URL){
    const revoked=await app.inject({method:'GET',url:'/spaces',headers:auth(reader.cookie)});
    assert.equal(revoked.json().spaces.find((s:any)=>s.id===restricted).can_read,false);
 
+
+   // An unauthorized reader must never receive a published restricted snippet.
+   const privateVer=privateDoc.versionId;
+   await app.inject({method:'POST',url:`/knowledge/versions/${privateVer}/submit-review`,headers:auth(reviewer.cookie)});
+   let readyPrivate=false;
+   for(let i=0;i<45;i++){
+     const r=await query('SELECT index_status FROM document_versions WHERE id=$1',[privateVer]);
+     if(r.rows[0].index_status==='READY'){readyPrivate=true;break;}
+     await new Promise(resolve=>setTimeout(resolve,400));
+   }
+   assert.equal(readyPrivate,true);
+   const privateApproved=await app.inject({method:'POST',url:`/knowledge/versions/${privateVer}/publish`,headers:auth(reviewer.cookie),payload:{confirm:true}});
+   assert.equal(privateApproved.statusCode,200,privateApproved.body);
+   const readerActor=await actorForSession(reader.cookie.split('=')[1]);
+   assert.ok(readerActor);
+   assert.equal((await searchKnowledge(readerActor!,'laboratório isolado')).some(x=>x.documentId===privateDoc.documentId),false);
+   await app.inject({method:'POST',url:`/admin/spaces/${restricted}/grants`,headers:auth(admin.cookie),payload:{userId:reader.id,read:true,edit:false,approve:false}});
+   const grantedActor=await actorForSession(reader.cookie.split('=')[1]);
+   assert.ok(grantedActor);
+   assert.equal((await searchKnowledge(grantedActor!,'laboratório isolado')).some(x=>x.documentId===privateDoc.documentId),true);
+   await app.inject({method:'POST',url:`/admin/spaces/${restricted}/grants`,headers:auth(admin.cookie),payload:{userId:reader.id,read:false,edit:false,approve:false}});
+   assert.equal((await searchKnowledge(grantedActor!,'laboratório isolado')).some(x=>x.documentId===privateDoc.documentId),false);
+
+   // Admin onboarding uses a single-use temporary token, never a known initial password.
+   const onboardingEmail=`onboarding-${id}@example.test`;
+   const created=await app.inject({method:'POST',url:'/admin/users',headers:auth(admin.cookie),payload:{email:onboardingEmail,role:'USER'}});
+   assert.equal(created.statusCode,201,created.body);
+   const reset=created.json() as {resetToken:string};
+   assert.ok(reset.resetToken.length>20);
+   const change=await app.inject({method:'POST',url:'/auth/change-password',payload:{resetToken:reset.resetToken,newPassword:'new-Secure-Password-123!'}});
+   assert.equal(change.statusCode,200,change.body);
+   const reuse=await app.inject({method:'POST',url:'/auth/change-password',payload:{resetToken:reset.resetToken,newPassword:'another-Secure-Password-123!'}});
+   assert.equal(reuse.statusCode,401,'Temporary token must be single use');
+   const active=await app.inject({method:'POST',url:'/auth/login',payload:{email:onboardingEmail,password:'new-Secure-Password-123!'}});
+   assert.equal(active.statusCode,200);
    const badOrigin=await app.inject({method:'POST',url:'/conversations',headers:{cookie:reader.cookie,origin:'https://evil.invalid'}});
    assert.equal(badOrigin.statusCode,403);
   } finally {
