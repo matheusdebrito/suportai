@@ -9,6 +9,8 @@ export default defineConfig({
  reporter:process.env.CI?'list':'html',
  use:{
    baseURL:'http://localhost:5173',
+   actionTimeout:15_000,
+   navigationTimeout:20_000,
    ...devices['Desktop Chrome'],
    screenshot:'only-on-failure',
    trace:'retain-on-failure'

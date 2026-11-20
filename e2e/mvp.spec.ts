@@ -18,7 +18,7 @@ test('cadastro, primeiro acesso, conhecimento, conversa e feedback sobrevivem ao
  await page.getByRole('button',{name:'Usuários',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Cadastrar colaborador'})).toBeVisible();
  await page.getByLabel('E-mail').fill(memberEmail);
- await page.getByLabel('Perfil',{exact:true}).selectOption('USER');
+ // O formulário inicia com perfil Colaborador; não depender do nome acessível das opções.
  await page.getByRole('button',{name:'Criar usuário'}).click();
  const code=page.locator('.pending code');
  await expect(code).toBeVisible();
