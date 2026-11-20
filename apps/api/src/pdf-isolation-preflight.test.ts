@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {inspectPdfWorkerIsolation} from './pdf-isolation-preflight.js';
+import {inspectPdfWorkerIsolation,isIsolationPreflightEntrypoint} from './pdf-isolation-preflight.js';
 
 const protectedStatus=['Name: node','NoNewPrivs: 1','CapEff: 0000000000000000','Seccomp: 2'].join(String.fromCharCode(10));
 test('worker OS hardening preflight accepts a minimal non-root Linux snapshot',()=>{
@@ -17,4 +17,10 @@ test('worker OS hardening preflight rejects root, capabilities, disabled seccomp
 test('missing proc status and unsupported platforms fail closed',()=>{
  assert.ok(inspectPdfWorkerIsolation({platform:'linux',uid:1001,procStatus:undefined}).length>=3);
  assert.ok(inspectPdfWorkerIsolation({platform:'win32',uid:undefined,procStatus:undefined}).length>0);
+});
+
+test('compiled JS and source TS preflight paths actually invoke CLI',()=>{
+ assert.equal(isIsolationPreflightEntrypoint('/app/apps/api/dist/pdf-isolation-preflight.js'),true);
+ assert.equal(isIsolationPreflightEntrypoint('/app/apps/api/src/pdf-isolation-preflight.ts'),true);
+ assert.equal(isIsolationPreflightEntrypoint('/app/apps/api/dist/pdf-isolation-preflight.test.js'),false);
 });

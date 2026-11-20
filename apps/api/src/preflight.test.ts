@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {inspectProductionConfig} from './preflight.js';
+import {inspectProductionConfig,isProductionPreflightEntrypoint} from './preflight.js';
 const safe={NODE_ENV:'production',APP_ORIGIN:'https://suportai.example.test',
  DATABASE_URL:'postgresql://do-not-print-secret@db:5432/suportai',
  ALLOW_EXTERNAL_AI_DATA_PROCESSING:'false'};
@@ -23,4 +23,10 @@ test('production preflight accepts file-backed connection settings and forbids b
  const fileMode={...safe,DATABASE_URL:undefined,DATABASE_URL_FILE:'/run/secrets/database_url'};
  assert.deepEqual(inspectProductionConfig(fileMode),[]);
  assert.ok(inspectProductionConfig({...fileMode,BOOTSTRAP_ADMIN_PASSWORD_FILE:'/run/secrets/onboarding'}).length>0);
+});
+
+test('compiled production preflight CLI is never silent',()=>{
+ assert.equal(isProductionPreflightEntrypoint('/app/apps/api/dist/preflight.js'),true);
+ assert.equal(isProductionPreflightEntrypoint('src/preflight.ts'),true);
+ assert.equal(isProductionPreflightEntrypoint('src/preflight.test.ts'),false);
 });
