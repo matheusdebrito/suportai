@@ -723,6 +723,45 @@ if(!process.env.TEST_DATABASE_URL){
      versionNumber:Number(candidate.rows[0].version_number),ordinal:Number(candidate.rows[0].ordinal),
      title:candidate.rows[0].title,content:candidate.rows[0].content,score:1
    };
+   // Existing conversation metadata must no longer expose archived documents,
+   // even though the original response and citations stay in the audit database.
+   const historicalConversation=await app.inject({method:'POST',url:'/conversations',
+     headers:auth(reader.cookie)});
+   assert.equal(historicalConversation.statusCode,200);
+   const currentReader=await actorForSession(reader.cookie.split('=')[1]);
+   assert.ok(currentReader);
+   const historicalMessage=await query(
+     "INSERT INTO messages(conversation_id,role,content,sources,auth_revision) "+
+     "VALUES($1,'assistant',$2,$3::jsonb,$4) RETURNING id",
+     [historicalConversation.json().id,'Resposta histórica com documento publicado',
+       JSON.stringify([{documentId:oldSource.documentId,versionId:oldSource.versionId,
+         versionNumber:oldSource.versionNumber,title:oldSource.title,ordinal:oldSource.ordinal}]),
+       currentReader!.auth_revision]);
+   const archivedHistory=await app.inject({method:'GET',
+     url:'/conversations/'+historicalConversation.json().id,headers:auth(reader.cookie)});
+   assert.equal(archivedHistory.statusCode,200);
+   const redacted=archivedHistory.json().messages.find((m:any)=>m.id===historicalMessage.rows[0].id);
+   assert.deepEqual(redacted.sources,[]);
+   assert.doesNotMatch(redacted.content,/Resposta histórica com documento publicado/,
+     'Archived knowledge must not remain readable in the chat history');
+
+   // Model memory must not silently rehydrate archived answers.
+   let memoryWasRedacted=false;
+   const memoryApp=await buildApp({agentResponder:async(_actor,_conv,_input,history)=>{
+     memoryWasRedacted=!history.some(m=>m.content.includes('Resposta histórica com documento publicado'));
+     return {answer:'O histórico anterior foi protegido.',sources:[],pendingActions:[]};
+   }});
+   try{
+     const reask=await memoryApp.inject({method:'POST',url:'/conversations/'+historicalConversation.json().id+'/messages',
+       headers:auth(reader.cookie),payload:{message:'Podemos retomar?'}});
+     assert.equal(reask.statusCode,200,reask.body);
+     assert.equal(memoryWasRedacted,true,'Archived citations must never re-enter the agent context');
+   }finally{
+     await memoryApp.close();
+   }
+   const retainedAudit=await query('SELECT sources FROM messages WHERE id=$1',[historicalMessage.rows[0].id]);
+   assert.equal(retainedAudit.rows[0].sources.length,1,'Audit must retain original citations');
+
    const staleSourceApp=await buildApp({agentResponder:async()=>({
      answer:'I should not return a procedure that was archived during the model response.',
      sources:[oldSource],pendingActions:[]
@@ -770,6 +809,11 @@ if(!process.env.TEST_DATABASE_URL){
      headers:auth(reviewer.cookie),payload:{confirm:true}});
    assert.equal(restoredDoc.statusCode,200,restoredDoc.body);
    assert.equal(restoredDoc.json().archived,false);
+   const restoredHistory=await app.inject({method:'GET',
+     url:'/conversations/'+historicalConversation.json().id,headers:auth(reader.cookie)});
+   const restoredMessage=restoredHistory.json().messages.find((m:any)=>m.id===historicalMessage.rows[0].id);
+   assert.equal(restoredMessage.sources.length,1);
+   assert.equal(restoredMessage.content,'Resposta histórica com documento publicado');
    const afterRestore=await app.inject({method:'GET',url:'/knowledge/documents/'+archiveId,
      headers:auth(reader.cookie)});
    assert.equal(afterRestore.statusCode,200);
