@@ -1189,7 +1189,7 @@ if(!process.env.TEST_DATABASE_URL){
    // operation cannot manufacture an audit event for a separate actor.
    const requiredAudit:[string,string][]=[
      ['KNOWLEDGE_DRAFT_CREATED',sharedDoc.documentId],
-     ['KNOWLEDGE_SUBMITTED_REVIEW',sharedDoc.documentId],
+     ['KNOWLEDGE_SUBMITTED_REVIEW',sharedDoc.versionId],
      ['KNOWLEDGE_PUBLISHED',sharedDoc.documentId],
      ['ASSISTANT_FEEDBACK_SAVED',assistantMessageId],
      ['USER_CREATED',created.json().id],
