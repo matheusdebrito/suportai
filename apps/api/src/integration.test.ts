@@ -861,6 +861,36 @@ if(!process.env.TEST_DATABASE_URL){
    }
 
 
+
+   // Conversation deletion removes private history but preserves official knowledge.
+   const deniedDeletion=await app.inject({method:'DELETE',url:'/conversations/'+conversationId,
+     headers:auth(reviewer.cookie),payload:{confirm:true}});
+   assert.equal(deniedDeletion.statusCode,404);
+   const withoutConfirm=await app.inject({method:'DELETE',url:'/conversations/'+conversationId,
+     headers:auth(changedCookie),payload:{}});
+   assert.equal(withoutConfirm.statusCode,400);
+   const deleted=await app.inject({method:'DELETE',url:'/conversations/'+conversationId,
+     headers:auth(changedCookie),payload:{confirm:true}});
+   assert.equal(deleted.statusCode,200,deleted.body);
+   const hiddenHistory=await app.inject({method:'GET',url:'/conversations/'+conversationId,
+     headers:auth(changedCookie)});
+   assert.equal(hiddenHistory.statusCode,404);
+   const removedMessages=await query('SELECT count(*)::int AS total FROM messages WHERE conversation_id=$1',[conversationId]);
+   assert.equal(removedMessages.rows[0].total,0);
+   const removedPending=await query('SELECT count(*)::int AS total FROM pending_actions WHERE conversation_id=$1',[conversationId]);
+   assert.equal(removedPending.rows[0].total,0);
+   const officialKnowledgePreserved=await query('SELECT count(*)::int AS total FROM pending_actions '+
+     'WHERE user_id=$1 AND result_version_id IS NOT NULL AND conversation_id IS NULL',[reader.id]);
+   assert.ok(officialKnowledgePreserved.rows[0].total>=1,'Confirmed knowledge remains linked to its author');
+   const removedFeedback=await query('SELECT count(*)::int AS total FROM feedback WHERE message_id=$1',[assistantMessageId]);
+   assert.equal(removedFeedback.rows[0].total,0);
+   const deletionAudit=await query("SELECT count(*)::int AS total FROM audit_events "+
+     "WHERE action='CONVERSATION_DELETED' AND resource_id=$1",[conversationId]);
+   assert.equal(deletionAudit.rows[0].total,1);
+   const secondDelete=await app.inject({method:'DELETE',url:'/conversations/'+conversationId,
+     headers:auth(changedCookie),payload:{confirm:true}});
+   assert.equal(secondDelete.statusCode,404);
+
   } finally {
    worker?.kill('SIGTERM');
    await app.close();
