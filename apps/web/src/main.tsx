@@ -17,6 +17,7 @@ type DocDetail={id:string;title:string;kind:'ARTICLE'|'PDF';space_id:string;isCu
 type Editing={documentId:string;baseVersionId:string};
 type PdfTarget={kind:'revision'|'correction';id:string;baseVersionId?:string;title:string};
 type Review={version_id:string;document_id:string;title:string;space_name:string;status:string;index_status:string;content:string;base_content?:string|null;ingestion_error?:string};
+type ArchivedDoc={id:string;title:string;kind:'ARTICLE'|'PDF';space_name:string;archived_at:string;current_version_id:string};
 function textDiff(before:string,after:string){
  const a=before.replace(/\r\n/g,'\n').split('\n'),b=after.replace(/\r\n/g,'\n').split('\n');
  let prefix=0;
@@ -62,6 +63,7 @@ function App(){
  const [error,setError]=useState('');
  const [pending,setPending]=useState<Pending[]>([]);
  const [review,setReview]=useState<Review[]>([]);
+ const [archived,setArchived]=useState<ArchivedDoc[]>([]);
  const [title,setTitle]=useState('');
  const [content,setContent]=useState('');
  const [spaceId,setSpaceId]=useState('');
@@ -85,7 +87,10 @@ function App(){
  async function refresh(){
   const [s,d,mine]=await Promise.all([api<{spaces:Space[]}>('/spaces'),api<{documents:Doc[]}>('/knowledge/documents'),api<{drafts:Draft[]}>('/knowledge/mine')]);
   setSpaces(s.spaces);setDocs(d.documents);setDrafts(mine.drafts);setSpaceId(prev=>prev||s.spaces.find(x=>x.can_edit)?.id||'');
-  if(user?.role==='APPROVER'){const reviews=await api<{reviews:Review[]}>('/knowledge/reviews');setReview(reviews.reviews);}
+  if(user?.role==='APPROVER'){
+   const [reviews,hidden]=await Promise.all([api<{reviews:Review[]}>('/knowledge/reviews'),api<{documents:ArchivedDoc[]}>('/knowledge/archived')]);
+   setReview(reviews.reviews);setArchived(hidden.documents);
+  }
   if(user?.role==='ADMIN'){const result=await api<{users:typeof users}>('/admin/users');setUsers(result.users);}
  }
  function failed(e:unknown){setError(e instanceof Error?e.message:'Falha desconhecida');}
@@ -174,7 +179,7 @@ function App(){
 
  async function login(e:React.FormEvent){e.preventDefault();setError('');try{const r=await api<{user:User}>('/auth/login',{method:'POST',body:JSON.stringify({email,password})});setPassword('');setUser(r.user);}catch(e){failed(e);}}
  async function changePassword(e:React.FormEvent){e.preventDefault();setError('');try{await api('/auth/change-password',{method:'POST',body:JSON.stringify({resetToken,newPassword})});const u=await api<User>('/auth/me');setUser(u);setResetToken('');setNewPassword('');setShowReset(false);}catch(e){failed(e);}}
- async function logout(){await api('/auth/logout',{method:'POST'}).catch(()=>{});setUser(null);setMessages([]);setConversationId(null);setConversations([]);setDrafts([]);setPending([]);setSelectedDoc(null);setCorrectionOf(null);setPdfTarget(null);setFeedbackEditor(null);setReviewNote('');setReviewDecision(null);setDuplicatePrompt(null);}
+ async function logout(){await api('/auth/logout',{method:'POST'}).catch(()=>{});setUser(null);setMessages([]);setConversationId(null);setConversations([]);setDrafts([]);setPending([]);setSelectedDoc(null);setArchived([]);setCorrectionOf(null);setPdfTarget(null);setFeedbackEditor(null);setReviewNote('');setReviewDecision(null);setDuplicatePrompt(null);}
  async function send(e:React.FormEvent){
   e.preventDefault();if(!input.trim()||busy||conversationLoading)return;setBusy(true);setError('');
   const text=input;setInput('');setMessages(m=>[...m,{role:'user',content:text}]);
@@ -250,6 +255,18 @@ function App(){
      await refresh();
    }catch(e){failed(e);}
  }
+ async function archiveDoc(id:string){
+   if(!window.confirm('Arquivar este documento? Ele deixará de aparecer no cérebro e nas buscas oficiais.'))return;
+   setError('');
+   try{await api('/knowledge/documents/'+id+'/archive',{method:'POST',body:JSON.stringify({confirm:true})});setSelectedDoc(null);await refresh();}
+   catch(e){failed(e);}
+ }
+ async function restoreDoc(id:string){
+   if(!window.confirm('Restaurar a versão aprovada deste documento ao cérebro?'))return;
+   setError('');
+   try{await api('/knowledge/documents/'+id+'/restore',{method:'POST',body:JSON.stringify({confirm:true})});await refresh();}
+   catch(e){failed(e);}
+ }
  async function openDoc(id:string){try{setSelectedDoc(await api(`/knowledge/documents/${id}`));setTab('knowledge');}catch(e){failed(e);}}
  async function openSource(documentId:string,versionId:string){try{
   setSelectedDoc(await api(`/knowledge/documents/${documentId}/versions/${versionId}`));
@@ -320,7 +337,7 @@ function App(){
  })()}</details><button className="secondary" type="button" onClick={()=>void openDoc(p.documentId!)}>Abrir artigo publicado</button></>:<p>{p.content.slice(0,900)}</p>}<button onClick={()=>confirmPending(p.id)}><Check size={16}/> {p.documentId?'Confirmar proposta de atualização':'Confirmar criação de rascunho'}</button></div>)}
   </div><form className="composer" onSubmit={send}><textarea placeholder="Digite sua pergunta..." value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();void send(e as unknown as React.FormEvent);}}}/><button disabled={busy||conversationLoading||!input.trim()} aria-label="Enviar mensagem"><Send size={19}/></button></form></section></div>}
  {tab==='knowledge'&&<div className="columns"><section className="panel"><h2>Artigos e documentos publicados</h2>{docs.length===0?<p className="hint">Nenhum documento publicado ainda.</p>:docs.map(d=><button className="item" key={d.id} onClick={()=>openDoc(d.id)}><BookOpen size={17}/><span>{d.title}<small>{d.space_name} · {d.kind}</small></span></button>)}
- {selectedDoc&&<article className="document"><h3>{selectedDoc.title}</h3><small>Versão {selectedDoc.version.version_number}</small><div className="formatted">{selectedDoc.version.content}</div>{selectedDoc.kind==='ARTICLE'&&selectedDoc.isCurrent!==false&&spaces.some(s=>s.id===selectedDoc.space_id&&s.can_edit)&&<button className="secondary" onClick={startEditing}>Criar revisão deste artigo</button>}{selectedDoc.kind==='PDF'&&selectedDoc.isCurrent!==false&&spaces.some(s=>s.id===selectedDoc.space_id&&s.can_edit)&&<button className="secondary" onClick={startPdfRevision}>Enviar nova versão deste PDF</button>}</article>}
+ {selectedDoc&&<article className="document"><h3>{selectedDoc.title}</h3><small>Versão {selectedDoc.version.version_number}</small><div className="formatted">{selectedDoc.version.content}</div>{selectedDoc.kind==='ARTICLE'&&selectedDoc.isCurrent!==false&&spaces.some(s=>s.id===selectedDoc.space_id&&s.can_edit)&&<button className="secondary" onClick={startEditing}>Criar revisão deste artigo</button>}{selectedDoc.kind==='PDF'&&selectedDoc.isCurrent!==false&&spaces.some(s=>s.id===selectedDoc.space_id&&s.can_edit)&&<button className="secondary" onClick={startPdfRevision}>Enviar nova versão deste PDF</button>}{user.role==='APPROVER'&&selectedDoc.isCurrent!==false&&spaces.some(s=>s.id===selectedDoc.space_id&&s.can_approve)&&<button className="danger" onClick={()=>void archiveDoc(selectedDoc.id)}>Arquivar documento</button>}</article>}
   <div className="drafts-header"><h2>Meus rascunhos</h2><button className="secondary" onClick={()=>void refresh().catch(failed)}><RotateCcw size={14}/> Atualizar</button></div>
   {drafts.length===0?<p className="hint">Nenhum rascunho ou revisão pendente.</p>:drafts.map(d=><div className="draft-item" key={d.version_id}><strong>{d.title}</strong><small>{d.space_name} · v{d.version_number} · {d.status==='DRAFT'?'Rascunho':d.status==='IN_REVIEW'?'Em revisão':d.status==='CHANGES_REQUESTED'?'Ajustes solicitados':'Rejeitado'} · Índice: {d.index_status}</small>{d.ingestion_error&&<p className="error">{d.ingestion_error}</p>}{d.review_note&&<p className="review-note"><strong>Parecer:</strong> {d.review_note}</p>}<div className="actions"><button className="secondary" onClick={()=>void viewDraft(d.version_id)}>Ver texto</button>{d.status==='DRAFT'&&d.index_status==='READY'&&<button className="secondary" onClick={()=>void submitVersion(d.version_id)}>Enviar para revisão</button>}{d.status==='CHANGES_REQUESTED'&&d.kind==='ARTICLE'&&<button className="secondary" onClick={()=>void startCorrection(d.version_id)}>Preparar correção</button>}{d.status==='CHANGES_REQUESTED'&&d.kind==='PDF'&&<button className="secondary" onClick={()=>startPdfCorrection(d)}>Enviar PDF corrigido</button>}{d.index_status==='FAILED'&&d.status!=='REJECTED'&&d.status!=='CHANGES_REQUESTED'&&<button className="secondary" onClick={()=>void retryVersion(d.version_id)}>Reprocessar</button>}</div></div>)}
   {draftView&&<article className="document"><div className="drafts-header"><h3>{draftView.title} · v{draftView.version_number}</h3><button className="ghost" onClick={()=>setDraftView(null)}>Fechar</button></div><small>{draftView.status}</small><div className="formatted">{draftView.content||'Aguardando extração do PDF.'}</div></article>}
@@ -352,7 +369,12 @@ function App(){
    </label>
    <div className="actions"><button>{reviewDecision.action==='reject'?'Confirmar rejeição':'Enviar pedido de ajustes'}</button><button className="secondary" type="button" onClick={()=>{setReviewDecision(null);setReviewNote('');}}>Cancelar</button></div>
   </form>}
- </div>)}</section>}
+ </div>)}<div className="drafts-header"><h2>Documentos arquivados</h2><button className="secondary" onClick={()=>void refresh().catch(failed)}><RotateCcw size={14}/> Atualizar</button></div>
+ {archived.length===0?<p className="hint">Nenhum documento arquivado em seus espaços de aprovação.</p>:archived.map(item=><div className="draft-item" key={item.id}>
+  <strong>{item.title}</strong><small>{item.space_name} · {item.kind} · Arquivado em {new Date(item.archived_at).toLocaleDateString('pt-BR')}</small>
+  <button className="secondary" onClick={()=>void restoreDoc(item.id)}>Restaurar versão publicada</button>
+ </div>)}
+ </section>}
  {tab==='admin'&&<div className="columns"><section className="panel"><h2>Cadastrar colaborador</h2><form onSubmit={createUser}><label>E-mail<input required type="email" value={newEmail} onChange={e=>setNewEmail(e.target.value)}/></label><label>Perfil<select value={newRole} onChange={e=>setNewRole(e.target.value as typeof newRole)}><option value="USER">Colaborador</option><option value="APPROVER">Aprovador de conhecimento</option><option value="ADMIN">Administrador</option></select></label><button>Criar usuário</button></form>{temporary&&<div className="pending"><strong>Código temporário (visível apenas agora)</strong><code>{temporary}</code><p className="hint">Entregue ao usuário por canal seguro. Válido por 15 minutos.</p><button className="secondary" onClick={()=>{void navigator.clipboard.writeText(temporary);}}>Copiar</button></div>}</section><section className="panel"><h2>Usuários</h2>{users.map(u=><div className="item user-item" key={u.id}><span>{u.email}<small>{u.active?'Ativo':'Inativo'} · {u.role}</small></span><button className="secondary" onClick={()=>resetUser(u.id)} disabled={u.id===user.id}><RotateCcw size={14}/> Redefinir</button><select aria-label={'Perfil de '+u.email} value={u.role} disabled={u.id===user.id} onChange={e=>void updateUser(u.id,{role:e.target.value as 'USER'|'APPROVER'|'ADMIN'})}><option value="USER">Colaborador</option><option value="APPROVER">Aprovador</option><option value="ADMIN">Administrador</option></select><button className="secondary" disabled={u.id===user.id} onClick={()=>{if(u.active&&!window.confirm('Desativar '+u.email+' e invalidar as sessões existentes?'))return;void updateUser(u.id,{active:!u.active});}}>{u.active?'Desativar':'Ativar'}</button><select aria-label={'Conceder acesso a '+u.email} defaultValue="" onChange={e=>{if(e.target.value){const [space,mode]=e.target.value.split('|');void grant(u.id,space,mode);}e.target.value='';}}><option value="">Alterar permissões do conhecimento...</option>{spaces.flatMap(s=>([['READ','Somente leitura'],['EDIT','Leitura e edição'],['APPROVE','Leitura, edição e aprovação'],['NONE','Revogar acesso']] as const).map(([mode,label])=><option key={s.id+mode} value={s.id+'|'+mode}>{s.name} — {label}</option>))}</select></div>)}</section></div>}
  </main></div>;
 }
