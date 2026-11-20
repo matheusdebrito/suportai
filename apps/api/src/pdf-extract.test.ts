@@ -32,3 +32,28 @@ test('page limits are checked before extracting the whole document',async()=>{
    /limite de 200 páginas/
  );
 });
+
+test('oversized PDF payloads fail before starting a parser',()=>{
+ const bytes=Buffer.alloc(8*1024*1024+1);
+ bytes.write('%PDF-1.7');
+ assert.throws(()=>extractPdfText(bytes),/PDF excede o limite de 8 MB/);
+});
+
+test('malformed content claiming to be PDF cannot publish extracted text',async()=>{
+ const forged=Buffer.from('%PDF-1.7\n% intentionally malformed\n/Type /Catalog\nstream\nnot a document\nendstream');
+ await assert.rejects(()=>extractPdfText(forged,1500),
+   /PDF inválido|PDF sem texto extraível|Tempo limite/);
+});
+
+test('a PDF JavaScript action is never executed by text extraction',async()=>{
+ const pdf=await PDFDocument.create();
+ const page=pdf.addPage([640,420]);
+ const font=await pdf.embedFont(StandardFonts.Helvetica);
+ page.drawText('Documento ficticio: registrar resultado do teste de backup no laboratorio.',{
+   x:40,y:300,size:12,font,maxWidth:550
+ });
+ pdf.addJavaScript('unsafe-action','throw new Error("PDF_JAVASCRIPT_EXECUTED");');
+ const extracted=await extractPdfText(Buffer.from(await pdf.save({useObjectStreams:false})));
+ assert.match(extracted,/registrar resultado do teste/);
+ assert.doesNotMatch(extracted,/PDF_JAVASCRIPT_EXECUTED/);
+});
