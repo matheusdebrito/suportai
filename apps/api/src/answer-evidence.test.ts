@@ -6,7 +6,7 @@ test('only an exact IPv4 address from an authorized excerpt supports an answer',
  const source=[{content:'Laboratório: DNS 192.0.2.53. Gateway 198.51.100.12.'}];
  assert.deepEqual(unsupportedNetworkLiterals('Use 192.0.2.53.',source),[]);
  assert.deepEqual(unsupportedNetworkLiterals('Use 192.0.2.5.',source),['192.0.2.5']);
- assert.deepEqual(unsupportedNetworkLiterals('Use 51.100.12.',source),['51.100.12']);
+ assert.deepEqual(unsupportedNetworkLiterals('Use 198.51.100.1.',source),['198.51.100.1']);
  assert.deepEqual(unsupportedNetworkLiterals('Use 192.0.2.53 e 192.0.2.54.',source),['192.0.2.54']);
 });
 test('a longer URL is not supported by a shorter URL in a document',()=>{
