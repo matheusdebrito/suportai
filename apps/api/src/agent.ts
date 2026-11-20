@@ -15,7 +15,7 @@ const tools:OpenAI.Chat.Completions.ChatCompletionTool[]=[
  {type:'function',function:{name:'search_knowledge',description:'Busca artigos e PDFs publicados e autorizados para responder perguntas internas.',parameters:{type:'object',properties:{query:{type:'string'}},required:['query'],additionalProperties:false}}},
  {type:'function',function:{name:'prepare_article',description:'Prepara prévia de artigo solicitado explicitamente pelo usuário; requer confirmação humana posterior antes de criar rascunho.',parameters:{type:'object',properties:{spaceId:{type:'string'},title:{type:'string'},content:{type:'string'},documentId:{type:'string',description:'Documento a atualizar se aplicável'}},required:['spaceId','title','content'],additionalProperties:false}}}
 ];
-export type AgentOutput={answer:string;sources:Source[];pendingActions:{id:string;title:string;content:string;spaceName:string}[]};
+export type AgentOutput={answer:string;sources:Source[];pendingActions:{id:string;title:string;content:string;spaceName:string;documentId?:string;beforeContent?:string}[]};
 export async function respond(actor:Actor,conversationId:string,userMessage:string,history:{role:'user'|'assistant';content:string}[],provider:OpenAI|null=client):Promise<AgentOutput>{
  const sources:Source[]=[];
  const pendingActions:AgentOutput['pendingActions']=[];
@@ -79,11 +79,19 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          const p=await spacePermission(actor,args.spaceId);
          if(!p?.edit) throw new Error('Espaço não autorizado');
          let baseVersionId:string|null=null;
+         let beforeContent:string|undefined;
+         let proposalTitle=args.title;
          const docId=typeof args.documentId==='string'?args.documentId:null;
          if(docId){
-           const d=await query('SELECT space_id,current_version_id FROM documents WHERE id=$1',[docId]);
-           if(!d.rowCount||d.rows[0].space_id!==args.spaceId||!d.rows[0].current_version_id) throw new Error('Documento não autorizado');
+           const d=await query(`SELECT d.space_id,d.kind,d.archived_at,d.title,d.current_version_id,
+              v.content AS base_content FROM documents d
+              JOIN document_versions v ON v.id=d.current_version_id
+              WHERE d.id=$1`,[docId]);
+           if(!d.rowCount||d.rows[0].space_id!==args.spaceId||d.rows[0].kind!=='ARTICLE'||d.rows[0].archived_at)
+             throw new Error('Artigo não autorizado ou não publicado');
            baseVersionId=d.rows[0].current_version_id;
+           beforeContent=d.rows[0].base_content;
+           proposalTitle=d.rows[0].title;
          }
          const dup=await query('SELECT id,title FROM documents WHERE space_id=$1 AND lower(title)=lower($2) AND archived_at IS NULL LIMIT 3',[args.spaceId,args.title]);
          const r=await transaction(async c=>{
@@ -96,9 +104,9 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
              throw new Error('Permissão de escrita revogada');
            return c.query(`INSERT INTO pending_actions(user_id,conversation_id,space_id,title,content,document_id,base_version_id)
              VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-             [actor.id,conversationId,args.spaceId,args.title,args.content,docId,baseVersionId]);
+             [actor.id,conversationId,args.spaceId,proposalTitle,args.content,docId,baseVersionId]);
          });
-         pendingActions.push({id:r.rows[0].id,title:args.title,content:args.content,spaceName:writableSpaces.find(s=>s.id===args.spaceId)?.name||'Espaço autorizado'});
+         pendingActions.push({id:r.rows[0].id,title:proposalTitle,content:args.content,spaceName:writableSpaces.find(s=>s.id===args.spaceId)?.name||'Espaço autorizado',...(docId?{documentId:docId,beforeContent}: {})});
          output={status:'PREVIEW_ONLY',actionId:r.rows[0].id,similarArticles:dup.rows,requiresExplicitConfirmation:true,message:'Prévia preparada. Usuário deve confirmar no botão antes de criar rascunho; a IA não pode confirmar sozinha.'};
        } else {output={error:'Ferramenta indisponível'};}
      } catch(error){output={error:error instanceof Error?error.message:'Falha na ferramenta'};}
