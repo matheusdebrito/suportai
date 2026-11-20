@@ -8,11 +8,21 @@ type Doc={id:string;title:string;kind:string;space_name:string};
 type Message={id?:string;role:'user'|'assistant';content:string;sources?:{documentId:string;versionId:string;versionNumber?:number;title:string}[]};
 type Pending={id:string;title:string;content:string;spaceName?:string};
 type Conversation={id:string;title:string;updated_at:string};
-type Draft={version_id:string;document_id:string;title:string;kind:'ARTICLE'|'PDF';version_number:number;status:'DRAFT'|'IN_REVIEW'|'REJECTED';index_status:'READY'|'PENDING'|'FAILED';space_name:string;ingestion_error?:string};
-type DraftDetail=Draft&{content:string};
+type Draft={version_id:string;document_id:string;title:string;kind:'ARTICLE'|'PDF';version_number:number;status:'DRAFT'|'IN_REVIEW'|'CHANGES_REQUESTED'|'REJECTED';index_status:'READY'|'PENDING'|'FAILED';space_name:string;ingestion_error?:string;review_note?:string};
+type DraftDetail=Draft&{content:string;space_id:string};
 type DocDetail={id:string;title:string;kind:'ARTICLE'|'PDF';space_id:string;isCurrent?:boolean;version:{id:string;content:string;version_number:number;status:string}};
 type Editing={documentId:string;baseVersionId:string};
-type Review={version_id:string;document_id:string;title:string;space_name:string;status:string;index_status:string;content:string;ingestion_error?:string};
+type Review={version_id:string;document_id:string;title:string;space_name:string;status:string;index_status:string;content:string;base_content?:string|null;ingestion_error?:string};
+function textDiff(before:string,after:string){
+ const a=before.replace(/\r\n/g,'\n').split('\n'),b=after.replace(/\r\n/g,'\n').split('\n');
+ let prefix=0;
+ while(prefix<a.length&&prefix<b.length&&a[prefix]===b[prefix])prefix++;
+ let suffix=0;
+ while(suffix<a.length-prefix&&suffix<b.length-prefix&&a[a.length-1-suffix]===b[b.length-1-suffix])suffix++;
+ const oldText=a.slice(prefix,a.length-suffix).join('\n');
+ const newText=b.slice(prefix,b.length-suffix).join('\n');
+ return {removed:oldText.slice(0,4000),added:newText.slice(0,4000),unchanged:oldText===newText};
+}
 async function api<T=any>(path:string,init:RequestInit={}):Promise<T> {
  const response=await fetch(path,{...init,credentials:'include',headers:{...(init.body instanceof FormData?{}:{'Content-Type':'application/json'}),...(init.headers||{})}});
  const result=await response.json().catch(()=>({error:'Resposta inválida do servidor'}));
@@ -47,6 +57,9 @@ function App(){
  const [draftView,setDraftView]=useState<DraftDetail|null>(null);
  const [selectedDoc,setSelectedDoc]=useState<DocDetail|null>(null);
  const [editing,setEditing]=useState<Editing|null>(null);
+ const [correctionOf,setCorrectionOf]=useState<string|null>(null);
+ const [reviewDecision,setReviewDecision]=useState<{id:string;action:'reject'|'request-changes'}|null>(null);
+ const [reviewNote,setReviewNote]=useState('');
  const [users,setUsers]=useState<Array<{id:string;email:string;role:string;active:boolean}>>([]);
  const [newEmail,setNewEmail]=useState('');
  const [newRole,setNewRole]=useState<'USER'|'APPROVER'|'ADMIN'>('USER');
@@ -85,15 +98,26 @@ function App(){
  function startEditing(){
   if(!selectedDoc||selectedDoc.kind!=='ARTICLE'||selectedDoc.isCurrent===false)return;
   if(!spaces.some(s=>s.id===selectedDoc.space_id&&s.can_edit))return;
+  setCorrectionOf(null);
   setEditing({documentId:selectedDoc.id,baseVersionId:selectedDoc.version.id});
   setTitle(selectedDoc.title);setContent(selectedDoc.version.content);setSpaceId(selectedDoc.space_id);
   setLastDraft(null);
  }
- function cancelEditing(){setEditing(null);setTitle('');setContent('');setLastDraft(null);}
+ async function startCorrection(versionId:string){
+   setError('');
+   try{
+     const original=await api<DraftDetail>('/knowledge/drafts/'+versionId);
+     if(original.status!=='CHANGES_REQUESTED'||original.kind!=='ARTICLE')throw new Error('Este artigo não está disponível para correção');
+     setEditing(null);setCorrectionOf(original.version_id);
+     setTitle(original.title);setContent(original.content);setSpaceId(original.space_id);
+     setTab('knowledge');setLastDraft(null);
+   }catch(e){failed(e);}
+ }
+ function cancelEditing(){setEditing(null);setCorrectionOf(null);setTitle('');setContent('');setLastDraft(null);}
 
  async function login(e:React.FormEvent){e.preventDefault();setError('');try{const r=await api<{user:User}>('/auth/login',{method:'POST',body:JSON.stringify({email,password})});setPassword('');setUser(r.user);}catch(e){failed(e);}}
  async function changePassword(e:React.FormEvent){e.preventDefault();setError('');try{await api('/auth/change-password',{method:'POST',body:JSON.stringify({resetToken,newPassword})});const u=await api<User>('/auth/me');setUser(u);setResetToken('');setNewPassword('');setShowReset(false);}catch(e){failed(e);}}
- async function logout(){await api('/auth/logout',{method:'POST'}).catch(()=>{});setUser(null);setMessages([]);setConversationId(null);setConversations([]);setDrafts([]);setPending([]);setSelectedDoc(null);}
+ async function logout(){await api('/auth/logout',{method:'POST'}).catch(()=>{});setUser(null);setMessages([]);setConversationId(null);setConversations([]);setDrafts([]);setPending([]);setSelectedDoc(null);setCorrectionOf(null);setReviewNote('');setReviewDecision(null);}
  async function send(e:React.FormEvent){
   e.preventDefault();if(!input.trim()||busy||conversationLoading)return;setBusy(true);setError('');
   const text=input;setInput('');setMessages(m=>[...m,{role:'user',content:text}]);
@@ -112,11 +136,14 @@ function App(){
   setTab('knowledge');await refresh();
  }catch(e){failed(e);}}
  async function saveArticle(e:React.FormEvent){e.preventDefault();setError('');try{
-  const r=editing
-   ? await api<{versionId:string}>(`/knowledge/documents/${editing.documentId}/versions`,{method:'POST',body:JSON.stringify({content,baseVersionId:editing.baseVersionId})})
-   : await api<{versionId:string}>('/knowledge/articles',{method:'POST',body:JSON.stringify({spaceId,title,content})});
-  setLastDraft(r.versionId);setEditing(null);setTitle('');setContent('');await refresh();
- }catch(e){failed(e);}}
+   const r=correctionOf
+     ? await api<{versionId:string}>('/knowledge/versions/'+correctionOf+'/correct',{method:'POST',body:JSON.stringify({content})})
+     : editing
+       ? await api<{versionId:string}>('/knowledge/documents/'+editing.documentId+'/versions',{method:'POST',body:JSON.stringify({content,baseVersionId:editing.baseVersionId})})
+       : await api<{versionId:string}>('/knowledge/articles',{method:'POST',body:JSON.stringify({spaceId,title,content})});
+   setLastDraft(r.versionId);setEditing(null);setCorrectionOf(null);setTitle('');setContent('');await refresh();
+ }catch(e){failed(e);}
+ }
  async function uploadPdf(e:React.ChangeEvent<HTMLInputElement>){
   const file=e.target.files?.[0];if(!file)return;setError('');
   try{const form=new FormData();form.append('spaceId',spaceId);form.append('file',file);
@@ -126,7 +153,20 @@ function App(){
  }
  async function retryVersion(id:string){setError('');try{await api(`/knowledge/versions/${id}/retry`,{method:'POST'});await refresh();}catch(e){failed(e);}}
  async function submitVersion(id:string){setError('');try{await api(`/knowledge/versions/${id}/submit-review`,{method:'POST'});setLastDraft(null);await refresh();}catch(e){failed(e);}}
- async function decide(id:string,action:'publish'|'reject'){setError('');try{await api(`/knowledge/versions/${id}/${action}`,{method:'POST',body:JSON.stringify(action==='publish'?{confirm:true}:{})});await refresh();}catch(e){failed(e);}}
+ async function publishVersion(id:string){setError('');try{
+   await api('/knowledge/versions/'+id+'/publish',{method:'POST',body:JSON.stringify({confirm:true})});
+   await refresh();
+ }catch(e){failed(e);}}
+ async function sendReviewDecision(e:React.FormEvent){e.preventDefault();if(!reviewDecision)return;
+   setError('');
+   try{
+     await api('/knowledge/versions/'+reviewDecision.id+'/'+reviewDecision.action,{
+       method:'POST',body:JSON.stringify({note:reviewNote.trim()})
+     });
+     setReviewDecision(null);setReviewNote('');
+     await refresh();
+   }catch(e){failed(e);}
+ }
  async function openDoc(id:string){try{setSelectedDoc(await api(`/knowledge/documents/${id}`));setTab('knowledge');}catch(e){failed(e);}}
  async function openSource(documentId:string,versionId:string){try{
   setSelectedDoc(await api(`/knowledge/documents/${documentId}/versions/${versionId}`));
