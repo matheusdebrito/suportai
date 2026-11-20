@@ -31,7 +31,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  const writableSpaces:{id:string;name:string}[]=allowMutation
    ? (await query(`SELECT s.id,s.name FROM spaces s
        LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$1
-       WHERE s.visibility='SHARED' OR COALESCE(g.can_edit,false)
+       WHERE COALESCE(g.can_edit,false) AND (s.visibility='SHARED' OR COALESCE(g.can_read,false))
        ORDER BY s.name LIMIT 30`,[actor.id])).rows : [];
  const availableTools=allowMutation && writableSpaces.length>0
    ? tools : tools.filter(t=>t.type==='function' && t.function.name==='search_knowledge');
@@ -96,11 +96,11 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          const dup=await query('SELECT id,title FROM documents WHERE space_id=$1 AND lower(title)=lower($2) AND archived_at IS NULL LIMIT 3',[args.spaceId,args.title]);
          const r=await transaction(async c=>{
            await requireCurrentActor(c,actor);
-           const perm=await c.query(`SELECT s.visibility,g.can_edit FROM spaces s
+           const perm=await c.query(`SELECT s.visibility,g.can_read,g.can_edit FROM spaces s
              LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2 WHERE s.id=$1`,
              [args.spaceId,actor.id]);
            const allowed=perm.rows[0];
-           if(!allowed || !(allowed.visibility==='SHARED'||allowed.can_edit))
+           if(!allowed || !(allowed.can_edit && (allowed.visibility==='SHARED'||allowed.can_read)))
              throw new Error('Permissão de escrita revogada');
            return c.query(`INSERT INTO pending_actions(user_id,conversation_id,space_id,title,content,document_id,base_version_id)
              VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id`,

@@ -130,8 +130,9 @@ export function registerAuth(app:FastifyInstance) {
    const a=await requireActor(req);requireAdmin(a);
    const spaceId=(req.params as {id:string}).id;
    const b=req.body as {userId?:unknown;read?:unknown;edit?:unknown;approve?:unknown}|undefined;
-   if(typeof b?.userId!=='string'||typeof b.read!=='boolean'||typeof b.edit!=='boolean'||typeof b.approve!=='boolean') return reply.code(400).send({error:'Permissões inválidas'});
+   if(typeof b?.userId!=='string'||typeof b.read!=='boolean'||typeof b.edit!=='boolean'||typeof b.approve!=='boolean'||((b.edit||b.approve)&&!b.read)) return reply.code(400).send({error:'Permissões inválidas: edição e aprovação exigem leitura'});
    await transaction(async c=>{
+     await c.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[b.userId]);
      await c.query(`INSERT INTO space_grants(user_id,space_id,can_read,can_edit,can_approve) VALUES($1,$2,$3,$4,$5)
        ON CONFLICT (user_id,space_id) DO UPDATE SET can_read=$3,can_edit=$4,can_approve=$5`,[b.userId,spaceId,b.read,b.edit,b.approve]);
      await c.query('UPDATE users SET auth_revision=auth_revision+1 WHERE id=$1',[b.userId]);
@@ -143,9 +144,11 @@ export function registerAuth(app:FastifyInstance) {
    const a=await requireActor(req);
    const r=await query(`SELECT s.id,s.name,s.visibility,
    (s.visibility='SHARED' OR COALESCE(g.can_read,false)) AS can_read,
-   (s.visibility='SHARED' OR COALESCE(g.can_edit,false)) AS can_edit,
-   ($2='APPROVER' AND (s.visibility='SHARED' OR COALESCE(g.can_approve,false))) AS can_approve
-   FROM spaces s LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$1 ORDER BY name`,[a.id,a.role]);
+   ((s.visibility='SHARED' OR COALESCE(g.can_read,false)) AND COALESCE(g.can_edit,false)) AS can_edit,
+   ($2='APPROVER' AND (s.visibility='SHARED' OR COALESCE(g.can_read,false)) AND COALESCE(g.can_approve,false)) AS can_approve
+   FROM spaces s LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$1
+   WHERE s.visibility='SHARED' OR COALESCE(g.can_read,false) OR $2='ADMIN'
+   ORDER BY name`,[a.id,a.role]);
    return {spaces:r.rows};
  });
 }
