@@ -26,6 +26,6 @@ test -s "$tmp"
 "${compose[@]}" exec -T db pg_restore --list < "$tmp" > /dev/null
 ln -- "$tmp" "$final"
 rm -f "$tmp"
-sha256sum "$final" > "$final.sha256"
+(cd "$directory" && sha256sum "$(basename "$final")" > "$(basename "$final").sha256")
 echo "Backup locally verified. Encrypt and copy it off-host under the approved retention policy."
 echo "File: $final"
