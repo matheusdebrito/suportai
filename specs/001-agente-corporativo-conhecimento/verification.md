@@ -75,3 +75,29 @@
 - **Critérios de aceitação:** vários automatizados, alguns parciais e AC-021 não verificado. CI verde não equivale a aprovação do ambiente real.
 
 Não houve deploy nem execução de migração em banco produtivo como parte desta verificação.
+
+## Atualização de evidências — incrementos recentes
+
+Os seguintes PRs são evidência de **implementação e CI** (não de homologação operacional):
+
+| Área | PRs e evidência | Status |
+| --- | --- | --- |
+| Respostas interrompidas/injeção simulada | #37 [CI](https://github.com/matheusdebrito/suportai/actions/runs/44804440646) | Automatizado |
+| Proteção de consultas RAG e respostas vazias | #38–#39, CIs dos PRs | Automatizado |
+| Abstenção, conflito e cenário sintético | #40 [CI](https://github.com/matheusdebrito/suportai/actions/runs/44812178891) | Contratos automatizados, LLM real não verificado |
+| Falha temporária de RAG | #41 [CI](https://github.com/matheusdebrito/suportai/actions/runs/44812686755) | Automatizado |
+| Departamentos e vínculos | #42 [CI](https://github.com/matheusdebrito/suportai/actions/runs/44815140514) | API/PostgreSQL/Chromium |
+| Arquivos PDF adversariais | #43 [CI](https://github.com/matheusdebrito/suportai/actions/runs/44814419734), #47 [CI](https://github.com/matheusdebrito/suportai/actions/runs/44815692387), #49 [CI](https://github.com/matheusdebrito/suportai/actions/runs/44816523735) | Chromium e PDF criptografado real fictício; isolamento de SO não verificado |
+| Literais de rede nas respostas | #44 [CI](https://github.com/matheusdebrito/suportai/actions/runs/44814673043) | Regra sintática, não validação semântica geral |
+| Executor opcional de avaliação com modelo real | #45 [CI](https://github.com/matheusdebrito/suportai/actions/runs/44814988992) | Código testado, chamadas reais não executadas |
+| Comparação de conteúdo duplicado | #46 [CI](https://github.com/matheusdebrito/suportai/actions/runs/44815371840) | PostgreSQL/CI, qualidade de similaridade ainda parcial |
+| Preflight operacional | #48 [CI](https://github.com/matheusdebrito/suportai/actions/runs/44815906965) | Configuração testada, produção não verificada |
+
+### Bloqueios externos que não podem ser encerrados por CI
+
+1. Fornecedor, custos e tratamento/retencão de dados aprovados pela organização, e execução da avaliação T025 com **modelo real** autorizado.
+2. Contenção efetiva do parser PDF no sistema operacional de destino (usuário sem privilégios, rede, filesystem e limites de recursos), ensaio com arquivos hostis com autorização e revisão de dependências.
+3. Ambiente de deploy, HTTPS, observabilidade, backups reais com restauração isolada, RPO/RTO e plano de rollback testado.
+4. Piloto humano de TI com dados sintéticos e análise qualitativa de respostas, falsos positivos de duplicidade e UX.
+
+**Parecer mantido:** código em evolução com automação relevante; **NÃO APROVADO PARA DADOS INTERNOS REAIS** sem evidências externas. Não houve deploy nem migrações de produção.
