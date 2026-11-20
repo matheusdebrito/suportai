@@ -23,8 +23,10 @@ Concluir somente após execução real com banco, API, worker e UI, além de rev
 - [ ] T014 [REQ-006..REQ-010] Validar escolha de espaço pelo modelo real em pedidos ambíguos, sem IDs fornecidos pelo usuário.
 
 - [x] T015 [REQ-018, REQ-020, AC-013, AC-014] Aprovador solicita ajustes/rejeita com parecer; autor cria nova versão de artigo sem sobrescrever a anterior; autorização e concorrência validadas em integração PostgreSQL.
-- [ ] T016 [REQ-012, REQ-018] Permitir substituição de PDF após ajustes sem criar documento novo (ainda fora deste incremento).
+- [x] T016 [REQ-012, REQ-018, REQ-020; AC-014] Reenvio de PDF com ajustes, mantendo o documento e criando nova versão; permissões, concorrência, worker e publicação verificados com PostgreSQL real.
 - [ ] T017 [REQ-015, AC-011] Verificar visualmente a comparação antes/depois nas interfaces de edição e revisão.
 
 - [x] T018 [REQ-016, AC-012] Identificação de artigos publicados semelhantes no mesmo espaço antes da criação por painel ou conversa; prosseguir exige justificativa e gera evento auditável. Testado com PostgreSQL.
 - [ ] T019 [REQ-016, AC-012] Verificar no navegador o fluxo de sugestões e abertura de artigo existente; melhorar similaridade além de títulos quando houver dados reais suficientes.
+
+- [ ] T020 [REQ-012, REQ-020] Validar no navegador o envio de PDF corrigido e revisão de documento publicado, incluindo arquivos protegidos, sem texto e maiores que o limite.

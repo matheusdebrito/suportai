@@ -12,6 +12,7 @@ Assistente interno com cérebro de conhecimento baseado em artigos e PDFs, recup
 - Fluxo de rascunho, revisão, aprovação humana (inclusive autor-aprovador) e versionamento.
 - Pedidos de ajuste com parecer, versões corrigidas e aviso de artigos semelhantes antes de nova criação.
 - Upload de PDF com worker e processamento assíncrono.
+- Reenvio de PDFs após pedido de ajustes e revisões de PDFs publicados, sempre com nova versão e aprovação humana.
 
 ## Requisitos
 
