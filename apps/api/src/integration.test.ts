@@ -77,7 +77,7 @@ if(!process.env.TEST_DATABASE_URL){
    const page=pdfDocument.addPage([600,400]);
    const font=await pdfDocument.embedFont(StandardFonts.Helvetica);
    page.drawText('Checklist de seguranca: confira logs, backups e registros antes de executar qualquer procedimento.',{x:40,y:340,size:12,font,maxWidth:500});
-   const pdfBytes=Buffer.from(await pdfDocument.save());
+   const pdfBytes=Buffer.from(await pdfDocument.save({useObjectStreams:false}));
    const boundary='test-boundary-'+id;
    const body=Buffer.concat([
      Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="spaceId"\r\n\r\n${shared}\r\n--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="procedimento.pdf"\r\nContent-Type: application/pdf\r\n\r\n`),
@@ -92,7 +92,8 @@ if(!process.env.TEST_DATABASE_URL){
      if(status.rows[0].index_status==='FAILED')break;
      await new Promise(resolve=>setTimeout(resolve,400));
    }
-   assert.equal(pdfReady,true,'worker must extract valid PDF');
+   const pdfJob=await query('SELECT error FROM ingestion_jobs WHERE version_id=$1',[pdfUpload.json().versionId]);
+   assert.equal(pdfReady,true,'worker must extract valid PDF; '+String(pdfJob.rows[0]?.error??'unknown'));
    const restrictedDenied=await app.inject({method:'POST',url:'/knowledge/articles',headers:auth(reader.cookie),payload:{spaceId:restricted,title:'Restrito '+id,content:'Este texto somente deve ser acessado por leitores especificamente autorizados.'}});
    assert.equal(restrictedDenied.statusCode,403);
 
