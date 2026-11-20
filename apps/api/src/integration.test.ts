@@ -7,7 +7,7 @@ import {buildApp} from './server.js';
 import {pool,query} from './db.js';
 import {searchKnowledge} from './retrieval.js';
 import {claimJob,renewLease,storeClaimedResult,failClaimedJob,expireStaleJobs} from './worker-jobs.js';
-import {actorForSession} from './security.js';
+import {actorForSession,hashToken} from './security.js';
 import {respond} from './agent.js';
 import type OpenAI from 'openai';
 import {PDFDocument,StandardFonts} from 'pdf-lib';
@@ -71,6 +71,12 @@ if(!process.env.TEST_DATABASE_URL){
    const reviewerSpaces=await app.inject({method:'GET',url:'/spaces',headers:auth(reviewer.cookie)});
    assert.equal(reviewerSpaces.json().spaces.find((x:any)=>x.id===shared).can_approve,true);
 
+   const badGrant=await app.inject({method:'POST',url:'/admin/spaces/'+shared+'/grants',
+     headers:auth(admin.cookie),payload:{userId:'malformed-id',read:true,edit:true,approve:false}});
+   assert.equal(badGrant.statusCode,400);
+   const notFoundGrant=await app.inject({method:'POST',url:'/admin/spaces/'+shared+'/grants',
+     headers:auth(admin.cookie),payload:{userId:randomUUID(),read:true,edit:true,approve:false}});
+   assert.equal(notFoundGrant.statusCode,404);
    const forbiddenAdmin=await app.inject({method:'POST',url:'/admin/users',headers:auth(reader.cookie),payload:{email:'bad@example.test',role:'ADMIN'}});
    assert.equal(forbiddenAdmin.statusCode,403);
    const noOpsForReader=await app.inject({method:'GET',url:'/admin/operations',headers:auth(reader.cookie)});
@@ -831,6 +837,14 @@ if(!process.env.TEST_DATABASE_URL){
    const onboardingEmail=`onboarding-${id}@example.test`;
    const created=await app.inject({method:'POST',url:'/admin/users',headers:auth(admin.cookie),payload:{email:onboardingEmail,role:'USER'}});
    assert.equal(created.statusCode,201,created.body);
+   const duplicateAccount=await app.inject({method:'POST',url:'/admin/users',
+     headers:auth(admin.cookie),payload:{email:onboardingEmail,role:'USER'}});
+   assert.equal(duplicateAccount.statusCode,409);
+   const sameEmail=await query('SELECT count(*)::int AS total FROM users WHERE email=$1',[onboardingEmail]);
+   assert.equal(sameEmail.rows[0].total,1);
+   const adminOwnReset=await app.inject({method:'POST',url:'/admin/users/'+admin.id+'/reset-password',
+     headers:auth(admin.cookie)});
+   assert.equal(adminOwnReset.statusCode,400);
    const reset=created.json() as {resetToken:string};
    assert.ok(reset.resetToken.length>20);
    const change=await app.inject({method:'POST',url:'/auth/change-password',payload:{resetToken:reset.resetToken,newPassword:'new-Secure-Password-123!'}});
@@ -839,6 +853,30 @@ if(!process.env.TEST_DATABASE_URL){
    assert.equal(reuse.statusCode,401,'Temporary token must be single use');
    const active=await app.inject({method:'POST',url:'/auth/login',payload:{email:onboardingEmail,password:'new-Secure-Password-123!'}});
    assert.equal(active.statusCode,200);
+   const resetAfterActivation=await app.inject({method:'POST',
+     url:'/admin/users/'+created.json().id+'/reset-password',headers:auth(admin.cookie)});
+   assert.equal(resetAfterActivation.statusCode,200);
+   assert.equal(typeof resetAfterActivation.json().resetToken,'string');
+   const previousLogin=await app.inject({method:'POST',url:'/auth/login',
+     payload:{email:onboardingEmail,password:'new-Secure-Password-123!'}});
+   assert.equal(previousLogin.statusCode,401,'Admin password reset invalidates the old login');
+
+   // Simulate a session that survives a login/reset race; it must not be able
+   // to replace the administrator's one-time code.
+   const residualSessionRaw=randomUUID()+randomUUID();
+   await query("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '1 hour')",
+     [hashToken(residualSessionRaw),created.json().id]);
+   const passwordWithoutToken=await app.inject({method:'POST',url:'/auth/change-password',
+     headers:auth('suportai_session='+residualSessionRaw),
+     payload:{newPassword:'unauthorized-Password-123!'}});
+   assert.equal(passwordWithoutToken.statusCode,401,'A stale session must never replace the admin reset code');
+
+   const activatedWithReset=await app.inject({method:'POST',url:'/auth/change-password',
+     payload:{resetToken:resetAfterActivation.json().resetToken,newPassword:'rotated-Secure-Password-123!'}});
+   assert.equal(activatedWithReset.statusCode,200);
+   const resetReuse=await app.inject({method:'POST',url:'/auth/change-password',
+     payload:{resetToken:resetAfterActivation.json().resetToken,newPassword:'another-Secure-Password-123!'}});
+   assert.equal(resetReuse.statusCode,401);
    const badOrigin=await app.inject({method:'POST',url:'/conversations',headers:{cookie:reader.cookie,origin:'https://evil.invalid'}});
    assert.equal(badOrigin.statusCode,403);
    // Administrator-only role changes and deactivation must revoke active sessions.
@@ -850,6 +888,9 @@ if(!process.env.TEST_DATABASE_URL){
    assert.equal(disable.statusCode,200,disable.body);
    const sessionAfterDeactivation=await app.inject({method:'GET',url:'/auth/me',headers:auth(reader.cookie)});
    assert.equal(sessionAfterDeactivation.statusCode,401);
+   const resetInactive=await app.inject({method:'POST',url:'/admin/users/'+reader.id+'/reset-password',
+     headers:auth(admin.cookie)});
+   assert.equal(resetInactive.statusCode,404,'Inactive accounts must not receive reset tokens');
    const disabledLogin=await app.inject({method:'POST',url:'/auth/login',payload:{email:reader.email,password:reader.password}});
    assert.equal(disabledLogin.statusCode,401);
    const enable=await app.inject({method:'PATCH',url:`/admin/users/${reader.id}`,headers:auth(admin.cookie),payload:{active:true}});
