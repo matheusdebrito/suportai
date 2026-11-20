@@ -1,50 +1,55 @@
 #!/usr/bin/env bash
-# Creates a NEW isolated database. Never drops or replaces a production database.
+# Restore only into a disposable networkless PostgreSQL CONTAINER/cluster.
+# Never connects to the production database or Docker Compose production DB.
 set -euo pipefail
 umask 077
-if [[ $# -ne 1 || ! "${1:-}" = /* || ! -f "${1:-}" || -L "${1:-}" ]]; then
-  echo "Usage: verify-restore.sh /absolute/suportai-backup.dump" >&2
+if [[ $# -ne 2 || ! "${1:-}" = /* || ! -f "${1:-}" || -L "${1:-}" ||
+      ! "${2:-}" = /* || ! -d "${2:-}" || -L "${2:-}" ]]; then
+  echo "Usage: verify-restore.sh /absolute/backup.dump /absolute/private/restore-work-dir" >&2
   exit 2
 fi
-if [[ -z "${SUPORTAI_ENV_FILE:-}" || ! "${SUPORTAI_ENV_FILE}" = /* || ! -f "${SUPORTAI_ENV_FILE}" ]]; then
-  echo "SUPORTAI_ENV_FILE must point to an existing absolute configuration file" >&2
-  exit 2
-fi
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-compose=(docker compose --env-file "${SUPORTAI_ENV_FILE}" -f "$root/deploy/compose.production.yml")
 file="$1"
+work="$2"
 if [[ -f "$file.sha256" ]]; then
   (cd "$(dirname "$file")" && sha256sum --check "$(basename "$file").sha256")
 fi
-"${compose[@]}" exec -T db pg_restore --list < "$file" > /dev/null
-target="suportai_restore_$(date -u +%Y%m%d%H%M%S)_$$"
-if [[ ! "$target" =~ ^suportai_restore_[0-9]{14}_[0-9]+$ ]]; then
-  echo "Invalid disposable restore database name" >&2
-  exit 2
+restore_dir="$(mktemp -d "$work/suportai-restore.XXXXXXXX")"
+container="suportai-restore-$(date -u +%Y%m%d%H%M%S)-$$"
+cleanup(){
+  docker rm -f "$container" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+# Trust authentication is safe ONLY because the dedicated validation
+# container has no network namespace or published ports, and no secrets.
+docker run -d --name "$container" --network none --memory 2g --cpus 1 \
+  --pids-limit 128 --cap-drop ALL --security-opt no-new-privileges \
+  -e POSTGRES_USER=suportai -e POSTGRES_DB=suportai_restore \
+  -e POSTGRES_HOST_AUTH_METHOD=trust \
+  -v "$restore_dir:/var/lib/postgresql/data" \
+  pgvector/pgvector:pg17 >/dev/null
+ready=false
+for ((i=0;i<60;i++)); do
+  if docker exec "$container" pg_isready -U suportai -d suportai_restore >/dev/null 2>&1; then
+    ready=true
+    break
+  fi
+  sleep 1
+done
+if [[ "$ready" != true ]]; then
+  echo "Disposable PostgreSQL did not become ready" >&2
+  exit 1
 fi
-"${compose[@]}" exec -T db createdb -U suportai "$target"
-echo "New verification database: $target"
-echo "No cleanup is performed automatically; a DBA must review before dropping it."
-"${compose[@]}" exec -T db pg_restore --exit-on-error --no-owner --no-acl -U suportai -d "$target" < "$file"
-for table in schema_migrations users departments spaces documents document_versions ingestion_jobs knowledge_chunks audit_events; do
-  before="$("${compose[@]}" exec -T db psql -XAt -v ON_ERROR_STOP=1 -U suportai -d suportai -c "SELECT count(*) FROM $table")"
-  after="$("${compose[@]}" exec -T db psql -XAt -v ON_ERROR_STOP=1 -U suportai -d "$target" -c "SELECT count(*) FROM $table")"
-  if [[ "$before" != "$after" ]]; then
-    echo "Restore count mismatch: $table" >&2
-    exit 1
-  fi
+# pg_restore reads the chosen backup from stdin, not from production DB.
+docker exec -i "$container" pg_restore --exit-on-error --no-owner --no-acl \
+  -U suportai -d suportai_restore < "$file"
+docker exec "$container" psql -XAt -v ON_ERROR_STOP=1 -U suportai -d suportai_restore \
+  -c "SELECT CASE WHEN to_regtype('vector') IS NOT NULL AND to_regclass('public.schema_migrations') IS NOT NULL THEN 'ok' ELSE 'invalid' END" | grep -qx ok
+for table in users departments spaces documents document_versions ingestion_jobs knowledge_chunks audit_events; do
+  docker exec "$container" psql -XAt -v ON_ERROR_STOP=1 -U suportai -d suportai_restore \
+    -c "SELECT count(*) FROM $table" > /dev/null
 done
-for sql in \
-  "SELECT COALESCE(sum(octet_length(pdf_bytes)),0) FROM document_versions" \
-  "SELECT count(*) FROM documents WHERE current_version_id IS NOT NULL" \
-  "SELECT count(*) FROM knowledge_chunks WHERE embedding IS NOT NULL"; do
-  before="$("${compose[@]}" exec -T db psql -XAt -v ON_ERROR_STOP=1 -U suportai -d suportai -c "$sql")"
-  after="$("${compose[@]}" exec -T db psql -XAt -v ON_ERROR_STOP=1 -U suportai -d "$target" -c "$sql")"
-  if [[ "$before" != "$after" ]]; then
-    echo "Restore invariant mismatch" >&2
-    exit 1
-  fi
-done
-"${compose[@]}" exec -T db psql -XAt -v ON_ERROR_STOP=1 -U suportai -d "$target" \
-  -c "SELECT CASE WHEN to_regtype('vector') IS NOT NULL THEN 'ok' ELSE 'fail' END" | grep -qx ok
-echo "Disposable restore validation passed. Verify RPO/RTO, perform human review and safely clean up."
+docker exec "$container" psql -XAt -v ON_ERROR_STOP=1 -U suportai -d suportai_restore \
+  -c "SELECT 'restored_versions='||count(*), 'restored_pdf_bytes='||COALESCE(sum(octet_length(pdf_bytes)),0) FROM document_versions"
+echo "Isolated restore succeeded. Container will be removed; restored data remains at:"
+echo "$restore_dir"
+echo "Operator must review RPO/RTO and manually dispose the temporary data afterward."
