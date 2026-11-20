@@ -6,6 +6,7 @@ import {randomUUID} from 'node:crypto';
 import {buildApp} from './server.js';
 import {pool,query} from './db.js';
 import {searchKnowledge} from './retrieval.js';
+import {claimJob,renewLease,storeClaimedResult,failClaimedJob,expireStaleJobs} from './worker-jobs.js';
 import {actorForSession} from './security.js';
 import {respond} from './agent.js';
 import type OpenAI from 'openai';
@@ -166,6 +167,36 @@ if(!process.env.TEST_DATABASE_URL){
 
    const unauthorizedPublish=await app.inject({method:'POST',url:`/knowledge/versions/${sharedDoc.versionId}/publish`,headers:auth(admin.cookie),payload:{confirm:true}});
    assert.equal(unauthorizedPublish.statusCode,403);
+
+
+   // The worker lease is a concurrency token: a crashed/old worker must never
+   // publish stale chunks or overwrite a newer worker's result.
+   const leased=await claimJob();
+   assert.ok(leased,'At least one pending article ingestion job must exist');
+   const stolen={...leased!,leaseToken:randomUUID()};
+   assert.equal(await renewLease(stolen),false);
+   assert.equal(await failClaimedJob(stolen,'A worker that lost the lease must not mark a job failed'),false);
+   const staleCommit=await storeClaimedResult(stolen,'INJECTED STALE CONTENT',['INJECTED STALE CONTENT'],[null]);
+   assert.equal(staleCommit,false);
+   const staleStatus=await query('SELECT status,lease_token FROM ingestion_jobs WHERE version_id=$1',[leased!.versionId]);
+   assert.equal(staleStatus.rows[0].status,'RUNNING');
+   assert.equal(staleStatus.rows[0].lease_token,leased!.leaseToken);
+   assert.equal(await renewLease(leased!),true);
+   // Three consecutive worker crashes require an explicit manual retry;
+   // the cleanup must update job and version atomically.
+   await query("UPDATE ingestion_jobs SET attempts=3,updated_at=now()-interval '6 minutes' WHERE version_id=$1",[leased!.versionId]);
+   const expired=await expireStaleJobs();
+   assert.ok(expired>=1);
+   const stopped=await query('SELECT j.status,j.lease_token,v.index_status FROM ingestion_jobs j JOIN document_versions v ON v.id=j.version_id WHERE j.version_id=$1',[leased!.versionId]);
+   assert.equal(stopped.rows[0].status,'FAILED');
+   assert.equal(stopped.rows[0].lease_token,null);
+   assert.equal(stopped.rows[0].index_status,'FAILED');
+   const manualRecovery=await app.inject({method:'POST',url:'/knowledge/versions/'+leased!.versionId+'/retry',headers:auth(reader.cookie)});
+   assert.equal(manualRecovery.statusCode,200,manualRecovery.body);
+   const recovered=await query('SELECT status,lease_token,attempts FROM ingestion_jobs WHERE version_id=$1',[leased!.versionId]);
+   assert.equal(recovered.rows[0].status,'PENDING');
+   assert.equal(recovered.rows[0].lease_token,null);
+   assert.equal(recovered.rows[0].attempts,0);
 
    worker=spawn(process.execPath,['--import','tsx','src/worker.ts'],{cwd:process.cwd(),env:{...process.env,NODE_ENV:'development'},stdio:'ignore'});
    let indexStatus='PENDING';
