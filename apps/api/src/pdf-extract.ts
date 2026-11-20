@@ -1,4 +1,5 @@
 import {spawn} from 'node:child_process';
+import {extractPdfViaSocket} from './pdf-socket-client.js';
 import {fileURLToPath} from 'node:url';
 
 const MAX_BYTES=8*1024*1024;
@@ -10,7 +11,7 @@ const parserPath=fileURLToPath(new URL('../bin/extract-pdf-child.mjs',import.met
  * Limits parser exposure to a subprocess with a restricted environment and
  * a V8 heap budget. This is fault containment, NOT an OS-level sandbox.
  */
-export function extractPdfText(bytes:Buffer,timeoutMs=DEFAULT_TIMEOUT):Promise<string>{
+export function extractPdfTextLocally(bytes:Buffer,timeoutMs=DEFAULT_TIMEOUT):Promise<string>{
  if(bytes.length>MAX_BYTES)throw new Error('PDF excede o limite de 8 MB');
  if(bytes.length<8||bytes.subarray(0,5).toString()!=='%PDF-')
    throw new Error('PDF inválido');
@@ -61,4 +62,13 @@ export function extractPdfText(bytes:Buffer,timeoutMs=DEFAULT_TIMEOUT):Promise<s
    });
    child.stdin.end(bytes);
  });
+}
+
+/** Production PDF ingestion fails closed until an isolated parser is wired. */
+export function extractPdfText(bytes:Buffer,timeoutMs=DEFAULT_TIMEOUT):Promise<string>{
+ const socket=process.env.PDF_PARSER_SOCKET?.trim();
+ if(socket)return extractPdfViaSocket(bytes,socket,timeoutMs);
+ if(process.env.NODE_ENV==='production')
+   throw new Error('Leitor de PDF isolado não configurado');
+ return extractPdfTextLocally(bytes,timeoutMs);
 }
