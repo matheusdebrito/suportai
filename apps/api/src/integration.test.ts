@@ -308,6 +308,14 @@ if(!process.env.TEST_DATABASE_URL){
 
 
    // Creating a similar published procedure requires an explicit human rationale.
+   // A minor typo in the title must still surface a potentially matching
+   // published procedure, without requiring an external embedding provider.
+   const typoCandidate=await app.inject({method:'POST',url:'/knowledge/articles',headers:auth(reader.cookie),
+     payload:{spaceId:shared,title:'Procedimento DMS '+id,
+       content:'Guia alternativo de DNS criado para testar proteção contra títulos digitados incorretamente.'}});
+   assert.equal(typoCandidate.statusCode,409,typoCandidate.body);
+   assert.equal(typoCandidate.json().code,'SIMILAR_ARTICLES');
+   assert.ok(typoCandidate.json().matches.some((d:any)=>d.id===sharedDoc.documentId));
    const similarTitle='Procedimento DNS '+id+' - guia alternativo';
    const potentialDuplicate=await app.inject({method:'POST',url:'/knowledge/articles',headers:auth(reader.cookie),
      payload:{spaceId:shared,title:similarTitle,content:'Outro procedimento de DNS para demonstrar a criação justificada após verificação de duplicidade.'}});
