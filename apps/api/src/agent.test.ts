@@ -89,3 +89,20 @@ test('filtered model answers do not show partial instructions',async()=>{
  assert.doesNotMatch(result.answer,/Procedimento parcial/);
  assert.deepEqual(result.sources,[]);
 });
+
+test('the model cannot submit a credential inside a knowledge search',async()=>{
+ const observed:any[]=[];
+ const fake=fakeLLM([
+   {role:'assistant',content:null,tool_calls:[fakeCall('search_knowledge',
+     {query:'VPN password=Senha#Segura2026!'})]},
+   {role:'assistant',content:'A consulta não foi executada.'}
+ ],observed);
+ const result=await respond(actor,randomUUID(),'Qual é o procedimento de VPN?',[],fake);
+ assert.deepEqual(result.sources,[]);
+ assert.match(result.answer,/não um procedimento interno validado/i);
+ assert.equal(observed.length,2);
+ const toolResponses=(observed[1].messages as any[]).filter(m=>m.role==='tool');
+ assert.equal(toolResponses.length,1);
+ assert.match(toolResponses[0].content,/possível credencial/i);
+ assert.doesNotMatch(toolResponses[0].content,/Senha#Segura2026!/);
+});

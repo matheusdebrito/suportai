@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {relaxedLexicalQuery,safeRetrievedSources,type Source} from './retrieval.js';
+import {relaxedLexicalQuery,safeRetrievedSources,searchKnowledge,type Source} from './retrieval.js';
 
 test('natural Portuguese questions retain meaningful search terms',()=>{
  assert.equal(relaxedLexicalQuery('Como posso configurar o DNS no Linux?'),'configurar | dns | linux');
@@ -19,4 +19,15 @@ test('RAG rejects legacy sources when the title contains a credential',()=>{
    title:'VPN password=Senha#Segura2026!',content:'Procedimento sintético sem segredo no corpo',score:0.9};
  assert.deepEqual(safeRetrievedSources([source],5),[]);
  assert.equal(safeRetrievedSources([{...source,title:'VPN'}],5).length,1);
+});
+
+test('search with credentials stops before database or embedding requests',async()=>{
+ // This assertion is independent of PostgreSQL and the embedding provider:
+ // an unsafe search must exit before consulting either service.
+ const actor={id:'synthetic',role:'USER',auth_revision:0,must_change_password:false} as const;
+ assert.deepEqual(await searchKnowledge(actor,
+   'Verifique a VPN: password=Senha#Segura2026!'),[]);
+ const longQuery='x'.repeat(540)+' api_key=abcdefghijklmnopqrstuvwxyz123456';
+ assert.deepEqual(await searchKnowledge(actor,longQuery),[],
+   'Checking only the first 500 chars would leak credentials after truncation');
 });
