@@ -1,0 +1,24 @@
+{
+  email {$SUPORTAI_TLS_CONTACT}
+}
+{$SUPORTAI_DOMAIN} {
+  encode zstd gzip
+  @api path /auth /auth/* /admin /admin/* /knowledge /knowledge/* /conversations /conversations/* /spaces /spaces/* /feedback /feedback/*
+  handle @api {
+    reverse_proxy api:4000
+  }
+  @internal path /health /ready
+  handle @internal {
+    respond 404
+  }
+  handle {
+    root * /srv
+    try_files {path} /index.html
+    file_server
+  }
+  header {
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "no-referrer"
+    X-Frame-Options "DENY"
+  }
+}

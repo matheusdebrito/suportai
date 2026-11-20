@@ -37,6 +37,46 @@ jobs:
       - run: npm test
       - run: npm run rag:evaluate -w @suportai/api # dry-run only, zero external requests
       - run: npm run build
+      - name: Validate hardened production Compose configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          temp="$(mktemp -d)"
+          trap 'rm -rf "$temp"' EXIT
+          printf 'test_password' > "$temp/db_password"
+          printf 'postgres://suportai:test_password@db:5432/suportai' > "$temp/database_url"
+          : > "$temp/ai_key"
+          mkdir -p "$temp/socket"
+          export SUPORTAI_DB_PASSWORD_FILE="$temp/db_password"
+          export SUPORTAI_DATABASE_URL_FILE="$temp/database_url"
+          export SUPORTAI_AI_KEY_FILE="$temp/ai_key"
+          export PDF_SOCKET_DIR="$temp/socket"
+          export SUPORTAI_DOMAIN=suportai.example.org
+          export SUPORTAI_TLS_CONTACT=ti@example.org
+          export APP_ORIGIN=https://suportai.example.org
+          docker compose -f deploy/compose.production.yml config --quiet
+          docker compose -f deploy/compose.production.yml config --format json > "$temp/compose.json"
+          node - "$temp/compose.json" <<'NODE'
+          const cfg=JSON.parse(require('node:fs').readFileSync(process.argv[2],'utf8'));
+          const parser=cfg.services['pdf-parser'];
+          if(parser.network_mode!=='none'||parser.read_only!==true||
+             parser.user!=='10001:10001'||(parser.secrets||[]).length>0||
+             !(parser.cap_drop||[]).includes('ALL'))
+             throw new Error('PDF parser lacks mandatory isolation configuration');
+          const worker=cfg.services.worker;
+          if(!worker.volumes?.some(v=>v.target==='/run/suportai'&&v.read_only))
+             throw new Error('Worker parser socket mount must be read-only');
+          NODE
+      - name: Build and validate production runtime images
+        run: |
+          docker build -f deploy/Dockerfile --target runtime -t suportai/runtime:ci .
+          docker run --rm --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges --user 10001:10001 \
+            suportai/runtime:ci node apps/api/dist/pdf-isolation-preflight.js
+          docker build -f deploy/Dockerfile --target web -t suportai/web:ci .
+          docker run --rm -e SUPORTAI_DOMAIN=suportai.example.org \
+            -e SUPORTAI_TLS_CONTACT=ti@example.org --entrypoint caddy \
+            suportai/web:ci validate --config /etc/caddy/Caddyfile
       # Browser tests use a different database from request/integration tests.
       - name: Create isolated browser-test database
         run: |
