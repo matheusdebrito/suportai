@@ -47,6 +47,45 @@ if(!process.env.TEST_DATABASE_URL){
    assert.equal(entries.find(x=>x.id===shared)?.can_read,true);
    assert.equal(entries.find(x=>x.id===shared)?.can_edit,false);
    assert.equal(entries.find(x=>x.id===shared)?.can_approve,false);
+   // Departments are metadata, not a way to gain restricted knowledge access.
+   const deptDenied=await app.inject({method:'GET',url:'/admin/departments',headers:auth(reader.cookie)});
+   assert.equal(deptDenied.statusCode,403);
+   const initialDepartments=await app.inject({method:'GET',url:'/admin/departments',headers:auth(admin.cookie)});
+   assert.equal(initialDepartments.statusCode,200);
+   assert.ok(initialDepartments.json().departments.some((d:any)=>d.name==='Tecnologia da Informação'));
+   const newDepartment=await app.inject({method:'POST',url:'/admin/departments',
+     headers:auth(admin.cookie),payload:{name:'Suporte fictício '+id}});
+   assert.equal(newDepartment.statusCode,201,newDepartment.body);
+   const departmentId=newDepartment.json().id as string;
+   const duplicateDepartment=await app.inject({method:'POST',url:'/admin/departments',
+     headers:auth(admin.cookie),payload:{name:'suporte fictício '+id}});
+   assert.equal(duplicateDepartment.statusCode,409);
+   const invalidMembership=await app.inject({method:'PUT',url:'/admin/users/'+reader.id+'/departments',
+     headers:auth(reader.cookie),payload:{departmentIds:[departmentId]}});
+   assert.equal(invalidMembership.statusCode,403);
+   const assigned=await app.inject({method:'PUT',url:'/admin/users/'+reader.id+'/departments',
+     headers:auth(admin.cookie),payload:{departmentIds:[departmentId]}});
+   assert.equal(assigned.statusCode,200,assigned.body);
+   const accountDepartments=await app.inject({method:'GET',url:'/admin/users',headers:auth(admin.cookie)});
+   assert.deepEqual(accountDepartments.json().users.find((u:any)=>u.id===reader.id).department_ids,[departmentId]);
+   const duplicateAssignment=await app.inject({method:'PUT',url:'/admin/users/'+reader.id+'/departments',
+     headers:auth(admin.cookie),payload:{departmentIds:[departmentId,departmentId]}});
+   assert.equal(duplicateAssignment.statusCode,400);
+   const noReadViaDepartment=await app.inject({method:'GET',url:'/spaces',headers:auth(reader.cookie)});
+   assert.equal(noReadViaDepartment.statusCode,401,'Membership change revokes previous sessions');
+   // Restore the fixture session using a fresh login without altering the knowledge grants.
+   const newSession=await app.inject({method:'POST',url:'/auth/login',
+     payload:{email:reader.email,password:reader.password}});
+   assert.equal(newSession.statusCode,200);
+   reader.cookie=newSession.headers['set-cookie']!.toString().split(';')[0];
+   const afterDepartment=await app.inject({method:'GET',url:'/spaces',headers:auth(reader.cookie)});
+   assert.equal(afterDepartment.json().spaces.some((s:any)=>s.id===restricted),false);
+   const deactivated=await app.inject({method:'PATCH',url:'/admin/departments/'+departmentId,
+     headers:auth(admin.cookie),payload:{active:false,name:'Suporte técnico '+id}});
+   assert.equal(deactivated.statusCode,200,deactivated.body);
+   const inactiveMembership=await app.inject({method:'PUT',url:'/admin/users/'+reviewer.id+'/departments',
+     headers:auth(admin.cookie),payload:{departmentIds:[departmentId]}});
+   assert.equal(inactiveMembership.statusCode,400);
    const noWrite=await app.inject({method:'POST',url:'/knowledge/articles',headers:auth(reader.cookie),
      payload:{spaceId:shared,title:'Artigo sem direito de edição '+id,
        content:'Apenas a leitura compartilhada nunca deve conceder permissão de criação.'}});

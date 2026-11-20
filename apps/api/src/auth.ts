@@ -4,6 +4,12 @@ import { query, transaction } from './db.js';
 import { actorForSession, requireCurrentActor, token, hashToken, type Actor } from './security.js';
 export const COOKIE = 'suportai_session';
 const isProd = process.env.NODE_ENV==='production';
+const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const departmentName=(name:unknown):string|null=>{
+ if(typeof name!=='string')return null;
+ const value=name.trim().replace(/\s+/g,' ');
+ return value.length>=3&&value.length<=80?value:null;
+};
 function setCookie(reply:any,raw:string) { reply.setCookie(COOKIE,raw,{httpOnly:true,secure:isProd,sameSite:'strict',path:'/',maxAge:60*60*8}); }
 export async function requireActor(req:FastifyRequest):Promise<Actor> {
  const a=await actorForSession(req.cookies?.[COOKIE]);
@@ -104,11 +110,89 @@ export function registerAuth(app:FastifyInstance) {
    setCookie(reply,raw);
    return {ok:true};
  });
+ app.get('/admin/departments',async req=>{
+   const admin=await requireActor(req);requireAdmin(admin);
+   const result=await transaction(async c=>{
+     await requireCurrentActor(c,admin);
+     return c.query(`SELECT d.id,d.name,d.active,
+       (SELECT count(*)::int FROM user_departments ud WHERE ud.department_id=d.id) AS members
+       FROM departments d ORDER BY lower(d.name),d.id`);
+   });
+   return {departments:result.rows};
+ });
+ app.post('/admin/departments',async(req,reply)=>{
+   const admin=await requireActor(req);requireAdmin(admin);
+   const name=departmentName((req.body as {name?:unknown}|undefined)?.name);
+   if(!name)return reply.code(400).send({error:'Nome do departamento inválido'});
+   const created=await transaction(async c=>{
+     await requireCurrentActor(c,admin);
+     const r=await c.query('INSERT INTO departments(name) VALUES($1) ON CONFLICT DO NOTHING RETURNING id,name,active',[name]);
+     if(r.rowCount)await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'DEPARTMENT_CREATED',$2)",[admin.id,r.rows[0].id]);
+     return r.rows[0]||null;
+   });
+   return created?reply.code(201).send(created):reply.code(409).send({error:'Departamento já cadastrado'});
+ });
+ app.patch('/admin/departments/:id',async(req,reply)=>{
+   const admin=await requireActor(req);requireAdmin(admin);
+   const id=(req.params as {id:string}).id;
+   const body=req.body as {name?:unknown;active?:unknown}|undefined;
+   if(!uuid.test(id)||!body||!('name' in body)&&!('active' in body)||
+      ('name' in body&&!departmentName(body.name))||
+      ('active' in body&&typeof body.active!=='boolean'))
+     return reply.code(400).send({error:'Alteração de departamento inválida'});
+   try{
+     const result=await transaction(async c=>{
+       await requireCurrentActor(c,admin);
+       const r=await c.query('UPDATE departments SET name=COALESCE($2,name),active=COALESCE($3,active) WHERE id=$1 RETURNING id,name,active',
+         [id,'name' in body?departmentName(body.name):null,'active' in body?body.active:null]);
+       if(r.rowCount)await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'DEPARTMENT_UPDATED',$2)",[admin.id,id]);
+       return r.rows[0]||null;
+     });
+     return result||reply.code(404).send({error:'Departamento não encontrado'});
+   }catch(error){
+     if((error as {code?:string}).code==='23505')return reply.code(409).send({error:'Departamento já cadastrado'});
+     throw error;
+   }
+ });
+ app.put('/admin/users/:id/departments',async(req,reply)=>{
+   const admin=await requireActor(req);requireAdmin(admin);
+   const id=(req.params as {id:string}).id;
+   const ids=(req.body as {departmentIds?:unknown}|undefined)?.departmentIds;
+   if(!uuid.test(id)||!Array.isArray(ids)||ids.length>12||
+      !ids.every(value=>typeof value==='string'&&uuid.test(value))||
+      new Set(ids).size!==ids.length)
+     return reply.code(400).send({error:'Vínculos de departamentos inválidos'});
+   const outcome=await transaction(async c=>{
+     await requireCurrentActor(c,admin);
+     const account=await c.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[id]);
+     if(!account.rowCount)return 'NOT_FOUND';
+     const existing=await c.query('SELECT department_id FROM user_departments WHERE user_id=$1 ORDER BY department_id',[id]);
+     const oldIds=existing.rows.map(row=>row.department_id as string);
+     const desired=[...ids].sort();
+     if(JSON.stringify(oldIds)===JSON.stringify(desired))return 'OK';
+     const allowed=await c.query('SELECT id FROM departments WHERE id=ANY($1::uuid[]) AND active=true FOR SHARE',[desired]);
+     if(allowed.rowCount!==desired.length)return 'INVALID_DEPARTMENT';
+     await c.query('DELETE FROM user_departments WHERE user_id=$1',[id]);
+     for(const departmentId of desired)await c.query('INSERT INTO user_departments(user_id,department_id) VALUES($1,$2)',[id,departmentId]);
+     // A department cannot grant READ. Invalidate sessions to remain safe if
+     // a future release starts using this membership for further policy.
+     await c.query('UPDATE users SET auth_revision=auth_revision+1 WHERE id=$1',[id]);
+     await c.query('DELETE FROM sessions WHERE user_id=$1',[id]);
+     await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'USER_DEPARTMENTS_UPDATED',$2)",[admin.id,id]);
+     return 'OK';
+   });
+   if(outcome==='NOT_FOUND')return reply.code(404).send({error:'Usuário não encontrado'});
+   if(outcome==='INVALID_DEPARTMENT')return reply.code(400).send({error:'Departamento inexistente ou inativo'});
+   return {ok:true};
+ });
  app.get('/admin/users',async req=>{
    const a=await requireActor(req);requireAdmin(a);
    const users=await transaction(async c=>{
      await requireCurrentActor(c,a);
-     const r=await c.query('SELECT id,email,role,active,must_change_password FROM users ORDER BY created_at DESC LIMIT 200');
+     const r=await c.query(`SELECT u.id,u.email,u.role,u.active,u.must_change_password,
+       (SELECT COALESCE(array_agg(ud.department_id ORDER BY ud.department_id),'{}'::uuid[])
+        FROM user_departments ud WHERE ud.user_id=u.id) AS department_ids
+       FROM users u ORDER BY u.created_at DESC LIMIT 200`);
      return r.rows;
    });
    return {users};
