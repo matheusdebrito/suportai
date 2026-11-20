@@ -13,6 +13,9 @@ test('technical questions require a knowledge lookup; greetings and write propos
  assert.equal(shouldForceKnowledgeLookup('Como configurar uma VLAN?'),true);
  assert.equal(shouldForceKnowledgeLookup('Qual o procedimento de backup?'),true);
  assert.equal(shouldForceKnowledgeLookup('Oi, bom dia'),false);
+ assert.equal(shouldForceKnowledgeLookup('Bom dia, qual é o procedimento de backup?'),true);
+ assert.equal(shouldForceKnowledgeLookup('Oi! Como reiniciar o serviço VPN?'),true);
+ assert.equal(shouldForceKnowledgeLookup('Obrigado, explique a política de acesso'),true);
  assert.equal(shouldForceKnowledgeLookup('Adicione este procedimento'),false);
 });
 test('unsourced technical explanations are always labeled non-validated',()=>{

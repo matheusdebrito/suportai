@@ -47,6 +47,13 @@ test('a greeting is answered without forced lookup',async()=>{
  assert.equal(observed[0].tool_choice,'auto');
  assert.equal(result.sources.length,0);
 });
+test('a technical question prefixed by a greeting still forces evidence lookup',async()=>{
+ const observed:any[]=[];
+ const fake=fakeLLM([{role:'assistant',content:'Execute esta configuração interna.'}],observed);
+ const result=await respond(actor,randomUUID(),'Bom dia, qual é o procedimento interno para VPN?',[],fake);
+ assert.equal(observed[0].tool_choice.function.name,'search_knowledge');
+ assert.match(result.answer,/não um procedimento interno validado/i);
+});
 test('every model tool call is answered, including calls beyond the limit',async()=>{
  const observed:any[]=[];
  const fake=fakeLLM([
