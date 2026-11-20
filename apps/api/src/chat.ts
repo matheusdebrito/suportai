@@ -2,6 +2,7 @@ import type {FastifyInstance} from 'fastify';
 import {query} from './db.js';
 import {requireActor} from './auth.js';
 import {respond} from './agent.js';
+import {hasSecrets} from './knowledge.js';
 export function registerChat(app:FastifyInstance) {
  app.post('/conversations',async req=>{
    const actor=await requireActor(req);
@@ -24,6 +25,7 @@ export function registerChat(app:FastifyInstance) {
    const a=await requireActor(req);const id=(req.params as {id:string}).id;
    const b=req.body as {message?:unknown}|undefined;
    if(typeof b?.message!=='string'||b.message.trim().length===0||b.message.length>4000) return reply.code(400).send({error:'Mensagem inválida'});
+   if(hasSecrets(b.message)) return reply.code(422).send({error:'Possível credencial detectada. Remova senhas e tokens antes de enviar.'});
    const conv=await query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2',[id,a.id]);
    if(!conv.rowCount) return reply.code(404).send({error:'Conversa não encontrada'});
    const previous=await query('SELECT role,content FROM messages WHERE conversation_id=$1 AND auth_revision=$2 ORDER BY created_at DESC LIMIT 8',[id,a.auth_revision]);
