@@ -8,7 +8,7 @@
 - [x] T004 [REQ-006..REQ-010; AC-005..AC-007] Validar conversação, tool calling, citações ancoradas, respostas sem evidência e perguntas de esclarecimento.
 - [x] T005 [REQ-014..REQ-021; AC-010..AC-014, AC-022] Validar prévia, confirmação, proteção contra duplicidade, revisão, autoaprovação permitida e publicação atômica.
 - [x] T006 [REQ-005, REQ-023; AC-004, AC-015] Testar prompt injection em PDFs e memória após revogação, incluindo mensagens em trânsito.
-- [ ] T007 [REQ-022, REQ-024..REQ-026; AC-015..AC-018] Testar detecção de segredos, feedback, auditoria, reintentos, falhas controladas e recuperação.
+- [x] T007 [REQ-022, REQ-024..REQ-026; AC-015..AC-018] Testar detecção de segredos, feedback, auditoria, reintentos, falhas controladas e recuperação **com fixtures e banco de CI** (PRs #13, #21, #53 e #56). Não equivale a recuperação de produção (T027).
 - [ ] T008 [REQ-001..REQ-029] Executar typecheck, testes, instalação limpa, CI, revisão de segurança e teste de restauração de backup antes de produção.
 - [ ] T009 [REQ-012] Decidir necessidade de OCR de PDFs escaneados; sem OCR no primeiro incremento.
 - [ ] T010 [REQ-008, REQ-022] Aprovar provedores e política de processamento de dados reais antes de disponibilizar material interno.
@@ -57,3 +57,14 @@ Concluir somente após execução real com banco, API, worker e UI, além de rev
 - **T027/T008:** restauração em CI e preflight de configuração do PR #48 não substituem DR operacional, revisão do provedor, controles no host, monitoramento e deploy real.
 - **T009:** OCR ainda fora do escopo aprovado para o MVP.
 - **T010:** política contratual de IA e processamento de dados internos depende de autorização específica da organização.
+
+## Continuidade após PRs #52–#57
+
+- [x] Correspondência **exata** de endereços IPv4/URLs nas fontes do RAG (PR #52, CI aprovada). Não é avaliação semântica de conteúdo.
+- [x] Integridade da auditoria de ações críticas com PostgreSQL e teste de não persistência de credenciais sintéticas no metadata dos eventos (PR #53, CI aprovada).
+- [x] PDF fictício com ação URI que aponta para servidor local: extração não realizou requisições (PR #54, CI aprovada). Não demonstra isolamento total de rede.
+- [x] Comando de **diagnóstico** de controles Linux para o worker, sem implantar políticas automaticamente (PR #55, CI aprovada).
+- [x] Sanitização de mensagens imprevistas nos logs HTTP/agente e nos erros persistidos pelo worker (PR #56, CI aprovada).
+- [x] Conjunto pequeno de exemplos sintéticos positivos e negativos para duplicidade de conteúdo (PR #57, CI aprovada). T026 continua aberta para calibração com corpus independente revisado.
+
+**Dependências ainda abertas, sem autorização inferida:** T008/T010/T014/T025/T027 exigem ambiente/provedor/política e revisão humana. T028/T031 exigem verificação de sandbox no host de implantação. T009 (OCR) requer decisão de escopo. T013 permanece como validação manual de UX. Nenhum desses itens deve ser concluído apenas por CI verde.

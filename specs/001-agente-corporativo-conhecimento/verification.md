@@ -101,3 +101,16 @@ Os seguintes PRs são evidência de **implementação e CI** (não de homologaç
 4. Piloto humano de TI com dados sintéticos e análise qualitativa de respostas, falsos positivos de duplicidade e UX.
 
 **Parecer mantido:** código em evolução com automação relevante; **NÃO APROVADO PARA DADOS INTERNOS REAIS** sem evidências externas. Não houve deploy nem migrações de produção.
+
+## Verificação complementar — PRs #52–#57
+
+| PR | Evidência de CI | Resultado e limitação |
+| --- | --- | --- |
+| [#52](https://github.com/matheusdebrito/suportai/pull/52) | [CI #44823624760](https://github.com/matheusdebrito/suportai/actions/runs/44823624760) | Correspondência exata de IP/URL com fontes; não prova aderência semântica de toda a resposta |
+| [#53](https://github.com/matheusdebrito/suportai/pull/53) | [CI #44824135148](https://github.com/matheusdebrito/suportai/actions/runs/44824135148) | Auditoria crítica e não exposição de segredos sintéticos em metadados testados |
+| [#54](https://github.com/matheusdebrito/suportai/pull/54) | [CI #44824084573](https://github.com/matheusdebrito/suportai/actions/runs/44824084573) | Ação URI no PDF não acionou servidor-canário; teste não impõe bloqueio de rede no SO |
+| [#55](https://github.com/matheusdebrito/suportai/pull/55) | [CI #44824386142](https://github.com/matheusdebrito/suportai/actions/runs/44824386142) | Diagnóstico sintético Linux não-root/capabilities/seccomp/NoNewPrivs; verificação do host real não executada |
+| [#56](https://github.com/matheusdebrito/suportai/pull/56) | [CI #44824723183](https://github.com/matheusdebrito/suportai/actions/runs/44824723183) | Erros internos imprevistos não expostos em logs e status do worker testados |
+| [#57](https://github.com/matheusdebrito/suportai/pull/57) | [CI #44824923174](https://github.com/matheusdebrito/suportai/actions/runs/44824923174) | Casos sintéticos de similaridade positivos e negativos; precisão/recall real não medidos |
+
+**Parecer atualizado: APROVADO COM RESSALVAS apenas para integrar essas mudanças de código.** T007 tem verificação automatizada de seus cenários sintéticos, mas o aplicativo **permanece NÃO APROVADO para dados internos reais e produção**, pelos bloqueios de fornecedor, avaliação adversarial com modelo real, isolamento PDF no SO, operação e recuperação em ambiente de destino e piloto humano de TI. Nenhum deploy ou migração de produção ocorreu nesta rodada.
