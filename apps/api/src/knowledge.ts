@@ -431,12 +431,42 @@ export function registerKnowledge(app:FastifyInstance) {
    return result;
  });
  app.post('/feedback',async(req,reply)=>{
-   const a=await requireActor(req);
-   const b=req.body as {messageId?:unknown;rating?:unknown;comment?:unknown}|undefined;
-   if(typeof b?.messageId!=='string'||!['GOOD','BAD'].includes(String(b.rating))||typeof b.comment==='string'&&b.comment.length>1000) return reply.code(400).send({error:'Feedback inválido'});
-   const r=await query(`INSERT INTO feedback(user_id,message_id,rating,comment)
-     SELECT $1,m.id,$3,$4 FROM messages m JOIN conversations c ON c.id=m.conversation_id
-     WHERE m.id=$2 AND c.user_id=$1 RETURNING id`,[a.id,b.messageId,b.rating,typeof b.comment==='string'?b.comment:null]);
-   return r.rowCount?{ok:true}:reply.code(404).send({error:'Mensagem não encontrada'});
+   const actor=await requireActor(req);
+   const body=req.body as {messageId?:unknown;rating?:unknown;comment?:unknown}|undefined;
+   if(typeof body?.messageId!=='string'||!['GOOD','BAD'].includes(String(body.rating))
+     ||(body.comment!==undefined && body.comment!==null && typeof body.comment!=='string'))
+     return reply.code(400).send({error:'Feedback inválido'});
+   const comment=typeof body.comment==='string'?body.comment.trim():null;
+   if(comment && comment.length>1000)
+     return reply.code(400).send({error:'Comentário excede 1.000 caracteres'});
+   if(comment && hasSecrets(comment))
+     return reply.code(422).send({error:'Possível credencial detectada no comentário'});
+   const result=await transaction(async c=>{
+     // Locking the assistant message serializes retries and concurrent ratings.
+     const message=await c.query('SELECT m.id FROM messages m JOIN conversations x ON x.id=m.conversation_id '+
+       "WHERE m.id=$1 AND x.user_id=$2 AND m.auth_revision=$3 AND m.role='assistant' FOR UPDATE OF m",
+       [body.messageId,actor.id,actor.auth_revision]);
+     if(!message.rowCount)return {error:'NOT_FOUND'} as const;
+     const account=await c.query('SELECT auth_revision,active FROM users WHERE id=$1 FOR SHARE',[actor.id]);
+     if(!account.rowCount||!account.rows[0].active||account.rows[0].auth_revision!==actor.auth_revision)
+       return {error:'REVOKED'} as const;
+     const previous=await c.query('SELECT id FROM feedback WHERE user_id=$1 AND message_id=$2 '+
+       'ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE',[actor.id,body.messageId]);
+     if(previous.rowCount){
+       await c.query('UPDATE feedback SET rating=$2,comment=$3 WHERE id=$1',
+         [previous.rows[0].id,body.rating,comment]);
+     }else{
+       await c.query('INSERT INTO feedback(user_id,message_id,rating,comment) VALUES($1,$2,$3,$4)',
+         [actor.id,body.messageId,body.rating,comment]);
+     }
+     await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'ASSISTANT_FEEDBACK_SAVED',$2)",
+       [actor.id,body.messageId]);
+     return {ok:true,rating:body.rating,comment};
+   });
+   if('error' in result)return reply.code(result.error==='REVOKED'?403:404).send({
+     error:result.error==='REVOKED'?'Sessão ou permissões alteradas':'Mensagem do agente não encontrada'
+   });
+   return result;
  });
+
 }

@@ -33,9 +33,16 @@ export function registerChat(app:FastifyInstance) {
    const a=await requireActor(req);const id=(req.params as {id:string}).id;
    const r=await query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2',[id,a.id]);
    if(!r.rowCount) return reply.code(404).send({error:'Conversa não encontrada'});
-   const messages=await query(`SELECT id,role,content,sources,created_at FROM messages
-     WHERE conversation_id=$1 AND auth_revision=$2
-     ORDER BY created_at DESC,id DESC LIMIT 100`,[id,a.auth_revision]);
+   const messages=await query(`SELECT m.id,m.role,m.content,m.sources,m.created_at,
+       f.rating AS feedback_rating,f.comment AS feedback_comment
+     FROM messages m
+     LEFT JOIN LATERAL (
+       SELECT rating,comment FROM feedback
+       WHERE user_id=$3 AND message_id=m.id AND m.role='assistant'
+       ORDER BY created_at DESC,id DESC LIMIT 1
+     ) f ON true
+     WHERE m.conversation_id=$1 AND m.auth_revision=$2
+     ORDER BY m.created_at DESC,m.id DESC LIMIT 100`,[id,a.auth_revision,a.id]);
    const pending=await query(`SELECT p.id,p.title,p.content,s.name AS "spaceName"
      FROM pending_actions p JOIN spaces s ON s.id=p.space_id
      LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2
