@@ -19,11 +19,14 @@ export function validEmail(v:unknown):v is string {return typeof v==='string' &&
 function strongPassword(v:unknown):v is string {return typeof v==='string'&&v.length>=12&&v.length<=256;}
 async function resetTokenFor(userId:string,admin:Actor):Promise<string|null> {
  const raw=token();
+ // Invalidate the previous password immediately. A reset token, not a stale
+ // password, must be the only way to regain access after an admin reset.
+ const unusablePassword=await argon2.hash(token());
  const eligible=await transaction(async c=>{
    await requireCurrentActor(c,admin);
    const account=await c.query('SELECT active FROM users WHERE id=$1 FOR UPDATE',[userId]);
    if(!account.rowCount||!account.rows[0].active)return false;
-   await c.query('UPDATE users SET must_change_password=true,auth_revision=auth_revision+1 WHERE id=$1',[userId]);
+   await c.query('UPDATE users SET password_hash=$2,must_change_password=true,auth_revision=auth_revision+1 WHERE id=$1',[userId,unusablePassword]);
    await c.query('DELETE FROM sessions WHERE user_id=$1',[userId]);
    await c.query('DELETE FROM password_resets WHERE user_id=$1',[userId]);
    await c.query("INSERT INTO password_resets(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '15 minutes')",[hashToken(raw),userId]);
