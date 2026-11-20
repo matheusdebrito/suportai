@@ -24,7 +24,7 @@ Concluir somente após execução real com banco, API, worker e UI, além de rev
 
 - [x] T015 [REQ-018, REQ-020, AC-013, AC-014] Aprovador solicita ajustes/rejeita com parecer; autor cria nova versão de artigo sem sobrescrever a anterior; autorização e concorrência validadas em integração PostgreSQL.
 - [x] T016 [REQ-012, REQ-018, REQ-020; AC-014] Reenvio de PDF com ajustes, mantendo o documento e criando nova versão; permissões, concorrência, worker e publicação verificados com PostgreSQL real.
-- [ ] T017 [REQ-015, AC-011] Verificar visualmente a comparação antes/depois nas interfaces de edição e revisão.
+- [x] T017 [REQ-015, AC-011] Comparação antes/depois em edição e revisão validada com Chromium no PR #18.
 
 - [x] T018 [REQ-016, AC-012] Identificação de artigos publicados semelhantes no mesmo espaço antes da criação por painel ou conversa; prosseguir exige justificativa e gera evento auditável. Testado com PostgreSQL.
 - [x] T019 [REQ-016, AC-012] Fluxo de duplicidade e abertura do artigo existente verificado com Chromium, no E2E editorial.
@@ -41,3 +41,7 @@ Concluir somente após execução real com banco, API, worker e UI, além de rev
 - [ ] T026 [REQ-016; AC-012] Evoluir similaridade além de títulos quando existirem dados sintéticos/curados suficientes para avaliar falsos positivos e omissões.
 - [ ] T027 [REQ-026; AC-018] Ensaio de backup e restauração em banco vazio, rollback e verificação operacional antes da liberação real.
 - [ ] T028 [REQ-012, REQ-022, AC-009, AC-015] Testes adicionais com PDFs maliciosos, protegidos e malformados em isolamento; não confundir processo-filho com sandbox de sistema operacional.
+
+- [x] T029 [REQ-012, REQ-020; AC-009, AC-014] Chromium verificou a nova versão de PDF publicado, pedido de ajustes, reenvio do PDF corrigido, reindexação e republicação do documento (PR #18).
+- [x] T030 [REQ-026; AC-018] GitHub Actions executa pg_dump/pg_restore de banco fictício, compara estrutura, extensão vector, tabelas, bytes de PDFs, versões e chunks de conhecimento (PR #19).
+- [ ] T031 [REQ-012, REQ-022; AC-009, AC-015] Revisão e classificação dos casos de arquivos PDF adversariais antes de usar arquivos sensíveis; testes do PR #20 são sintéticos e não constituem uma sandbox de sistema operacional.

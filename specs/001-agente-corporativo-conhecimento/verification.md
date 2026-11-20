@@ -53,6 +53,12 @@
 - Worker podia ser retomado após timeout e sobrescrever trechos. Bloqueio por token de lease, retentativas limitadas e testadas no PR #13.
 - Revogação podia concorrer com gravação da resposta do agente. Verificação transacional e teste de concorrência no PR #12.
 
+## Incrementos de verificação (20/11/2026)
+
+- [PR #18](https://github.com/matheusdebrito/suportai/pull/18): Playwright/Chromium cobre diferenças entre versões de artigos, revisão de PDF publicado, devolução para ajustes, reenvio e nova publicação.
+- [PR #19](https://github.com/matheusdebrito/suportai/pull/19): CI executa backup PostgreSQL 17 e restauração em segundo banco descartável com dados fictícios, comparando tabelas, PDFs, versões e chunks do RAG. Não substitui ensaio operacional de produção.
+- [PR #20](https://github.com/matheusdebrito/suportai/pull/20): cenários negativos de ingestão de PDF com extensão/MIME divergentes, cabeçalho forjado e credencial sintética. Validação final condicionada à CI do PR.
+
 ## Pendências para ambiente real
 
 1. **Avaliar LLM externo e provedor de embeddings** com autorização formal para processamento de dados internos; `ALLOW_EXTERNAL_AI_DATA_PROCESSING=false` permanece padrão.
