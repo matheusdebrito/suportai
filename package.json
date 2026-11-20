@@ -1,0 +1,17 @@
+{
+  "name": "suportai",
+  "private": true,
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w @suportai/api",
+    "dev:web": "npm run dev -w @suportai/web",
+    "build": "npm run build -w @suportai/api && npm run build -w @suportai/web",
+    "typecheck": "npm run typecheck -w @suportai/api && npm run typecheck -w @suportai/web",
+    "test": "npm run test -w @suportai/api",
+    "db:migrate": "npm run migrate -w @suportai/api",
+    "admin:bootstrap": "npm run bootstrap -w @suportai/api"
+  }
+}
