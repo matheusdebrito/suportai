@@ -9,7 +9,8 @@
     "test": "node --import tsx --test src/**/*.test.ts",
     "migrate": "tsx src/migrate.ts",
     "bootstrap": "tsx src/bootstrap.ts",
-    "worker": "tsx src/worker.ts"
+    "worker": "tsx src/worker.ts",
+    "rag:evaluate": "tsx src/rag-evaluation.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.0",
