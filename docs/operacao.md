@@ -74,7 +74,7 @@ Além de contagens, validar integridade referencial, usuários, versões publica
 ## Restrições conhecidas
 
 - PDFs digitalizados sem texto não usam OCR.
-- Parser de PDF em processo filho tem tempo/heap/saída limitados, **não é sandbox de SO**.
+- Em desenvolvimento, o leitor de PDFs usa processo filho com limites. **Em produção, só opera via serviço separado por socket Unix**, com parser sem rede no Compose seguro. O CI confirma esse isolamento somente no runner; o host real ainda exige verificação.
 - Detecção de segredos é heurística, não substitui classificação/revisão humana.
 - Modelo externo depende de autorização de processamento; configuração da chave sozinha não habilita o envio de dados.
 - Logs não devem conter arquivos, senhas, tokens temporários ou conteúdo privado.
@@ -96,7 +96,18 @@ O comando valida uma lista curta de pré-requisitos: HTTPS em `APP_ORIGIN`, URL 
 No **ambiente de destino**, executar o diagnóstico como o mesmo usuário/contêiner e sob as mesmas políticas com que o worker será iniciado:
 
 ```bash
+# No código-fonte (tsx disponível):
 npm run pdf:security-preflight -w @suportai/api
+# Na imagem compilada de produção, executar sob a política real de contêiner:
+node apps/api/dist/pdf-isolation-preflight.js
 ```
 
 O comando lê apenas UID e controles do próprio processo via `/proc/self/status`. Não utiliza rede, banco de dados, PDFs ou segredos. Confere processo não-root, `NoNewPrivs`, ausência de capacidades efetivas e seccomp. Falhar em qualquer controle **bloqueia a aprovação operacional**, mas um resultado positivo não comprova sandbox do leitor: ainda se deve demonstrar que o subprocesso de extração não acessa rede, arquivos privados ou serviços internos, com filesystem somente leitura e limites reais de CPU/memória. A aplicação não habilita isolamento automaticamente; providencie-o na infraestrutura com política revisada antes de PDFs não confiáveis.
+
+## Estado da infraestrutura de implantação (PRs #59–#65)
+
+- `deploy/compose.production.yml`: parser sem rede; API, worker e banco separados; segredos via arquivos. O overlay `deploy/compose.external-ai.yml` é **opcional** e requer aprovação do provedor, firewall de destino e custos.
+- `deploy/test-pdf-isolation.sh`: teste Docker em CI de PDF fictício, extração por socket, ausência de credenciais do parser e falha fechada ao interromper o serviço.
+- `deploy/backup.sh`, `deploy/verify-restore.sh`, `deploy/monitor.sh`: ferramentas para operadores autorizados, sem agendamento automático nem transmissão a armazenamento remoto.
+
+**Ação humana obrigatória:** executar verificações equivalentes no host de destino, definir estratégia de retenção/backup externo e obter autorização para dados reais e chamadas ao LLM. Os PRs não executaram deploy, migração de produção nem uso de documentos internos.

@@ -68,3 +68,15 @@ Concluir somente após execução real com banco, API, worker e UI, além de rev
 - [x] Conjunto pequeno de exemplos sintéticos positivos e negativos para duplicidade de conteúdo (PR #57, CI aprovada). T026 continua aberta para calibração com corpus independente revisado.
 
 **Dependências ainda abertas, sem autorização inferida:** T008/T010/T014/T025/T027 exigem ambiente/provedor/política e revisão humana. T028/T031 exigem verificação de sandbox no host de implantação. T009 (OCR) requer decisão de escopo. T013 permanece como validação manual de UX. Nenhum desses itens deve ser concluído apenas por CI verde.
+
+## Reconciliação dos PRs #59–#65 (novembro de 2026)
+
+- [x] Parser separado por socket Unix e falha fechada em produção sem serviço isolado (PR #59; CI #44828392842)
+- [x] Imagens de produção, TLS/Compose, redes internas e montagens de segredos por arquivo (PR #60; CI #44829723138)
+- [x] Scripts de backup e restauração em PostgreSQL temporário **sem rede**, mais monitoramento numérico (PR #61; CI #44830308954)
+- [x] Auditoria das dependências de produção na alteração dos manifestos (PR #62; audit #44830779456)
+- [x] CI executou contêiner do parser sem rede, extração real de PDF fictício por socket Unix, teste sem segredos e parada do parser com falha fechada; corrigidos preflights compilados (PR #63; CI #44834957130)
+- [x] Avaliador sintético RAG rejeita versão falsa, endereço sem fonte e escolha unilateral em contexto ambíguo (PR #64; CI #44835446428)
+- [x] Overlay de rede externo **opt-in** para worker, mantendo parser sem rede; teste de ambas topologias sem conexões externas (PR #65; CI #44835861529 e rede #44835861539)
+
+**Não concluir apenas com evidência de CI:** T008/T013/T014/T025/T026/T027/T028/T031 permanecem abertas na parte que envolve homologação humana, avaliação com LLM autorizado, calibração com corpus independente, controles do host real e continuidade/recuperação operacional. T009 segue fora do escopo sem aprovação. T010 depende de decisão da organização sobre provedor/retencão/custos. Nenhum deploy de produção foi executado.

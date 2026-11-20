@@ -53,6 +53,8 @@ Há testes de integração com PostgreSQL, testes de ponta a ponta com Chromium 
 - [Tarefas de validação](specs/001-agente-corporativo-conhecimento/tasks.md)
 - [Verificação de critérios do MVP](specs/001-agente-corporativo-conhecimento/verification.md)
 - [Runbook de operação e recuperação](docs/operacao.md)
+- [Implantação isolada por contêiner](docs/implantacao-container.md)
+- [Backup, restauração e monitoramento](docs/backup-restore-automation.md)
 - [Avaliação sintética do RAG](docs/avaliacao-rag.md)
 - [Testes e riscos residuais de PDFs](docs/avaliacao-pdf.md)
 
