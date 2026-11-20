@@ -250,5 +250,21 @@ test.describe('fluxo editorial com worker real',()=>{
    await page.getByRole('button',{name:'Conhecimento',exact:true}).click();
    await page.locator('button.item',{hasText:pdfName}).click();
    await expect(page.locator('.document')).toContainText('integridade dos backups');
+
+   // Archive and restore from the real browser. No archived knowledge can
+   // remain visible as a published document between these actions.
+   page.once('dialog',dialog=>{void dialog.accept();});
+   await page.getByRole('button',{name:'Arquivar documento'}).click();
+   await expect(page.locator('button.item',{hasText:pdfName})).toHaveCount(0);
+
+   await page.getByRole('button',{name:'Revisão',exact:true}).click();
+   const archivedPdf=page.locator('.draft-item',{hasText:pdfName});
+   await expect(archivedPdf).toContainText('Arquivado em');
+   page.once('dialog',dialog=>{void dialog.accept();});
+   await archivedPdf.getByRole('button',{name:'Restaurar versão publicada'}).click();
+   await expect(archivedPdf).toHaveCount(0);
+
+   await page.getByRole('button',{name:'Conhecimento',exact:true}).click();
+   await expect(page.locator('button.item',{hasText:pdfName})).toBeVisible();
  });
 });
