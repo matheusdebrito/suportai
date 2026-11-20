@@ -90,3 +90,13 @@ NODE_ENV=production npm run preflight -w @suportai/api
 O comando valida uma lista curta de pré-requisitos: HTTPS em `APP_ORIGIN`, URL de banco presente, ausência de segredos de bootstrap e configuração coerente de envio externo de IA. Ele não abre conexões nem escreve no banco.
 
 **Preflight verde não aprova produção.** Verificar manualmente isolamento do processamento de PDFs, TLS/reverse proxy, teste de restauração em banco separado, backups externos, RPO/RTO, monitoramento do worker e filas, política de retenção, implantação/rollback e autorização da empresa para usar dados internos e provedor de IA.
+
+## Diagnóstico básico do isolamento do worker (Linux)
+
+No **ambiente de destino**, executar o diagnóstico como o mesmo usuário/contêiner e sob as mesmas políticas com que o worker será iniciado:
+
+```bash
+npm run pdf:security-preflight -w @suportai/api
+```
+
+O comando lê apenas UID e controles do próprio processo via `/proc/self/status`. Não utiliza rede, banco de dados, PDFs ou segredos. Confere processo não-root, `NoNewPrivs`, ausência de capacidades efetivas e seccomp. Falhar em qualquer controle **bloqueia a aprovação operacional**, mas um resultado positivo não comprova sandbox do leitor: ainda se deve demonstrar que o subprocesso de extração não acessa rede, arquivos privados ou serviços internos, com filesystem somente leitura e limites reais de CPU/memória. A aplicação não habilita isolamento automaticamente; providencie-o na infraestrutura com política revisada antes de PDFs não confiáveis.

@@ -10,6 +10,7 @@
     "migrate": "tsx src/migrate.ts",
     "bootstrap": "tsx src/bootstrap.ts",
     "worker": "tsx src/worker.ts",
+    "pdf:security-preflight": "tsx src/pdf-isolation-preflight.ts",
     "preflight": "tsx src/preflight.ts",
     "rag:evaluate": "tsx src/rag-evaluation.ts"
   },
