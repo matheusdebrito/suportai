@@ -173,6 +173,31 @@ test.describe('fluxo editorial com worker real',()=>{
    await page.locator('.duplicate-item',{hasText:title}).getByRole('button',{name:'Abrir artigo'}).click();
    await expect(page.locator('.document')).toContainText(title);
 
+   // Negative uploads exercise the actual browser/API boundary.
+   const chooser=page.locator('label.upload input[type=file]');
+   await chooser.setInputFiles({name:'forged-upload.txt',mimeType:'text/plain',
+     buffer:Buffer.from('%PDF-1.7\\nnot-a-real-pdf')});
+   await expect(page.getByRole('alert')).toContainText('Formato não suportado');
+   const blankPdf=await PDFDocument.create();
+   blankPdf.addPage([600,400]);
+   const blankName='sem-texto-'+Date.now()+'.pdf';
+   await chooser.setInputFiles({name:blankName,mimeType:'application/pdf',
+     buffer:Buffer.from(await blankPdf.save({useObjectStreams:false}))});
+   await expect.poll(async()=>{
+     const response=await page.request.get('http://localhost:5173/knowledge/mine');
+     const result=await response.json() as {drafts:{title:string;index_status:string}[]};
+     return result.drafts.find(d=>d.title===blankName)?.index_status;
+   },{timeout:30_000}).toBe('FAILED');
+   await page.getByRole('button',{name:'Atualizar',exact:true}).click();
+   const blankDraft=page.locator('.draft-item',{hasText:blankName});
+   await expect(blankDraft).toContainText('FAILED');
+   await expect(blankDraft.getByRole('button',{name:'Enviar para revisão'})).toHaveCount(0);
+
+   const tooLarge=Buffer.alloc(8*1024*1024+8192,0x20);
+   tooLarge.write('%PDF-1.7');
+   const uploadResponse=page.waitForResponse(r=>r.url().includes('/knowledge/pdfs')&&r.request().method()==='POST');
+   await chooser.setInputFiles({name:'mais-de-8mb.pdf',mimeType:'application/pdf',buffer:tooLarge});
+   expect((await uploadResponse).status()).toBe(413);
    const pdf=await PDFDocument.create();
    const pagePdf=pdf.addPage([600,400]);
    const font=await pdf.embedFont(StandardFonts.Helvetica);
