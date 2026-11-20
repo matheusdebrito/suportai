@@ -473,7 +473,7 @@ export function registerKnowledge(app:FastifyInstance) {
      if(pending.expires_at<=new Date()) return {error:'EXPIRED'};
      const p=await spacePermission(a,pending.space_id);
      if(!p?.edit) return {error:'FORBIDDEN'};
-     if(hasSecrets(pending.content)) return {error:'SECRETS'};
+     if(hasSecrets(pending.title)||hasSecrets(pending.content)) return {error:'SECRETS'};
      let docId=pending.document_id;let version=1;
      let similarCount=0;
      if(docId){
@@ -502,7 +502,7 @@ export function registerKnowledge(app:FastifyInstance) {
    });
    if('error' in result){
      if(result.error==='SIMILAR_ARTICLES' && 'matches' in result)return reply.code(409).send({error:'Há artigos semelhantes. Abra o existente ou justifique a criação de outro.',code:'SIMILAR_ARTICLES',matches:result.matches});
-     return reply.code(result.error==='FORBIDDEN'?403:result.error==='NOT_FOUND'?404:409).send({error:result.error});
+     return reply.code(result.error==='FORBIDDEN'?403:result.error==='NOT_FOUND'?404:result.error==='SECRETS'?422:409).send({error:result.error});
    }
    return result;
  });
