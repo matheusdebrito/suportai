@@ -3,6 +3,7 @@ import {extractPdfText} from './pdf-extract.js';
 import {pool,query} from './db.js';
 import {chunks,hasSecrets} from './knowledge.js';
 import {embedText} from './llm.js';
+import {safeWorkerFailure} from './safe-errors.js';
 import {claimJob,renewLease,storeClaimedResult,failClaimedJob,expireStaleJobs} from './worker-jobs.js';
 
 async function processNext():Promise<boolean>{
@@ -32,8 +33,7 @@ async function processNext():Promise<boolean>{
    }
    await storeClaimedResult(job,text,parts,vectors);
  }catch(e){
-   const message=e instanceof Error?e.message:'Falha desconhecida';
-   await failClaimedJob(job,message);
+   await failClaimedJob(job,safeWorkerFailure(e));
  }
  return true;
 }
@@ -43,7 +43,7 @@ process.on('SIGTERM',()=>{running=false;});
 process.on('SIGINT',()=>{running=false;});
 while(running){
  const found=await processNext().catch(e=>{
-   console.error('Worker job failure',e instanceof Error?e.message:'unknown');
+   console.error('Worker job failure',safeWorkerFailure(e));
    return false;
  });
  if(!found)await new Promise(r=>setTimeout(r,1500));

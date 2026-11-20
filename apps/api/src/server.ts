@@ -9,6 +9,7 @@ import {registerKnowledge} from './knowledge.js';
 import {registerChat} from './chat.js';
 import {registerOperations} from './operations.js';
 import {respond} from './agent.js';
+import {safeErrorType} from './safe-errors.js';
 export async function buildApp(options:{agentResponder?:typeof respond}={}){
  const app=Fastify({logger:{redact:['req.headers.authorization','req.headers.cookie','res.headers.set-cookie']},bodyLimit:200_000});
  const origin=process.env.APP_ORIGIN||'http://localhost:5173';
@@ -32,7 +33,7 @@ export async function buildApp(options:{agentResponder?:typeof respond}={}){
  app.setErrorHandler((error,req,reply)=>{
    const err=error as Error & {statusCode?:number};
    const code=typeof err.statusCode==='number' && err.statusCode>=400 && err.statusCode<500?err.statusCode:500;
-   if(code===500) req.log.error({err:err.message},'Request failed');
+   if(code===500) req.log.error({errorType:safeErrorType(err)},'Request failed');
    reply.code(code).send({error:code===500?'Erro interno':err.message});
  });
  return app;

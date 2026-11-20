@@ -4,6 +4,7 @@ import {requireActor} from './auth.js';
 import {requireCurrentActor} from './security.js';
 import {respond} from './agent.js';
 import {hasSecrets} from './knowledge.js';
+import {safeErrorType} from './safe-errors.js';
 export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond) {
  app.post('/conversations',async req=>{
    const actor=await requireActor(req);
@@ -169,7 +170,7 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
        return reply.code(404).send({error:'A conversa foi excluída enquanto o agente respondia'});
      if((error as {statusCode?:number})?.statusCode===409)
        return reply.code(409).send({error:'O procedimento consultado foi arquivado ou atualizado. Refaça a pergunta para buscar a versão atual.'});
-     req.log.error({err:error instanceof Error?error.message:'unknown'},'Agent execution failed');
+     req.log.error({errorType:safeErrorType(error)},'Agent execution failed');
      return reply.code(503).send({error:'Não foi possível consultar o agente agora. Tente novamente.'});
    }
  });
