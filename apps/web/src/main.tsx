@@ -241,6 +241,20 @@ function App(){
   </nav><div className="sidebar-footer"><div className="identity">{user.email}<small>{user.role}</small></div><button onClick={logout}><LogOut size={17}/> Sair</button></div></aside>
  <main className="main"><header><div><strong>{tab==='chat'?'Assistente':tab==='knowledge'?'Base de conhecimento':tab==='reviews'?'Central de revisão':'Administração'}</strong><p>{tab==='chat'?'Pergunte, investigue e registre soluções com segurança.':'Conhecimento revisado, rastreável e acessível.'}</p></div>{tab==='chat'&&<button className="secondary" disabled={busy||conversationLoading} onClick={newConversation}><Plus size={16}/> Nova conversa</button>}</header>
  {error&&<div className="error" role="alert">{error}<button className="ghost" onClick={()=>setError('')}>Fechar</button></div>}
+ {duplicatePrompt&&<section className="panel duplicate-panel" aria-label="Possíveis artigos duplicados">
+  <h3>Encontramos artigos semelhantes a “{duplicatePrompt.title}”</h3>
+  <p className="hint">Evite criar um procedimento duplicado. Você pode abrir o conteúdo existente e propor uma atualização, ou justificar a criação de um artigo diferente.</p>
+  <div className="duplicates-list">{duplicatePrompt.matches.map(match=><div key={match.id} className="duplicate-item"><span><BookOpen size={16}/>{match.title}</span><button className="secondary" onClick={()=>{void openDoc(match.id);setDuplicatePrompt(null);}}>Abrir artigo</button></div>)}</div>
+  <form onSubmit={continueDuplicate}>
+    <label>Por que é necessário criar outro artigo?
+      <textarea required minLength={15} maxLength={500} rows={2} value={duplicateReason}
+        onChange={e=>setDuplicateReason(e.target.value)} placeholder="Explique a diferença do novo procedimento..."/>
+    </label>
+    <div className="actions"><button>Criar novo artigo com justificativa</button>
+      <button type="button" className="secondary" onClick={()=>{setDuplicatePrompt(null);setDuplicateReason('');}}>Cancelar</button>
+    </div>
+  </form>
+ </section>}
  {tab==='chat'&&<div className="chat-layout"><aside className="conversations-panel"><div className="conversations-heading"><strong>Conversas</strong><button className="secondary" disabled={busy||conversationLoading} onClick={()=>void refreshConversations().catch(failed)} aria-label="Atualizar conversas"><RotateCcw size={15}/></button></div>{conversations.length===0?<p className="hint">Suas conversas aparecem aqui depois da primeira mensagem.</p>:conversations.map(c=><button key={c.id} disabled={busy||conversationLoading} className={'conversation-item '+(conversationId===c.id?'selected':'')} onClick={()=>void openConversation(c.id)}><span>{c.title}</span><small>{new Date(c.updated_at).toLocaleDateString('pt-BR',{day:'2-digit',month:'short'})}</small></button>)}</aside><section className="chat"><div className="chat-history">{conversationLoading&&<p className="hint"><LoaderCircle className="spin" size={16}/> Abrindo conversa...</p>}{messages.length===0&&<div className="empty"><BrainCircuit size={40}/><h2>Como posso ajudar?</h2><p>Consulte procedimentos, investigue problemas ou peça para preparar um artigo no cérebro.</p><div className="suggestions">{['Como consultar procedimentos de rede?','Como registrar um procedimento novo?','O que fazer quando um servidor não responde?'].map(x=><button key={x} onClick={()=>setInput(x)}>{x}</button>)}</div></div>}
   {messages.map((m,i)=><div className={'bubble '+m.role} key={m.id||i}><div className="bubble-role">{m.role==='user'?'Você':'SuportAI'}</div><div className="formatted">{m.content}</div>{Boolean(m.sources?.length)&&<div className="sources"><strong>Fontes consultadas</strong>{m.sources!.map((s,j)=><button key={j} onClick={()=>openSource(s.documentId,s.versionId)}>{s.title} · versão {s.versionNumber??s.versionId.slice(0,8)}</button>)}</div>}</div>)}
   {busy&&<p className="hint"><LoaderCircle className="spin" size={16}/> Consultando conhecimento...</p>}
