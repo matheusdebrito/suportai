@@ -64,6 +64,47 @@ jobs:
           TEST_DATABASE_URL: postgres://suportai:test_password@localhost:5432/suportai_e2e
           E2E_ADMIN_EMAIL: e2e-admin@example.test
           E2E_ADMIN_PASSWORD: E2e-Secure-Password-Example-123!
+      - name: Validate PostgreSQL backup and restore (disposable CI databases only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This is restricted to the ephemeral GitHub Actions PostgreSQL service.
+          # No production URL is used; the source database contains synthetic E2E data.
+          container="$(docker ps --filter ancestor=pgvector/pgvector:pg17 --format '{{.ID}}' | head -n 1)"
+          test -n "$container"
+          docker exec "$container" pg_dump -U suportai -d suportai_e2e --no-owner --no-acl \
+            --format=custom --file=/tmp/suportai-ci-backup.dump
+          docker exec "$container" pg_restore --list /tmp/suportai-ci-backup.dump > /dev/null
+          docker exec "$container" psql -X -v ON_ERROR_STOP=1 -U suportai -d postgres \
+            -c 'CREATE DATABASE suportai_restore_ci'
+          docker exec "$container" pg_restore --exit-on-error --no-owner --no-acl \
+            -U suportai --dbname=suportai_restore_ci /tmp/suportai-ci-backup.dump
+          for table in schema_migrations users sessions password_resets spaces space_grants \
+            documents document_versions ingestion_jobs knowledge_chunks \
+            conversations messages pending_actions feedback audit_events; do
+            source_count="$(docker exec "$container" psql -XAt -U suportai -d suportai_e2e -c "SELECT count(*) FROM $table")"
+            restored_count="$(docker exec "$container" psql -XAt -U suportai -d suportai_restore_ci -c "SELECT count(*) FROM $table")"
+            if [ "$source_count" != "$restored_count" ]; then
+              echo "Restore mismatch in $table"
+              exit 1
+            fi
+          done
+          # Validate bytea payloads and published-version pointers, not just row counts.
+          for sql in \
+            "SELECT COALESCE(sum(octet_length(pdf_bytes)),0) FROM document_versions" \
+            "SELECT count(*) FROM document_versions WHERE status='PUBLISHED'" \
+            "SELECT count(*) FROM documents WHERE current_version_id IS NOT NULL" \
+            "SELECT count(*) FROM knowledge_chunks WHERE embedding IS NOT NULL"; do
+            before="$(docker exec "$container" psql -XAt -U suportai -d suportai_e2e -c "$sql")"
+            after="$(docker exec "$container" psql -XAt -U suportai -d suportai_restore_ci -c "$sql")"
+            test "$before" = "$after"
+          done
+          # pgcrypto/vector and historical migrations must also survive restoration.
+          docker exec "$container" psql -XAt -v ON_ERROR_STOP=1 -U suportai \
+            -d suportai_restore_ci \
+            -c "SELECT CASE WHEN to_regtype('vector') IS NOT NULL AND to_regclass('public.schema_migrations') IS NOT NULL THEN 'ok' ELSE 'fail' END" \
+            | grep -qx ok
+          echo "Isolated PostgreSQL 17 backup and restore completed successfully"
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
