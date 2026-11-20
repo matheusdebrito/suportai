@@ -78,7 +78,7 @@ test.describe('fluxo editorial com worker real',()=>{
  });
  test.afterAll(()=>{worker?.kill('SIGTERM');});
  test('aprovador publica artigo, identifica duplicidade e publica PDF',async({page})=>{
-   test.setTimeout(120_000);
+   test.setTimeout(230_000);
    const title='Procedimento de rede homologado '+Date.now();
    const approverEmail='e2e-approver-'+Date.now()+'@example.test';
    const approverPassword='Mvp-Secure-Approver-Password-123!';
@@ -158,5 +158,72 @@ test.describe('fluxo editorial com worker real',()=>{
    await pdfReview.getByRole('button',{name:'Publicar'}).click();
    await page.getByRole('button',{name:'Conhecimento',exact:true}).click();
    await expect(page.locator('button.item',{hasText:pdfName})).toBeVisible();
+
+   // Revising an article must render its before/after summary without overwriting the live document.
+   await page.locator('button.item',{hasText:title}).click();
+   await page.getByRole('button',{name:'Criar revisão deste artigo'}).click();
+   await page.getByLabel('Procedimento').fill('Revisão para homologação: verifique os servidores DNS, confirme a resolução e registre o resultado na auditoria.');
+   await page.getByText('Comparar alterações com a versão publicada').click();
+   await expect(page.locator('.diff-added')).toContainText('Revisão para homologação');
+   await expect(page.locator('.diff-removed')).toContainText('Confira o DNS');
+   await page.getByRole('button',{name:'Salvar proposta de revisão'}).click();
+   await waitIndexed(title);
+   const articleDraft=page.locator('.draft-item',{hasText:title});
+   await articleDraft.getByRole('button',{name:'Enviar para revisão'}).click();
+   await page.getByRole('button',{name:'Revisão',exact:true}).click();
+   const revisionReview=page.locator('.review',{hasText:title});
+   await expect(revisionReview).toBeVisible();
+   await revisionReview.getByText('O que mudou em relação à versão publicada?').click();
+   await expect(revisionReview.locator('.diff-added')).toContainText('Revisão para homologação');
+   await revisionReview.getByRole('button',{name:'Publicar'}).click();
+
+   // A published PDF can be updated in-place while its current version stays visible.
+   await page.getByRole('button',{name:'Conhecimento',exact:true}).click();
+   await page.locator('button.item',{hasText:pdfName}).click();
+   await page.getByRole('button',{name:'Enviar nova versão deste PDF'}).click();
+   const newPdf=await PDFDocument.create();
+   const revisedPdfPage=newPdf.addPage([600,400]);
+   const pdfFont=await newPdf.embedFont(StandardFonts.Helvetica);
+   revisedPdfPage.drawText('Checklist de infraestrutura revisado: registre auditoria, backups, disponibilidade e logs de suporte.',{
+     x:30,y:330,size:12,font:pdfFont,maxWidth:540
+   });
+   await page.locator('label.upload input[type=file]').setInputFiles({
+     name:'proposta-corrigida.pdf',mimeType:'application/pdf',
+     buffer:Buffer.from(await newPdf.save({useObjectStreams:false}))
+   });
+   await waitIndexed(pdfName);
+   await page.getByRole('button',{name:'Atualizar',exact:true}).click();
+   const currentPdfDraft=page.locator('.draft-item',{hasText:pdfName});
+   await currentPdfDraft.getByRole('button',{name:'Enviar para revisão'}).click();
+   await page.getByRole('button',{name:'Revisão',exact:true}).click();
+   const currentPdfReview=page.locator('.review',{hasText:pdfName});
+   await currentPdfReview.getByRole('button',{name:'Solicitar ajustes'}).click();
+   await currentPdfReview.getByPlaceholder('Escreva um parecer claro para o autor...').fill('Adicione a verificação de integridade dos backups ao checklist de infraestrutura.');
+   await currentPdfReview.getByRole('button',{name:'Enviar pedido de ajustes'}).click();
+   await page.getByRole('button',{name:'Conhecimento',exact:true}).click();
+   const correctionDraft=page.locator('.draft-item',{hasText:pdfName});
+   await expect(correctionDraft).toContainText('Ajustes solicitados');
+   await expect(correctionDraft).toContainText('verificação de integridade');
+   await correctionDraft.getByRole('button',{name:'Enviar PDF corrigido'}).click();
+   await expect(page.getByText('Selecionar arquivo corrigido: '+pdfName)).toBeVisible();
+   const finalPdf=await PDFDocument.create();
+   const finalPage=finalPdf.addPage([600,400]);
+   finalPage.drawText('Checklist atualizado: valide a integridade dos backups, analise logs e registre evidencias de cada verificacao.',{
+     x:30,y:330,size:12,font:pdfFont,maxWidth:540
+   });
+   await page.locator('label.upload input[type=file]').setInputFiles({
+     name:'versao-final.pdf',mimeType:'application/pdf',
+     buffer:Buffer.from(await finalPdf.save({useObjectStreams:false}))
+   });
+   await waitIndexed(pdfName);
+   await page.getByRole('button',{name:'Atualizar',exact:true}).click();
+   const finalDraft=page.locator('.draft-item',{hasText:pdfName});
+   await expect(finalDraft).not.toContainText('Ajustes solicitados');
+   await finalDraft.getByRole('button',{name:'Enviar para revisão'}).click();
+   await page.getByRole('button',{name:'Revisão',exact:true}).click();
+   await page.locator('.review',{hasText:pdfName}).getByRole('button',{name:'Publicar'}).click();
+   await page.getByRole('button',{name:'Conhecimento',exact:true}).click();
+   await page.locator('button.item',{hasText:pdfName}).click();
+   await expect(page.locator('.document')).toContainText('integridade dos backups');
  });
 });
