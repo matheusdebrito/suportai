@@ -23,7 +23,8 @@ export function inspectPdfWorkerIsolation(snapshot:IsolationSnapshot):string[]{
 }
 
 export function isIsolationPreflightEntrypoint(path:string|undefined):boolean{
- return /(?:^|[\\/])pdf-isolation-preflight\\.(?:js|ts)$/.test(path??'');
+ const filename=path?.replaceAll(String.fromCharCode(92),'/').split('/').pop();
+ return filename==='pdf-isolation-preflight.ts'||filename==='pdf-isolation-preflight.js';
 }
 if(isIsolationPreflightEntrypoint(process.argv[1])){
  let status:string|undefined;
