@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {readFile} from 'node:fs/promises';
 import {spawn,type ChildProcess} from 'node:child_process';
 import {PDFDocument,StandardFonts} from 'pdf-lib';
 
@@ -192,6 +193,19 @@ test.describe('fluxo editorial com worker real',()=>{
    const blankDraft=page.locator('.draft-item',{hasText:blankName});
    await expect(blankDraft).toContainText('FAILED');
    await expect(blankDraft.getByRole('button',{name:'Enviar para revisão'})).toHaveCount(0);
+
+   const encryptedName='protegido-'+Date.now()+'.pdf';
+   const encrypted=await readFile(new URL('../apps/api/test-fixtures/encrypted-lab.pdf',import.meta.url));
+   await chooser.setInputFiles({name:encryptedName,mimeType:'application/pdf',buffer:encrypted});
+   await expect.poll(async()=>{
+     const response=await page.request.get('http://localhost:5173/knowledge/mine');
+     const result=await response.json() as {drafts:{title:string;index_status:string}[]};
+     return result.drafts.find(d=>d.title===encryptedName)?.index_status;
+   },{timeout:30_000}).toBe('FAILED');
+   await page.getByRole('button',{name:'Atualizar',exact:true}).click();
+   const encryptedDraft=page.locator('.draft-item',{hasText:encryptedName});
+   await expect(encryptedDraft).toContainText('FAILED');
+   await expect(encryptedDraft.getByRole('button',{name:'Enviar para revisão'})).toHaveCount(0);
 
    const tooLarge=Buffer.alloc(8*1024*1024+8192,0x20);
    tooLarge.write('%PDF-1.7');
