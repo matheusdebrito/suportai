@@ -27,8 +27,8 @@ async function createVersion(actor:Actor,spaceId:string,title:string,content:str
      const doc=await c.query('INSERT INTO documents(space_id,title,kind) VALUES($1,$2,$3) RETURNING id',[spaceId,title,kind]);
      docId=doc.rows[0].id;
    }
-   const ver=await c.query(`INSERT INTO document_versions(document_id,version_number,status,content,pdf_bytes,authored_by)
-    VALUES($1,$2,'DRAFT',$3,$4,$5) RETURNING id`,[docId,versionNo,content,pdfBytes??null,actor.id]);
+   const ver=await c.query(`INSERT INTO document_versions(document_id,version_number,status,content,pdf_bytes,authored_by,base_version_id)
+    VALUES($1,$2,'DRAFT',$3,$4,$5,$6) RETURNING id`,[docId,versionNo,content,pdfBytes??null,actor.id,baseVersionId??null]);
    await c.query('INSERT INTO ingestion_jobs(version_id) VALUES($1)',[ver.rows[0].id]);
    await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'KNOWLEDGE_DRAFT_CREATED',$2)",[actor.id,docId]);
    return {documentId:docId!,versionId:ver.rows[0].id};
@@ -106,7 +106,7 @@ export function registerKnowledge(app:FastifyInstance) {
    const v=await query('SELECT d.space_id,v.authored_by FROM document_versions v JOIN documents d ON d.id=v.document_id WHERE v.id=$1',[id]);
    if(!v.rowCount) return reply.code(404).send({error:'Versão não encontrada'});
    const p=await spacePermission(a,v.rows[0].space_id);
-   if(!p?.edit && v.rows[0].authored_by!==a.id) return reply.code(403).send({error:'Sem permissão'});
+   if(!p?.edit) return reply.code(403).send({error:'Sem permissão'});
    const r=await query("UPDATE document_versions SET status='IN_REVIEW' WHERE id=$1 AND status='DRAFT' RETURNING id",[id]);
    return r.rowCount?{ok:true}:reply.code(409).send({error:'Estado inválido'});
  });
@@ -124,6 +124,7 @@ export function registerKnowledge(app:FastifyInstance) {
      if(a.role!=='APPROVER'||!(v.visibility==='SHARED'||v.can_approve)) return 'FORBIDDEN';
      if(v.status==='PUBLISHED'&&v.current_version_id===v.id) return 'OK';
      if(v.status!=='IN_REVIEW'||v.index_status!=='READY') return 'NOT_READY';
+     if(v.current_version_id!==v.base_version_id) return 'STALE';
      if(v.current_version_id) await c.query("UPDATE document_versions SET status='ARCHIVED' WHERE id=$1",[v.current_version_id]);
      await c.query("UPDATE document_versions SET status='PUBLISHED',reviewed_by=$2,reviewed_at=now() WHERE id=$1",[id,a.id]);
      await c.query('UPDATE documents SET current_version_id=$2 WHERE id=$1',[v.document_id,id]);
@@ -133,6 +134,7 @@ export function registerKnowledge(app:FastifyInstance) {
    if(outcome==='NOT_FOUND') return reply.code(404).send({error:'Versão não encontrada'});
    if(outcome==='FORBIDDEN') return reply.code(403).send({error:'Aprovação não autorizada'});
    if(outcome==='NOT_READY') return reply.code(409).send({error:'Versão não está revisada/indexada'});
+   if(outcome==='STALE') return reply.code(409).send({error:'Outra versão foi publicada. Atualize a revisão antes de publicar'});
    return {ok:true};
  });
  app.post('/knowledge/versions/:id/reject',async(req,reply)=>{
@@ -169,7 +171,7 @@ export function registerKnowledge(app:FastifyInstance) {
        const doc=await c.query("INSERT INTO documents(space_id,title,kind) VALUES($1,$2,'ARTICLE') RETURNING id",[pending.space_id,pending.title]);
        docId=doc.rows[0].id;
      }
-     const v=await c.query("INSERT INTO document_versions(document_id,version_number,status,content,authored_by) VALUES($1,$2,'DRAFT',$3,$4) RETURNING id",[docId,version,pending.content,a.id]);
+     const v=await c.query("INSERT INTO document_versions(document_id,version_number,status,content,authored_by,base_version_id) VALUES($1,$2,'DRAFT',$3,$4,$5) RETURNING id",[docId,version,pending.content,a.id,pending.base_version_id]);
      await c.query('INSERT INTO ingestion_jobs(version_id) VALUES($1)',[v.rows[0].id]);
      await c.query('UPDATE pending_actions SET result_version_id=$2,confirmed_at=now() WHERE id=$1',[id,v.rows[0].id]);
      await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'KNOWLEDGE_DRAFT_CREATED',$2)",[a.id,docId]);

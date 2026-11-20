@@ -51,6 +51,7 @@ CREATE TABLE documents (
 CREATE TABLE document_versions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   document_id uuid NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  base_version_id uuid REFERENCES document_versions(id),
   version_number integer NOT NULL,
   status text NOT NULL CHECK (status IN ('DRAFT','IN_REVIEW','PUBLISHED','REJECTED','ARCHIVED')),
   index_status text NOT NULL DEFAULT 'PENDING' CHECK (index_status IN ('PENDING','READY','FAILED')),
