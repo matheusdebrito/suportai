@@ -116,7 +116,7 @@ test.describe('fluxo editorial com worker real',()=>{
    );
    await page.getByRole('button',{name:'Criar rascunho'}).click();
    await waitIndexed(title);
-   await page.getByRole('button',{name:'Atualizar'}).click();
+   await page.getByRole('button',{name:'Atualizar',exact:true}).click();
    const draft=page.locator('.draft-item',{hasText:title});
    await expect(draft).toContainText('READY');
    await draft.getByRole('button',{name:'Enviar para revisão'}).click();
@@ -148,7 +148,7 @@ test.describe('fluxo editorial com worker real',()=>{
      name:pdfName,mimeType:'application/pdf',buffer:bytes
    });
    await waitIndexed(pdfName);
-   await page.getByRole('button',{name:'Atualizar'}).click();
+   await page.getByRole('button',{name:'Atualizar',exact:true}).click();
    const pdfDraft=page.locator('.draft-item',{hasText:pdfName});
    await expect(pdfDraft).toContainText('READY');
    await pdfDraft.getByRole('button',{name:'Enviar para revisão'}).click();
