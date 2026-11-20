@@ -48,8 +48,19 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      ? ({type:'function',function:{name:'search_knowledge'}} as const)
      : ('auto' as const);
    const completion=await provider.chat.completions.create({model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',messages,tools:availableTools,tool_choice:toolChoice,temperature:0.2,max_tokens:1400});
-   const message=completion.choices[0]?.message;
+   const choice=completion.choices[0];
+   const message=choice?.message;
    if(!message) throw new Error('Resposta vazia do provedor');
+   // Do not present incomplete procedural instructions as a finished answer.
+   // A truncated tool call must never be executed, and a partial answer must
+   // not inherit citations as evidence of a complete response.
+   if(choice.finish_reason==='length'||choice.finish_reason==='content_filter'){
+     const reason=choice.finish_reason==='length'
+       ? 'A resposta da IA foi interrompida pelo limite de tamanho.'
+       : 'A resposta da IA foi interrompida pelo filtro do provedor.';
+     return {answer:reason+' Não execute instruções parciais. Reformule a pergunta ou divida o procedimento em etapas.',
+       sources:[],pendingActions};
+   }
    messages.push(message);
    if(!message.tool_calls?.length) return {answer:groundedReply(message.content||'Não consegui concluir a resposta.',forceLookup,sources.length),sources,pendingActions};
    for(const [index,call] of message.tool_calls.entries()){
