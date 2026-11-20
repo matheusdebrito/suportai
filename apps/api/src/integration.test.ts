@@ -68,6 +68,13 @@ if(!process.env.TEST_DATABASE_URL){
    }
    const grantedSpaces=await app.inject({method:'GET',url:'/spaces',headers:auth(reader.cookie)});
    assert.equal(grantedSpaces.json().spaces.find((x:any)=>x.id===shared).can_edit,true);
+   // A secret in metadata is just as sensitive as a secret in article content.
+   const secretTitle=await app.inject({method:'POST',url:'/knowledge/articles',
+     headers:auth(reader.cookie),payload:{spaceId:shared,
+       title:'Acesso VPN password=Senha#Segura2026!',
+       content:'Este procedimento fictício não deve ser armazenado porque o título contém uma credencial.'}});
+   assert.equal(secretTitle.statusCode,422,secretTitle.body);
+   assert.doesNotMatch(secretTitle.body,/Senha#Segura2026!/);
    const reviewerSpaces=await app.inject({method:'GET',url:'/spaces',headers:auth(reviewer.cookie)});
    assert.equal(reviewerSpaces.json().spaces.find((x:any)=>x.id===shared).can_approve,true);
 
@@ -99,6 +106,20 @@ if(!process.env.TEST_DATABASE_URL){
    const proposed=await app.inject({method:'POST',url:'/conversations',headers:auth(reader.cookie)});
    assert.equal(proposed.statusCode,200);
    const conversationId=proposed.json().id as string;
+   // Historical/untrusted pending proposals must be validated again on
+   // confirmation, regardless of the tool's current preflight checks.
+   const forgedPending=await query(
+     'INSERT INTO pending_actions(user_id,conversation_id,space_id,title,content) '+
+     'VALUES($1,$2,$3,$4,$5) RETURNING id',
+     [reader.id,conversationId,shared,'VPN password=Senha#Segura2026!',
+       'Este conteúdo fictício deve ser recusado devido à credencial inserida no título.']);
+   const deniedPending=await app.inject({method:'POST',
+     url:'/knowledge/pending/'+forgedPending.rows[0].id+'/confirm',headers:auth(reader.cookie)});
+   assert.equal(deniedPending.statusCode,422,deniedPending.body);
+   assert.doesNotMatch(deniedPending.body,/Senha#Segura2026!/);
+   const blockedRecord=await query('SELECT result_version_id FROM pending_actions WHERE id=$1',[forgedPending.rows[0].id]);
+   assert.equal(blockedRecord.rows[0].result_version_id,null);
+   await query('DELETE FROM pending_actions WHERE id=$1',[forgedPending.rows[0].id]);
    const editorActor=await actorForSession(reader.cookie.split('=')[1]);
    assert.ok(editorActor);
    let draftCalls=0;
@@ -623,6 +644,9 @@ if(!process.env.TEST_DATABASE_URL){
      return app.inject({method:'POST',url:'/knowledge/pdfs',
        headers:{...auth(reader.cookie),'content-type':'multipart/form-data; boundary='+b},payload});
    }
+   const secretPdfFilename=await negativePdfUpload(pdfBytes,'password=Senha#Segura2026!.pdf');
+   assert.equal(secretPdfFilename.statusCode,422,secretPdfFilename.body);
+   assert.doesNotMatch(secretPdfFilename.body,/Senha#Segura2026!/);
    const fakePdf=await negativePdfUpload(Buffer.from('not a pdf at all'));
    assert.equal(fakePdf.statusCode,415,'A file extension and MIME cannot bypass header validation');
    const wrongMime=await negativePdfUpload(pdfBytes,'documento.pdf','application/octet-stream');
