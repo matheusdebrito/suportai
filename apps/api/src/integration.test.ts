@@ -499,6 +499,71 @@ if(!process.env.TEST_DATABASE_URL){
    assert.equal(historicalPdf.statusCode,200);
    assert.equal(historicalPdf.json().version.status,'ARCHIVED');
 
+
+   // Negative PDF fixtures: failures must be explicit and must never publish partial content.
+   async function negativePdfUpload(bytes:Buffer,filename='suspeito.pdf',mime='application/pdf'){
+     const b='adversarial-'+randomUUID();
+     const payload=Buffer.concat([
+       Buffer.from('--'+b+'\r\nContent-Disposition: form-data; name="spaceId"\r\n\r\n'+shared+'\r\n'+
+         '--'+b+'\r\nContent-Disposition: form-data; name="file"; filename="'+filename+'"\r\n'+
+         'Content-Type: '+mime+'\r\n\r\n'),
+       bytes,Buffer.from('\r\n--'+b+'--\r\n')
+     ]);
+     return app.inject({method:'POST',url:'/knowledge/pdfs',
+       headers:{...auth(reader.cookie),'content-type':'multipart/form-data; boundary='+b},payload});
+   }
+   const fakePdf=await negativePdfUpload(Buffer.from('not a pdf at all'));
+   assert.equal(fakePdf.statusCode,415,'A file extension and MIME cannot bypass header validation');
+   const wrongMime=await negativePdfUpload(pdfBytes,'documento.pdf','application/octet-stream');
+   assert.equal(wrongMime.statusCode,415,'A PDF with an unexpected MIME type must be rejected');
+   const wrongExt=await negativePdfUpload(pdfBytes,'documento.txt');
+   assert.equal(wrongExt.statusCode,415,'A non-PDF file extension must be rejected');
+
+   // A forged PDF header is not a valid document. The parser runs in an isolated
+   // subprocess and the worker must record failure without publishing anything.
+   const forged=await negativePdfUpload(Buffer.from('%PDF-1.7\n1 0 obj\nbroken document\n%%EOF'));
+   assert.equal(forged.statusCode,201,forged.body);
+   const forgedId=forged.json().versionId as string;
+   for(let attempt=0;attempt<50;attempt++){
+     const r=await query('SELECT index_status FROM document_versions WHERE id=$1',[forgedId]);
+     if(['FAILED','READY'].includes(r.rows[0]?.index_status))break;
+     await new Promise(resolve=>setTimeout(resolve,300));
+   }
+   const forgedStatus=await query('SELECT index_status FROM document_versions WHERE id=$1',[forgedId]);
+   assert.equal(forgedStatus.rows[0].index_status,'FAILED');
+   const forgedPublish=await app.inject({method:'POST',url:'/knowledge/versions/'+forgedId+'/publish',
+     headers:auth(reviewer.cookie),payload:{confirm:true}});
+   assert.equal(forgedPublish.statusCode,409);
+   const forgedReader=await app.inject({method:'GET',url:'/knowledge/documents/'+forged.json().documentId,
+     headers:auth(reader.cookie)});
+   assert.equal(forgedReader.statusCode,404);
+
+   // A plausible PDF containing a leaked credential must fail processing,
+   // without ever entering approved RAG or leaking the credential into an error.
+   const secretPdf=await PDFDocument.create();
+   const secretPage=secretPdf.addPage([600,400]);
+   const secretFont=await secretPdf.embedFont(StandardFonts.Helvetica);
+   secretPage.drawText('Checklist interno de testes: api_key=abcdefghijklmnop. Nao publique segredos ou tokens de acesso.',{
+     x:30,y:330,size:12,font:secretFont,maxWidth:540
+   });
+   const secretBytes=Buffer.from(await secretPdf.save({useObjectStreams:false}));
+   const secretUpload=await negativePdfUpload(secretBytes);
+   assert.equal(secretUpload.statusCode,201,secretUpload.body);
+   const secretId=secretUpload.json().versionId as string;
+   for(let attempt=0;attempt<50;attempt++){
+     const state=await query('SELECT index_status FROM document_versions WHERE id=$1',[secretId]);
+     if(state.rows[0]?.index_status==='FAILED')break;
+     await new Promise(resolve=>setTimeout(resolve,300));
+   }
+   const leakedJob=await query('SELECT j.error,v.index_status FROM ingestion_jobs j '+
+     'JOIN document_versions v ON v.id=j.version_id WHERE j.version_id=$1',[secretId]);
+   assert.equal(leakedJob.rows[0].index_status,'FAILED');
+   assert.match(leakedJob.rows[0].error,/credencial/i);
+   assert.doesNotMatch(leakedJob.rows[0].error,/abcdefghijklmnop/);
+   const secretPublished=await app.inject({method:'GET',url:'/knowledge/documents/'+secretUpload.json().documentId,
+     headers:auth(reader.cookie)});
+   assert.equal(secretPublished.statusCode,404);
+
    const restrictedDenied=await app.inject({method:'POST',url:'/knowledge/articles',headers:auth(reader.cookie),payload:{spaceId:restricted,title:'Restrito '+id,content:'Este texto somente deve ser acessado por leitores especificamente autorizados.'}});
    assert.equal(restrictedDenied.statusCode,403);
 
