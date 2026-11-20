@@ -36,3 +36,11 @@ Para cada cenário, marcar **APROVADO**, **FALHOU** ou **NÃO VERIFICADO**, incl
 ## Política antes de usar dados reais
 
 Uma chave de API não constitui aprovação. O mecanismo `ALLOW_EXTERNAL_AI_DATA_PROCESSING` continua desabilitado por padrão. A avaliação real depende de decisão humana sobre provedor, custos, retenção e autorização de processamento; esta documentação não altera essa decisão.
+
+## Executável opcional para modelo real — somente fixtures sintéticas
+
+- `npm run rag:evaluate -w @suportai/api`: imprime **somente** a lista de cenários; nenhum dado é enviado nem há conexão de rede.
+- `EVAL_SYNTHETIC_LLM_APPROVED=true OPENAI_API_KEY=... npm run rag:evaluate -w @suportai/api -- --run`: executa os cinco cenários fictícios com modelo real, **somente após autorização específica do provedor/custos**.
+- Não usa banco, projetos, documentos reais, sessões ou conteúdo do usuário. A busca é injetada e fornece apenas os trechos fictícios codificados no arquivo.
+- Registre modelo, data, resultados, saída completa e avaliação humana. Os critérios automáticos são sinais iniciais e podem classificar incorretamente respostas válidas.
+- Não configure o modo de execução externa em pipelines ou tarefas automáticas. Mantenha a configuração de produção de envio externo inalterada.
