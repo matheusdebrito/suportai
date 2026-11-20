@@ -22,6 +22,14 @@ test('cadastro, primeiro acesso, conhecimento, conversa e feedback sobrevivem ao
  await page.getByLabel('E-mail').fill(memberEmail);
  // O formulário inicia com perfil Colaborador; não depender do nome acessível das opções.
  await page.getByRole('button',{name:'Criar usuário'}).click();
+ const access=page.getByLabel('Conceder acesso a '+memberEmail);
+ const grantOption=access.locator('option',{hasText:'Conhecimento geral — Leitura e edição'});
+ const grantValue=await grantOption.getAttribute('value');
+ expect(grantValue).toBeTruthy();
+ await Promise.all([
+   page.waitForResponse(r=>r.url().includes('/grants')&&r.request().method()==='POST'&&r.ok()),
+   access.selectOption(grantValue!)
+ ]);
  const code=page.locator('.pending code');
  await expect(code).toBeVisible();
  const temporaryCode=(await code.innerText()).trim();
@@ -92,6 +100,14 @@ test.describe('fluxo editorial com worker real',()=>{
    await page.getByLabel('E-mail').fill(approverEmail);
    await page.locator('section.panel').filter({has:page.getByRole('heading',{name:'Cadastrar colaborador'})}).locator('select').selectOption('APPROVER');
    await page.getByRole('button',{name:'Criar usuário'}).click();
+   const access=page.getByLabel('Conceder acesso a '+approverEmail);
+   const grantOption=access.locator('option',{hasText:'Conhecimento geral — Leitura, edição e aprovação'});
+   const grantValue=await grantOption.getAttribute('value');
+   expect(grantValue).toBeTruthy();
+   await Promise.all([
+     page.waitForResponse(r=>r.url().includes('/grants')&&r.request().method()==='POST'&&r.ok()),
+     access.selectOption(grantValue!)
+   ]);
    const temporary=(await page.locator('.pending code').innerText()).trim();
    expect(temporary.length).toBeGreaterThan(20);
    await page.getByRole('button',{name:'Sair'}).click();
@@ -104,8 +120,9 @@ test.describe('fluxo editorial com worker real',()=>{
    const waitIndexed=async(documentTitle:string)=>{
      await expect.poll(async()=>{
        const response=await page.request.get('http://localhost:5173/knowledge/mine');
-       const data=await response.json() as {drafts:{title:string;index_status:string}[]};
-       return data.drafts.find(d=>d.title===documentTitle)?.index_status||'MISSING';
+       const data=await response.json() as {drafts:{title:string;status:string;index_status:string}[]};
+       // Multiple versions can share a title; only wait for the new DRAFT.
+       return data.drafts.find(d=>d.title===documentTitle&&d.status==='DRAFT')?.index_status||'MISSING';
      },{timeout:60_000,intervals:[500,1000,1500]}).toBe('READY');
    };
 

@@ -51,7 +51,7 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
      LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2
      WHERE p.conversation_id=$1 AND p.user_id=$2
        AND p.result_version_id IS NULL AND p.expires_at>now()
-       AND (s.visibility='SHARED' OR COALESCE(g.can_edit,false))
+       AND (s.visibility='SHARED' OR COALESCE(g.can_read,false)) AND COALESCE(g.can_edit,false)
      ORDER BY p.expires_at DESC LIMIT 10`,[id,a.id]);
    return {id,messages:messages.rows.reverse(),pendingActions:pending.rows};
  });

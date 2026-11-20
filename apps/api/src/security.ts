@@ -14,11 +14,11 @@ export async function actorForSession(raw: string | undefined): Promise<Actor | 
 export function canRead(visibility: string, grant?:{can_read?:boolean}|null) {
   return visibility === 'SHARED' || Boolean(grant?.can_read);
 }
-export function canEdit(visibility: string, grant?:{can_edit?:boolean}|null) {
-  return visibility === 'SHARED' || Boolean(grant?.can_edit);
+export function canEdit(visibility: string, grant?:{can_edit?:boolean;can_read?:boolean}|null) {
+  return canRead(visibility,grant) && Boolean(grant?.can_edit);
 }
-export function canApprove(role:string,visibility:string, grant?:{can_approve?:boolean}|null) {
-  return role === 'APPROVER' && (visibility === 'SHARED' || Boolean(grant?.can_approve));
+export function canApprove(role:string,visibility:string, grant?:{can_approve?:boolean;can_read?:boolean}|null) {
+  return role === 'APPROVER' && canRead(visibility,grant) && Boolean(grant?.can_approve);
 }
 export async function spacePermission(actor:Actor, spaceId:string) {
  const r=await query(`SELECT s.visibility,g.can_read,g.can_edit,g.can_approve FROM spaces s

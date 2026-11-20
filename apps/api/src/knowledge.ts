@@ -91,7 +91,7 @@ export function registerKnowledge(app:FastifyInstance) {
      LEFT JOIN ingestion_jobs j ON j.version_id=v.id
      WHERE v.authored_by=$1 AND v.status IN ('DRAFT','IN_REVIEW','CHANGES_REQUESTED','REJECTED') AND v.superseded_by IS NULL
        AND d.archived_at IS NULL
-       AND (s.visibility='SHARED' OR COALESCE(g.can_edit,false))
+       AND (s.visibility='SHARED' OR COALESCE(g.can_read,false)) AND COALESCE(g.can_edit,false)
      ORDER BY v.created_at DESC,v.id DESC LIMIT 100`,[a.id]);
    return {drafts:r.rows};
  });
@@ -107,7 +107,7 @@ export function registerKnowledge(app:FastifyInstance) {
      WHERE v.id=$1 AND v.authored_by=$2
        AND v.status IN ('DRAFT','IN_REVIEW','CHANGES_REQUESTED','REJECTED') AND v.superseded_by IS NULL
        AND d.archived_at IS NULL
-       AND (s.visibility='SHARED' OR COALESCE(g.can_edit,false))`,[id,a.id]);
+       AND (s.visibility='SHARED' OR COALESCE(g.can_read,false)) AND COALESCE(g.can_edit,false)`,[id,a.id]);
    if(!r.rowCount) throw Object.assign(new Error('Rascunho não encontrado'),{statusCode:404});
    return r.rows[0];
  });
@@ -189,7 +189,7 @@ export function registerKnowledge(app:FastifyInstance) {
     LEFT JOIN document_versions base ON base.id=v.base_version_id
     LEFT JOIN ingestion_jobs j ON j.version_id=v.id
     LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$1
-    WHERE v.status='IN_REVIEW' AND v.superseded_by IS NULL AND (s.visibility='SHARED' OR COALESCE(g.can_approve,false))
+    WHERE v.status='IN_REVIEW' AND v.superseded_by IS NULL AND (s.visibility='SHARED' OR COALESCE(g.can_read,false)) AND COALESCE(g.can_approve,false)
     ORDER BY v.created_at DESC LIMIT 100`,[a.id]);
    return {reviews:r.rows};
  });
@@ -214,14 +214,14 @@ export function registerKnowledge(app:FastifyInstance) {
    const id=(req.params as {id:string}).id;
    const state=await transaction(async c=>{
      await requireCurrentActor(c,a);
-     const r=await c.query(`SELECT v.id,v.authored_by,v.status,s.visibility,g.can_edit
+     const r=await c.query(`SELECT v.id,v.authored_by,v.status,s.visibility,g.can_read,g.can_edit
        FROM document_versions v JOIN documents d ON d.id=v.document_id
        JOIN spaces s ON s.id=d.space_id
        LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2
        WHERE v.id=$1 FOR UPDATE OF v`,[id,a.id]);
      const version=r.rows[0];
      if(!version||version.authored_by!==a.id)return 'NOT_FOUND';
-     if(!(version.visibility==='SHARED'||version.can_edit))return 'FORBIDDEN';
+     if(!(version.can_edit && (version.visibility==='SHARED'||version.can_read)))return 'FORBIDDEN';
      if(version.status!=='DRAFT')return 'CONFLICT';
      await c.query("UPDATE document_versions SET status='IN_REVIEW' WHERE id=$1",[id]);
      await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'KNOWLEDGE_SUBMITTED_REVIEW',$2)",[a.id,id]);
@@ -239,12 +239,12 @@ export function registerKnowledge(app:FastifyInstance) {
    if(b?.confirm!==true) return reply.code(400).send({error:'Confirmação humana obrigatória'});
    const outcome=await transaction(async c=>{
      await requireCurrentActor(c,a);
-     const r=await c.query(`SELECT v.*,d.space_id,d.current_version_id,s.visibility,g.can_approve
+     const r=await c.query(`SELECT v.*,d.space_id,d.current_version_id,s.visibility,g.can_read,g.can_approve
         FROM document_versions v JOIN documents d ON d.id=v.document_id JOIN spaces s ON s.id=d.space_id
         LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2 WHERE v.id=$1 FOR UPDATE OF v,d`,[id,a.id]);
      const v=r.rows[0];
      if(!v) return 'NOT_FOUND';
-     if(a.role!=='APPROVER'||!(v.visibility==='SHARED'||v.can_approve)) return 'FORBIDDEN';
+     if(a.role!=='APPROVER'||!(v.can_approve && (v.visibility==='SHARED'||v.can_read))) return 'FORBIDDEN';
      if(v.status==='PUBLISHED'&&v.current_version_id===v.id) return 'OK';
      if(v.status!=='IN_REVIEW'||v.index_status!=='READY') return 'NOT_READY';
      if(v.current_version_id!==v.base_version_id) return 'STALE';
@@ -271,13 +271,13 @@ export function registerKnowledge(app:FastifyInstance) {
      return reply.code(400).send({error:'Justificativa obrigatória (10 a 2.000 caracteres, sem credenciais)'});
    const state=await transaction(async c=>{
      await requireCurrentActor(c,actor);
-     const r=await c.query('SELECT v.document_id,v.status,s.visibility,g.can_approve FROM document_versions v '+
+     const r=await c.query('SELECT v.document_id,v.status,s.visibility,g.can_read,g.can_approve FROM document_versions v '+
        'JOIN documents d ON d.id=v.document_id JOIN spaces s ON s.id=d.space_id '+
        'LEFT JOIN space_grants g ON g.user_id=$2 AND g.space_id=s.id '+
        'WHERE v.id=$1 FOR UPDATE OF v,d',[id,actor.id]);
      const item=r.rows[0];
      if(!item)return 'NOT_FOUND';
-     if(actor.role!=='APPROVER'||!(item.visibility==='SHARED'||item.can_approve))return 'FORBIDDEN';
+     if(actor.role!=='APPROVER'||!(item.can_approve && (item.visibility==='SHARED'||item.can_read)))return 'FORBIDDEN';
      if(item.status!=='IN_REVIEW')return 'CONFLICT';
      await c.query("UPDATE document_versions SET status='CHANGES_REQUESTED',reviewed_by=$2,reviewed_at=now(),review_note=$3 WHERE id=$1",[id,actor.id,note]);
      await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'KNOWLEDGE_CHANGES_REQUESTED',$2)",[actor.id,item.document_id]);
@@ -303,10 +303,10 @@ export function registerKnowledge(app:FastifyInstance) {
        'JOIN documents d ON d.id=v.document_id WHERE v.id=$1 FOR UPDATE OF v,d',[id]);
      const ver=r.rows[0];
      if(!ver||ver.authored_by!==actor.id||ver.archived_at)return {error:'NOT_FOUND'};
-     const perm=await c.query('SELECT s.visibility,g.can_edit FROM spaces s '+
+     const perm=await c.query('SELECT s.visibility,g.can_read,g.can_edit FROM spaces s '+
        'LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2 WHERE s.id=$1',[ver.space_id,actor.id]);
      const p=perm.rows[0];
-     if(!(p && (p.visibility==='SHARED'||p.can_edit)))return {error:'FORBIDDEN'};
+     if(!(p && (p.can_edit && (p.visibility==='SHARED'||p.can_read))))return {error:'FORBIDDEN'};
      if(ver.kind!=='ARTICLE')return {error:'UNSUPPORTED'};
      if(ver.status!=='CHANGES_REQUESTED'||ver.superseded_by)return {error:'CONFLICT'};
      if(ver.current_version_id!==ver.base_version_id)return {error:'STALE'};
@@ -349,10 +349,10 @@ export function registerKnowledge(app:FastifyInstance) {
        'JOIN documents d ON d.id=v.document_id WHERE v.id=$1 FOR UPDATE OF v,d',[id]);
      const ver=r.rows[0];
      if(!ver||ver.authored_by!==actor.id||ver.archived_at)return {error:'NOT_FOUND'};
-     const perm=await c.query('SELECT s.visibility,g.can_edit FROM spaces s '+
+     const perm=await c.query('SELECT s.visibility,g.can_read,g.can_edit FROM spaces s '+
        'LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2 WHERE s.id=$1',[ver.space_id,actor.id]);
      const p=perm.rows[0];
-     if(!(p && (p.visibility==='SHARED'||p.can_edit)))return {error:'FORBIDDEN'};
+     if(!(p && (p.can_edit && (p.visibility==='SHARED'||p.can_read))))return {error:'FORBIDDEN'};
      if(ver.kind!=='PDF')return {error:'UNSUPPORTED'};
      if(ver.status!=='CHANGES_REQUESTED'||ver.superseded_by)return {error:'CONFLICT'};
      if(ver.current_version_id!==ver.base_version_id)return {error:'STALE'};
@@ -386,13 +386,13 @@ export function registerKnowledge(app:FastifyInstance) {
      return reply.code(400).send({error:'Informe a justificativa (10 a 2.000 caracteres, sem credenciais)'});
    const state=await transaction(async c=>{
      await requireCurrentActor(c,actor);
-     const r=await c.query('SELECT v.status,v.document_id,s.visibility,g.can_approve FROM document_versions v '+
+     const r=await c.query('SELECT v.status,v.document_id,s.visibility,g.can_read,g.can_approve FROM document_versions v '+
        'JOIN documents d ON d.id=v.document_id JOIN spaces s ON s.id=d.space_id '+
        'LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2 '+
        'WHERE v.id=$1 FOR UPDATE OF v,d',[id,actor.id]);
      const ver=r.rows[0];
      if(!ver)return 'NOT_FOUND';
-     if(actor.role!=='APPROVER'||!(ver.visibility==='SHARED'||ver.can_approve))return 'FORBIDDEN';
+     if(actor.role!=='APPROVER'||!(ver.can_approve && (ver.visibility==='SHARED'||ver.can_read)))return 'FORBIDDEN';
      if(ver.status!=='IN_REVIEW')return 'CONFLICT';
      await c.query("UPDATE document_versions SET status='REJECTED',review_note=$3,reviewed_by=$2,reviewed_at=now() WHERE id=$1",[id,actor.id,note]);
      await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'KNOWLEDGE_REJECTED',$2)",[actor.id,ver.document_id]);

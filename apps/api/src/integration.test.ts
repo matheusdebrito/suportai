@@ -38,10 +38,38 @@ if(!process.env.TEST_DATABASE_URL){
    const admin=await createUser('ADMIN');
    const spaces=await app.inject({method:'GET',url:'/spaces',headers:auth(reader.cookie)});
    assert.equal(spaces.statusCode,200);
-   const entries=spaces.json().spaces as Array<{id:string;visibility:string}>;
+   const entries=spaces.json().spaces as Array<{id:string;visibility:string;can_read:boolean;can_edit:boolean;can_approve:boolean}>;
    const shared=entries.find(x=>x.visibility==='SHARED')?.id;
-   const restricted=entries.find(x=>x.visibility==='RESTRICTED')?.id;
+   const adminSpaces=await app.inject({method:'GET',url:'/spaces',headers:auth(admin.cookie)});
+   const restricted=adminSpaces.json().spaces.find((x:any)=>x.visibility==='RESTRICTED')?.id as string;
    assert.ok(shared&&restricted);
+   assert.equal(entries.some(x=>x.id===restricted),false,'Espaços restritos não autorizados devem ficar ocultos');
+   assert.equal(entries.find(x=>x.id===shared)?.can_read,true);
+   assert.equal(entries.find(x=>x.id===shared)?.can_edit,false);
+   assert.equal(entries.find(x=>x.id===shared)?.can_approve,false);
+   const noWrite=await app.inject({method:'POST',url:'/knowledge/articles',headers:auth(reader.cookie),
+     payload:{spaceId:shared,title:'Artigo sem direito de edição '+id,
+       content:'Apenas a leitura compartilhada nunca deve conceder permissão de criação.'}});
+   assert.equal(noWrite.statusCode,403);
+   const noReviewerRights=await app.inject({method:'GET',url:'/knowledge/reviews',headers:auth(reviewer.cookie)});
+   assert.deepEqual(noReviewerRights.json().reviews,[]);
+   const noImplicitEditActor=await actorForSession(reader.cookie.split('=')[1]);
+   assert.ok(noImplicitEditActor);
+   const noImplicitEdit=await respond(noImplicitEditActor!,randomUUID(),'Adicione este procedimento ao cérebro',[],{
+     chat:{completions:{create:async()=>({choices:[{message:{role:'assistant',content:'Sem autorização de edição'}}]})}}
+   } as unknown as OpenAI);
+   assert.equal(noImplicitEdit.pendingActions.length,0);
+   const adminOnlyWithoutRead=await app.inject({method:'GET',url:'/spaces',headers:auth(admin.cookie)});
+   assert.equal(adminOnlyWithoutRead.json().spaces.find((x:any)=>x.id===restricted).can_read,false);
+   for(const {userId,approve} of [{userId:reader.id,approve:false},{userId:reviewer.id,approve:true}]){
+     const grantedAccess: {statusCode:number;body:string}=await app.inject({method:'POST',url:'/admin/spaces/'+shared+'/grants',
+       headers:auth(admin.cookie),payload:{userId,read:true,edit:true,approve}});
+     assert.equal(grantedAccess.statusCode,200,grantedAccess.body);
+   }
+   const grantedSpaces=await app.inject({method:'GET',url:'/spaces',headers:auth(reader.cookie)});
+   assert.equal(grantedSpaces.json().spaces.find((x:any)=>x.id===shared).can_edit,true);
+   const reviewerSpaces=await app.inject({method:'GET',url:'/spaces',headers:auth(reviewer.cookie)});
+   assert.equal(reviewerSpaces.json().spaces.find((x:any)=>x.id===shared).can_approve,true);
 
    const forbiddenAdmin=await app.inject({method:'POST',url:'/admin/users',headers:auth(reader.cookie),payload:{email:'bad@example.test',role:'ADMIN'}});
    assert.equal(forbiddenAdmin.statusCode,403);
@@ -628,7 +656,7 @@ if(!process.env.TEST_DATABASE_URL){
    assert.equal(granted.json().spaces.find((s:any)=>s.id===restricted).can_read,true);
    await app.inject({method:'POST',url:`/admin/spaces/${restricted}/grants`,headers:auth(admin.cookie),payload:{userId:reader.id,read:false,edit:false,approve:false}});
    const revoked=await app.inject({method:'GET',url:'/spaces',headers:auth(reader.cookie)});
-   assert.equal(revoked.json().spaces.find((s:any)=>s.id===restricted).can_read,false);
+   assert.equal(revoked.json().spaces.some((s:any)=>s.id===restricted),false);
 
 
    // An unauthorized reader must never receive a published restricted snippet.
