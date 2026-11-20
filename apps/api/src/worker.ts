@@ -1,4 +1,4 @@
-import pdf from 'pdf-parse';
+import {PDFParse} from 'pdf-parse';
 import {pool,query} from './db.js';
 import {chunks,hasSecrets} from './knowledge.js';
 import {embedText} from './llm.js';
@@ -14,13 +14,24 @@ async function processNext():Promise<boolean>{
    let text=r.rows[0].content as string;
    if(r.rows[0].pdf_bytes){
      const bytes=r.rows[0].pdf_bytes as Buffer;
-     const parsed=await pdf(bytes,{max:200});
-     text=parsed.text;
+     // The legacy v1 parser silently rejected valid PDFs with "bad XRef entry".
+     // v2 explicitly frees its parser resources after extraction.
+     const parser=new PDFParse({data:new Uint8Array(bytes)});
+     try{
+       const info=await parser.getInfo();
+       if(info.total>200) throw new Error('PDF excede o limite de 200 páginas');
+       const parsed=await parser.getText();
+       text=parsed.text;
+     }finally{
+       await parser.destroy();
+     }
      if(text.trim().length<40) throw new Error('PDF sem texto extraível; necessário texto digital');
    }
    if(hasSecrets(text)) throw new Error('Possível credencial detectada; revisão necessária');
    if(!text.trim()) throw new Error('Documento vazio');
-   const parts=chunks(text).slice(0,500);
+   if(text.length>450000) throw new Error('Documento muito extenso; divida-o em arquivos menores');
+   const parts=chunks(text);
+   if(parts.length>500) throw new Error('Quantidade de trechos excede o limite; processamento interrompido');
    const vectors:(number[]|null)[]=[];
    for(const part of parts){
      try {vectors.push(await embedText(part));}
