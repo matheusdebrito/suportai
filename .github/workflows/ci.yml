@@ -146,6 +146,12 @@ jobs:
             -c "SELECT CASE WHEN to_regtype('vector') IS NOT NULL AND to_regclass('public.schema_migrations') IS NOT NULL THEN 'ok' ELSE 'fail' END" \
             | grep -qx ok
           echo "Isolated PostgreSQL 17 backup and restore completed successfully"
+          # Exercise the operator restore script against the same fictitious dump,
+          # in a separate networkless database container (no production server).
+          restore_temp="$(mktemp -d)"
+          docker cp "$container:/tmp/suportai-ci-backup.dump" "$restore_temp/test.dump"
+          mkdir -p "$restore_temp/restores"
+          bash deploy/verify-restore.sh "$restore_temp/test.dump" "$restore_temp/restores"
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
