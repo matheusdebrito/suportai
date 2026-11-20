@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createServer,type Server} from 'node:http';
+import {createServer,type Server,type RequestListener} from 'node:http';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -9,7 +9,7 @@ import {extractPdfViaSocket} from './pdf-socket-client.js';
 const PDF=Buffer.from('%PDF-1.7\nsynthetic-fixture');
 
 async function withFakeParser(
- handler: Parameters<typeof createServer>[0],
+ handler: RequestListener,
  run: (socket: string) => Promise<void>
 ) {
  const directory=await mkdtemp(join(tmpdir(),'suportai-adversarial-ipc-'));
