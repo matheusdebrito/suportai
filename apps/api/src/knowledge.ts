@@ -345,7 +345,7 @@ export function registerKnowledge(app:FastifyInstance) {
        await c.query("INSERT INTO audit_events(actor_id,action,resource_id,metadata) VALUES($1,'KNOWLEDGE_DUPLICATE_ACKNOWLEDGED',$2,$3::jsonb)",
          [a.id,docId,JSON.stringify({reason:duplicateReason})]);
      }
-     await c.query('UPDATE pending_actions SET result_version_id=$2,confirmed_at=now() WHERE id=$1',[id,v.rows[0].id]);
+     await c.query('UPDATE pending_actions SET result_version_id=$2,document_id=$3,confirmed_at=now() WHERE id=$1',[id,v.rows[0].id,docId]);
      await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'KNOWLEDGE_DRAFT_CREATED',$2)",[a.id,docId]);
      return {documentId:docId,versionId:v.rows[0].id};
    });
