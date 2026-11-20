@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import argon2 from 'argon2';
 import { pool, query, transaction, audit } from './db.js';
-import { actorForSession, token, hashToken, type Actor } from './security.js';
+import { actorForSession, requireCurrentActor, token, hashToken, type Actor } from './security.js';
 export const COOKIE = 'suportai_session';
 const isProd = process.env.NODE_ENV==='production';
 function setCookie(reply:any,raw:string) { reply.setCookie(COOKIE,raw,{httpOnly:true,secure:isProd,sameSite:'strict',path:'/',maxAge:60*60*8}); }
@@ -17,16 +17,20 @@ export function requireAdmin(actor:Actor) {
 }
 export function validEmail(v:unknown):v is string {return typeof v==='string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) && v.length<=254;}
 function strongPassword(v:unknown):v is string {return typeof v==='string'&&v.length>=12&&v.length<=256;}
-async function resetTokenFor(userId:string,adminId:string) {
+async function resetTokenFor(userId:string,admin:Actor):Promise<string|null> {
  const raw=token();
- await transaction(async c=>{
+ const eligible=await transaction(async c=>{
+   await requireCurrentActor(c,admin);
+   const account=await c.query('SELECT active FROM users WHERE id=$1 FOR UPDATE',[userId]);
+   if(!account.rowCount||!account.rows[0].active)return false;
    await c.query('UPDATE users SET must_change_password=true,auth_revision=auth_revision+1 WHERE id=$1',[userId]);
    await c.query('DELETE FROM sessions WHERE user_id=$1',[userId]);
    await c.query('DELETE FROM password_resets WHERE user_id=$1',[userId]);
    await c.query("INSERT INTO password_resets(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '15 minutes')",[hashToken(raw),userId]);
-   await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'PASSWORD_RESET_STARTED',$2)",[adminId,userId]);
+   await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'PASSWORD_RESET_STARTED',$2)",[admin.id,userId]);
+   return true;
  });
- return raw;
+ return eligible?raw:null;
 }
 export function registerAuth(app:FastifyInstance) {
  const attempts=new Map<string,{count:number,until:number}>();
@@ -89,25 +93,38 @@ export function registerAuth(app:FastifyInstance) {
  });
  app.get('/admin/users',async req=>{
    const a=await requireActor(req);requireAdmin(a);
-   const r=await query('SELECT id,email,role,active,must_change_password FROM users ORDER BY created_at DESC LIMIT 200');
-   return {users:r.rows};
+   const users=await transaction(async c=>{
+     await requireCurrentActor(c,a);
+     const r=await c.query('SELECT id,email,role,active,must_change_password FROM users ORDER BY created_at DESC LIMIT 200');
+     return r.rows;
+   });
+   return {users};
  });
  app.post('/admin/users',async(req,reply)=>{
    const a=await requireActor(req);requireAdmin(a);
    const b=req.body as {email?:unknown;role?:unknown}|undefined;
    if(!validEmail(b?.email)||!['USER','APPROVER','ADMIN'].includes(String(b?.role))) return reply.code(400).send({error:'Usuário inválido'});
    const password=await argon2.hash(token());
-   const r=await query('INSERT INTO users(email,password_hash,role,must_change_password) VALUES($1,$2,$3,true) RETURNING id',[b.email.toLowerCase(),password,b.role]);
-   const resetToken=await resetTokenFor(r.rows[0].id,a.id);
-   await audit(a.id,'USER_CREATED',r.rows[0].id);
-   return reply.code(201).send({id:r.rows[0].id,resetToken,expiresInMinutes:15});
+   const resetToken=token();
+   const newId=await transaction(async c=>{
+     await requireCurrentActor(c,a);
+     const created=await c.query('INSERT INTO users(email,password_hash,role,must_change_password) VALUES($1,$2,$3,true) RETURNING id',
+       [b.email.toLowerCase(),password,b.role]);
+     const id=created.rows[0].id as string;
+     await c.query("INSERT INTO password_resets(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '15 minutes')",
+       [hashToken(resetToken),id]);
+     await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'PASSWORD_RESET_STARTED',$2)",[a.id,id]);
+     await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'USER_CREATED',$2)",[a.id,id]);
+     return id;
+   });
+   return reply.code(201).send({id:newId,resetToken,expiresInMinutes:15});
  });
  app.post('/admin/users/:id/reset-password',async(req,reply)=>{
    const a=await requireActor(req);requireAdmin(a);
    const id=(req.params as {id:string}).id;
-   const exists=await query('SELECT id FROM users WHERE id=$1',[id]);
-   if(!exists.rowCount) return reply.code(404).send({error:'Usuário não encontrado'});
-   const resetToken=await resetTokenFor(id,a.id);
+   if(id===a.id)return reply.code(400).send({error:'Use a troca de senha da própria conta'});
+   const resetToken=await resetTokenFor(id,a);
+   if(!resetToken)return reply.code(404).send({error:'Conta não encontrada ou inativa'});
    return {resetToken,expiresInMinutes:15};
  });
  app.patch('/admin/users/:id',async(req,reply)=>{
@@ -117,6 +134,7 @@ export function registerAuth(app:FastifyInstance) {
    if(id===a.id) return reply.code(400).send({error:'Não altere seu próprio perfil por esta operação'});
    if(typeof b?.active!=='boolean' && !['USER','APPROVER','ADMIN'].includes(String(b?.role))) return reply.code(400).send({error:'Alteração inválida'});
    const result=await transaction(async c=>{
+     await requireCurrentActor(c,a);
      const r=await c.query('UPDATE users SET active=COALESCE($2,active),role=COALESCE($3,role),auth_revision=auth_revision+1 WHERE id=$1 RETURNING id',[id,typeof b?.active==='boolean'?b.active:null,['USER','APPROVER','ADMIN'].includes(String(b?.role))?b?.role:null]);
      if(r.rowCount) {
        await c.query('DELETE FROM sessions WHERE user_id=$1',[id]);
@@ -132,6 +150,7 @@ export function registerAuth(app:FastifyInstance) {
    const b=req.body as {userId?:unknown;read?:unknown;edit?:unknown;approve?:unknown}|undefined;
    if(typeof b?.userId!=='string'||typeof b.read!=='boolean'||typeof b.edit!=='boolean'||typeof b.approve!=='boolean'||((b.edit||b.approve)&&!b.read)) return reply.code(400).send({error:'Permissões inválidas: edição e aprovação exigem leitura'});
    await transaction(async c=>{
+     await requireCurrentActor(c,a);
      await c.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[b.userId]);
      await c.query(`INSERT INTO space_grants(user_id,space_id,can_read,can_edit,can_approve) VALUES($1,$2,$3,$4,$5)
        ON CONFLICT (user_id,space_id) DO UPDATE SET can_read=$3,can_edit=$4,can_approve=$5`,[b.userId,spaceId,b.read,b.edit,b.approve]);
