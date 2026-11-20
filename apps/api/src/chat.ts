@@ -72,6 +72,20 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
      const sources=output.sources.map(s=>({documentId:s.documentId,versionId:s.versionId,versionNumber:s.versionNumber,title:s.title,ordinal:s.ordinal}));
      const saved=await transaction(async c=>{
        await requireCurrentActor(c,a);
+       // Serializing on each cited document prevents an archived or superseded
+       // procedure being presented as current after the model has responded.
+       for(const source of sources){
+         const live=await c.query(`SELECT d.id FROM documents d
+           JOIN document_versions v ON v.document_id=d.id AND v.id=$2
+           JOIN spaces s ON s.id=d.space_id
+           LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$3
+           WHERE d.id=$1 AND d.current_version_id=$2 AND d.archived_at IS NULL
+             AND v.status='PUBLISHED' AND v.index_status='READY'
+             AND (s.visibility='SHARED' OR COALESCE(g.can_read,false))
+           FOR SHARE OF d`,[source.documentId,source.versionId,a.id]);
+         if(!live.rowCount)
+           throw Object.assign(new Error('Fonte arquivada ou atualizada durante a resposta'),{statusCode:409});
+       }
        const result=await c.query(`INSERT INTO messages(conversation_id,role,content,sources,auth_revision)
          VALUES($1,'assistant',$2,$3,$4) RETURNING id`,[id,output.answer,JSON.stringify(sources),a.auth_revision]);
        return result.rows[0].id as string;
@@ -80,6 +94,8 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
    }catch(error){
      if((error as {statusCode?:number})?.statusCode===403)
        return reply.code(403).send({error:'Permissões alteradas durante a consulta; entre novamente para continuar'});
+     if((error as {statusCode?:number})?.statusCode===409)
+       return reply.code(409).send({error:'O procedimento consultado foi arquivado ou atualizado. Refaça a pergunta para buscar a versão atual.'});
      req.log.error({err:error instanceof Error?error.message:'unknown'},'Agent execution failed');
      return reply.code(503).send({error:'Não foi possível consultar o agente agora. Tente novamente.'});
    }
