@@ -26,6 +26,9 @@ test('cadastro, primeiro acesso, conhecimento, conversa e feedback sobrevivem ao
  expect(temporaryCode.length).toBeGreaterThan(20);
 
  await page.getByRole('button',{name:'Sair'}).click();
+ // Logout must revoke the server-side cookie, not only clear React state.
+ await page.reload();
+ await expect(page.getByRole('button',{name:'Entrar'})).toBeVisible();
  await page.getByRole('button',{name:'Tenho um código temporário'}).click();
  await page.getByLabel('Código temporário').fill(temporaryCode);
  await page.getByLabel('Nova senha (12+ caracteres)').fill(memberPassword);
