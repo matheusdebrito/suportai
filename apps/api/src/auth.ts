@@ -104,12 +104,13 @@ export function registerAuth(app:FastifyInstance) {
    const a=await requireActor(req);requireAdmin(a);
    const b=req.body as {email?:unknown;role?:unknown}|undefined;
    if(!validEmail(b?.email)||!['USER','APPROVER','ADMIN'].includes(String(b?.role))) return reply.code(400).send({error:'Usuário inválido'});
+   const email=(b.email as string).toLowerCase();
    const password=await argon2.hash(token());
    const resetToken=token();
    const newId=await transaction(async c=>{
      await requireCurrentActor(c,a);
      const created=await c.query('INSERT INTO users(email,password_hash,role,must_change_password) VALUES($1,$2,$3,true) ON CONFLICT (email) DO NOTHING RETURNING id',
-       [b.email.toLowerCase(),password,b.role]);
+       [email,password,b.role]);
      if(!created.rowCount)return null;
      const id=created.rows[0].id as string;
      await c.query("INSERT INTO password_resets(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '15 minutes')",
