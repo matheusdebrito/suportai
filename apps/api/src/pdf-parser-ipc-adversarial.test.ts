@@ -61,15 +61,15 @@ test('socket client rejects oversized PDFs before contacting a parser',async()=>
   Buffer.from('%PDF-1.7\n'),
   Buffer.alloc(8*1024*1024,65)
  ]);
- await assert.rejects(
-  extractPdfViaSocket(oversized,'/run/suportai/not-mounted.sock'),
+ assert.throws(
+  ()=>extractPdfViaSocket(oversized,'/run/suportai/not-mounted.sock'),
   /PDF excede o limite de 8 MB/
  );
 });
 
 test('socket client rejects a fake PDF header before contacting a parser',async()=>{
- await assert.rejects(
-  extractPdfViaSocket(Buffer.from('NOT_A_PDF'),'\/run\/suportai\/not-mounted.sock'),
+ assert.throws(
+  ()=>extractPdfViaSocket(Buffer.from('NOT_A_PDF'),'/run/suportai/not-mounted.sock'),
   /PDF inválido/
  );
 });
