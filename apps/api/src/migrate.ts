@@ -46,6 +46,11 @@ try {
       throw error;
     }
   }
+  // Detect schema drift instead of claiming success because a checksum row exists.
+  for(const table of ['users','sessions','spaces','document_versions','knowledge_chunks']){
+    const found=await client.query('SELECT to_regclass($1::text) AS object_name',['public.'+table]);
+    if(!found.rows[0].object_name) throw new Error('Objeto de banco ausente após migração: '+table);
+  }
 }finally{
   if(locked) await client.query('SELECT pg_advisory_unlock(73016,1)').catch(()=>{});
   client.release();

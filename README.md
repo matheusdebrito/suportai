@@ -26,7 +26,9 @@ Node.js 22+, PostgreSQL 17 com extensão pgvector, e Docker/Compose opcional.
 6. `npm run dev:api` e, em outro terminal, `npm run worker -w @suportai/api`.
 7. `npm run dev:web`; acesse http://localhost:5173.
 
-**Migrações:** cada arquivo em `apps/api/sql/` é aplicado uma única vez e verificado por checksum. Se o banco já foi criado pelo script antigo, sem o histórico de migrações, a atualização bloqueia a operação para evitar assumir um esquema desconhecido. Faça backup, confira o esquema existente e planeje a regularização antes de prosseguir; não apague tabelas para contornar o aviso.\n\n**Atenção:** configure `DATABASE_URL` para a senha utilizada no Compose. A API deve estar atrás de HTTPS para uso real; cookies seguros são habilitados em produção. `OPENAI_API_KEY` ativa o LLM e embeddings; sem a chave, a consulta oferece apenas trechos por busca textual.
+**Migrações:** cada arquivo em `apps/api/sql/` é aplicado uma única vez e verificado por checksum. Se o banco já foi criado pelo script antigo, sem o histórico de migrações, a atualização bloqueia a operação para evitar assumir um esquema desconhecido. Faça backup, confira o esquema existente e planeje a regularização antes de prosseguir; não apague tabelas para contornar o aviso.
+
+**Atenção:** configure `DATABASE_URL` para a senha utilizada no Compose. A API deve estar atrás de HTTPS para uso real; cookies seguros são habilitados em produção. `OPENAI_API_KEY` ativa o LLM e embeddings; sem a chave, a consulta oferece apenas trechos por busca textual.
 
 Na criação de usuários, o backend retorna um código temporário de 15 minutos, que deve ser transmitido por um canal seguro. O usuário define a própria senha com `/auth/change-password`.
 
