@@ -7,6 +7,7 @@ import {buildApp} from './server.js';
 import {pool,query} from './db.js';
 import {searchKnowledge} from './retrieval.js';
 import {actorForSession} from './security.js';
+import {PDFDocument,StandardFonts} from 'pdf-lib';
 
 if(!process.env.TEST_DATABASE_URL){
   test('integration requires TEST_DATABASE_URL', {skip:'No isolated PostgreSQL test database configured'},()=>{});
@@ -70,6 +71,28 @@ if(!process.env.TEST_DATABASE_URL){
    const rejectMalformedPdf=await app.inject({method:'POST',url:'/knowledge/articles',headers:auth(reader.cookie),payload:{spaceId:shared,title:'x',content:'short'}});
    assert.equal(rejectMalformedPdf.statusCode,400);
 
+
+   // A genuine PDF is accepted, extracted by the worker, and only then eligible for publication.
+   const pdfDocument=await PDFDocument.create();
+   const page=pdfDocument.addPage([600,400]);
+   const font=await pdfDocument.embedFont(StandardFonts.Helvetica);
+   page.drawText('Checklist de seguranca: confira logs, backups e registros antes de executar qualquer procedimento.',{x:40,y:340,size:12,font,maxWidth:500});
+   const pdfBytes=Buffer.from(await pdfDocument.save());
+   const boundary='test-boundary-'+id;
+   const body=Buffer.concat([
+     Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="spaceId"\r\n\r\n${shared}\r\n--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="procedimento.pdf"\r\nContent-Type: application/pdf\r\n\r\n`),
+     pdfBytes,Buffer.from(`\r\n--${boundary}--\r\n`)
+   ]);
+   const pdfUpload=await app.inject({method:'POST',url:'/knowledge/pdfs',headers:{...auth(reader.cookie),'content-type':`multipart/form-data; boundary=${boundary}`},payload:body});
+   assert.equal(pdfUpload.statusCode,201,pdfUpload.body);
+   let pdfReady=false;
+   for(let i=0;i<45;i++){
+     const status=await query('SELECT index_status FROM document_versions WHERE id=$1',[pdfUpload.json().versionId]);
+     if(status.rows[0].index_status==='READY'){pdfReady=true;break;}
+     if(status.rows[0].index_status==='FAILED')break;
+     await new Promise(resolve=>setTimeout(resolve,400));
+   }
+   assert.equal(pdfReady,true,'worker must extract valid PDF');
    const restrictedDenied=await app.inject({method:'POST',url:'/knowledge/articles',headers:auth(reader.cookie),payload:{spaceId:restricted,title:'Restrito '+id,content:'Este texto somente deve ser acessado por leitores especificamente autorizados.'}});
    assert.equal(restrictedDenied.statusCode,403);
 
