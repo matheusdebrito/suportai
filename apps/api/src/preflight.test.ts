@@ -18,3 +18,9 @@ test('production preflight rejects unsafe or inconsistent configuration',()=>{
    OPENAI_API_KEY:undefined}).length>0);
  assert.ok(inspectProductionConfig({...safe,ALLOW_EXTERNAL_AI_DATA_PROCESSING:'maybe'}).length>0);
 });
+
+test('production preflight accepts file-backed connection settings and forbids bootstrap file',()=>{
+ const fileMode={...safe,DATABASE_URL:undefined,DATABASE_URL_FILE:'/run/secrets/database_url'};
+ assert.deepEqual(inspectProductionConfig(fileMode),[]);
+ assert.ok(inspectProductionConfig({...fileMode,BOOTSTRAP_ADMIN_PASSWORD_FILE:'/run/secrets/onboarding'}).length>0);
+});

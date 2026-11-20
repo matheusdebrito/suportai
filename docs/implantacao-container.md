@@ -42,7 +42,7 @@ Commands above are instructions for an authorized operator, **not commands run b
 - Test a synthetic PDF over the socket, then disable the parser and verify the worker records a safe failure (no local fallback).
 - Test HTTPS, cookies, sign-in, authorized/restricted content, RAG citations and worker indexing with dummy data.
 - Configure off-host encrypted backups, at least one separate restoration rehearsal, monitoring, RPO/RTO, rollback and retention in accordance with organization policy.
-- Run `npm run preflight` and `npm run pdf:security-preflight` under the same Linux process/security policy in the actual runtime.
+- Run `node apps/api/dist/preflight.js` in the API container and `node apps/api/dist/pdf-isolation-preflight.js` with the worker's Linux security policy. Production images intentionally omit the development-only `tsx` runner.
 - If any check fails, keep the pilot closed.
 
 A Compose file cannot itself prove actual network isolation, kernel security controls, dependency security, external provider privacy or an executed recovery plan.
