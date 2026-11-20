@@ -7,6 +7,9 @@ type Space={id:string;name:string;visibility:string;can_read:boolean;can_edit:bo
 type Doc={id:string;title:string;kind:string;space_name:string};
 type Message={id?:string;role:'user'|'assistant';content:string;sources?:{documentId:string;versionId:string;versionNumber?:number;title:string}[]};
 type Pending={id:string;title:string;content:string;spaceName?:string};
+type SimilarArticle={id:string;title:string;kind:'ARTICLE'|'PDF'};
+type DuplicatePrompt={source:'panel'|'pending';matches:SimilarArticle[];title:string;spaceId?:string;content?:string;pendingId?:string};
+type DuplicateResponseError=Error&{code?:string;matches?:SimilarArticle[]};
 type Conversation={id:string;title:string;updated_at:string};
 type Draft={version_id:string;document_id:string;title:string;kind:'ARTICLE'|'PDF';version_number:number;status:'DRAFT'|'IN_REVIEW'|'CHANGES_REQUESTED'|'REJECTED';index_status:'READY'|'PENDING'|'FAILED';space_name:string;ingestion_error?:string;review_note?:string};
 type DraftDetail=Draft&{content:string;space_id:string};
@@ -26,7 +29,9 @@ function textDiff(before:string,after:string){
 async function api<T=any>(path:string,init:RequestInit={}):Promise<T> {
  const response=await fetch(path,{...init,credentials:'include',headers:{...(init.body instanceof FormData?{}:{'Content-Type':'application/json'}),...(init.headers||{})}});
  const result=await response.json().catch(()=>({error:'Resposta inválida do servidor'}));
- if(!response.ok) throw new Error(result.error||'Falha na operação');
+ if(!response.ok) throw Object.assign(new Error(result.error||'Falha na operação'),
+   {code:typeof result.code==='string'?result.code:undefined,
+    matches:Array.isArray(result.matches)?result.matches:undefined});
  return result;
 }
 function App(){
@@ -53,6 +58,8 @@ function App(){
  const [content,setContent]=useState('');
  const [spaceId,setSpaceId]=useState('');
  const [lastDraft,setLastDraft]=useState<string|null>(null);
+ const [duplicatePrompt,setDuplicatePrompt]=useState<DuplicatePrompt|null>(null);
+ const [duplicateReason,setDuplicateReason]=useState('');
  const [drafts,setDrafts]=useState<Draft[]>([]);
  const [draftView,setDraftView]=useState<DraftDetail|null>(null);
  const [selectedDoc,setSelectedDoc]=useState<DocDetail|null>(null);
@@ -73,6 +80,35 @@ function App(){
   if(user?.role==='ADMIN'){const result=await api<{users:typeof users}>('/admin/users');setUsers(result.users);}
  }
  function failed(e:unknown){setError(e instanceof Error?e.message:'Falha desconhecida');}
+ function duplicateDetected(e:unknown,prompt:Omit<DuplicatePrompt,'matches'>):boolean{
+   const error=e as DuplicateResponseError;
+   if(error?.code!=='SIMILAR_ARTICLES'||!Array.isArray(error.matches))return false;
+   setDuplicatePrompt({...prompt,matches:error.matches});setDuplicateReason('');return true;
+ }
+ async function continueDuplicate(e:React.FormEvent){
+   e.preventDefault();if(!duplicatePrompt)return;
+   setError('');
+   try{
+     if(duplicatePrompt.source==='panel'){
+       const created=await api<{versionId:string}>('/knowledge/articles',{
+         method:'POST',body:JSON.stringify({
+          spaceId:duplicatePrompt.spaceId,title:duplicatePrompt.title,content:duplicatePrompt.content,
+          duplicateReason:duplicateReason.trim()
+         })
+       });
+       setTitle('');setContent('');setLastDraft(created.versionId);
+     }else{
+       const created=await api<{versionId:string}>('/knowledge/pending/'+duplicatePrompt.pendingId+'/confirm',{
+         method:'POST',body:JSON.stringify({duplicateReason:duplicateReason.trim()})
+       });
+       setPending(items=>items.filter(x=>x.id!==duplicatePrompt.pendingId));
+       setLastDraft(created.versionId);setTab('knowledge');
+     }
+     setDuplicatePrompt(null);setDuplicateReason('');
+     await refresh();
+   }catch(error){failed(error);}
+ }
+
  async function refreshConversations(){
   const result=await api<{conversations:Conversation[]}>('/conversations');
   setConversations(result.conversations);
@@ -117,7 +153,7 @@ function App(){
 
  async function login(e:React.FormEvent){e.preventDefault();setError('');try{const r=await api<{user:User}>('/auth/login',{method:'POST',body:JSON.stringify({email,password})});setPassword('');setUser(r.user);}catch(e){failed(e);}}
  async function changePassword(e:React.FormEvent){e.preventDefault();setError('');try{await api('/auth/change-password',{method:'POST',body:JSON.stringify({resetToken,newPassword})});const u=await api<User>('/auth/me');setUser(u);setResetToken('');setNewPassword('');setShowReset(false);}catch(e){failed(e);}}
- async function logout(){await api('/auth/logout',{method:'POST'}).catch(()=>{});setUser(null);setMessages([]);setConversationId(null);setConversations([]);setDrafts([]);setPending([]);setSelectedDoc(null);setCorrectionOf(null);setReviewNote('');setReviewDecision(null);}
+ async function logout(){await api('/auth/logout',{method:'POST'}).catch(()=>{});setUser(null);setMessages([]);setConversationId(null);setConversations([]);setDrafts([]);setPending([]);setSelectedDoc(null);setCorrectionOf(null);setReviewNote('');setReviewDecision(null);setDuplicatePrompt(null);}
  async function send(e:React.FormEvent){
   e.preventDefault();if(!input.trim()||busy||conversationLoading)return;setBusy(true);setError('');
   const text=input;setInput('');setMessages(m=>[...m,{role:'user',content:text}]);
@@ -131,10 +167,13 @@ function App(){
   }catch(e){failed(e);}finally{setBusy(false);}
  }
  async function confirmPending(id:string){setError('');try{
-  const r=await api<{versionId:string}>(`/knowledge/pending/${id}/confirm`,{method:'POST'});
-  setPending(p=>p.filter(x=>x.id!==id));setLastDraft(r.versionId);
-  setTab('knowledge');await refresh();
- }catch(e){failed(e);}}
+   const r=await api<{versionId:string}>('/knowledge/pending/'+id+'/confirm',{method:'POST'});
+   setPending(p=>p.filter(x=>x.id!==id));setLastDraft(r.versionId);
+   setTab('knowledge');await refresh();
+ }catch(error){
+   const pendingAction=pending.find(p=>p.id===id);
+   if(!duplicateDetected(error,{source:'pending',pendingId:id,title:pendingAction?.title||'Proposta de artigo'}))failed(error);
+ }}
  async function saveArticle(e:React.FormEvent){e.preventDefault();setError('');try{
    const r=correctionOf
      ? await api<{versionId:string}>('/knowledge/versions/'+correctionOf+'/correct',{method:'POST',body:JSON.stringify({content})})
@@ -142,8 +181,10 @@ function App(){
        ? await api<{versionId:string}>('/knowledge/documents/'+editing.documentId+'/versions',{method:'POST',body:JSON.stringify({content,baseVersionId:editing.baseVersionId})})
        : await api<{versionId:string}>('/knowledge/articles',{method:'POST',body:JSON.stringify({spaceId,title,content})});
    setLastDraft(r.versionId);setEditing(null);setCorrectionOf(null);setTitle('');setContent('');await refresh();
- }catch(e){failed(e);}
- }
+ }catch(error){
+   if(!editing&&!correctionOf&&duplicateDetected(error,{source:'panel',spaceId,title,content}))return;
+   failed(error);
+ }}
  async function uploadPdf(e:React.ChangeEvent<HTMLInputElement>){
   const file=e.target.files?.[0];if(!file)return;setError('');
   try{const form=new FormData();form.append('spaceId',spaceId);form.append('file',file);
