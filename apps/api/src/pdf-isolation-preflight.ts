@@ -22,8 +22,7 @@ export function inspectPdfWorkerIsolation(snapshot:IsolationSnapshot):string[]{
  return problems;
 }
 
-const invoked=process.argv[1]?.endsWith('/pdf-isolation-preflight.ts')||
- process.argv[1]?.endsWith('\\\\pdf-isolation-preflight.ts');
+const invoked=process.argv[1]?.endsWith('pdf-isolation-preflight.ts');
 if(invoked){
  let status:string|undefined;
  try{status=readFileSync('/proc/self/status','utf8');}catch{}
