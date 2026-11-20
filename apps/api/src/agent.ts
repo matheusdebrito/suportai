@@ -15,20 +15,31 @@ const tools:OpenAI.Chat.Completions.ChatCompletionTool[]=[
  {type:'function',function:{name:'search_knowledge',description:'Busca artigos e PDFs publicados e autorizados para responder perguntas internas.',parameters:{type:'object',properties:{query:{type:'string'}},required:['query'],additionalProperties:false}}},
  {type:'function',function:{name:'prepare_article',description:'Prepara prévia de artigo solicitado explicitamente pelo usuário; requer confirmação humana posterior antes de criar rascunho.',parameters:{type:'object',properties:{spaceId:{type:'string'},title:{type:'string'},content:{type:'string'},documentId:{type:'string',description:'Documento a atualizar se aplicável'}},required:['spaceId','title','content'],additionalProperties:false}}}
 ];
-export type AgentOutput={answer:string;sources:Source[];pendingActions:{id:string;title:string;content:string}[]};
+export type AgentOutput={answer:string;sources:Source[];pendingActions:{id:string;title:string;content:string;spaceName:string}[]};
 export async function respond(actor:Actor,conversationId:string,userMessage:string,history:{role:'user'|'assistant';content:string}[],provider:OpenAI|null=client):Promise<AgentOutput>{
  const sources:Source[]=[];
  const pendingActions:AgentOutput['pendingActions']=[];
  const allowMutation=allowsKnowledgeMutation(userMessage);
  const forceLookup=shouldForceKnowledgeLookup(userMessage);
  let searchCalls=0;
- const availableTools=allowMutation?tools:tools.filter(t=>t.type==='function' && t.function.name==='search_knowledge');
  if(!provider){
    const found=await searchKnowledge(actor,userMessage,5);
    return {answer:found.length?'Não há modelo de IA configurado. Encontrei estes trechos relevantes no cérebro:\n\n'+found.map((s,i)=>`${i+1}. ${s.title} — ${s.content.slice(0,500)}`).join('\n\n'):'Não encontrei um procedimento confirmado no cérebro. O uso do modelo externo não está habilitado nesta instalação.',sources:found,pendingActions};
  }
+ // The user talks about spaces by name; they must not need UUIDs.
+ // Only authorized writable spaces are supplied to the model.
+ const writableSpaces:{id:string;name:string}[]=allowMutation
+   ? (await query(`SELECT s.id,s.name FROM spaces s
+       LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$1
+       WHERE s.visibility='SHARED' OR COALESCE(g.can_edit,false)
+       ORDER BY s.name LIMIT 30`,[actor.id])).rows : [];
+ const availableTools=allowMutation && writableSpaces.length>0
+   ? tools : tools.filter(t=>t.type==='function' && t.function.name==='search_knowledge');
  const messages:OpenAI.Chat.Completions.ChatCompletionMessageParam[]=[
   {role:'system',content:SYSTEM},
+  ...(allowMutation?[{role:'system' as const,content:
+     'Espaços de conhecimento onde este usuário pode preparar artigos (dados do servidor): '+JSON.stringify(writableSpaces)+
+     '. Use somente esses IDs nas ferramentas. O usuário não precisa informar IDs. Se houver vários espaços e a intenção não indicar qual deles, pergunte o destino antes de preparar. Nunca publique automaticamente.'}]:[]),
   ...history.slice(-8).map(m=>({role:m.role,content:m.content} as OpenAI.Chat.Completions.ChatCompletionMessageParam)),
   {role:'user',content:userMessage}
  ];
@@ -77,7 +88,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          const dup=await query('SELECT id,title FROM documents WHERE space_id=$1 AND lower(title)=lower($2) AND archived_at IS NULL LIMIT 3',[args.spaceId,args.title]);
          const r=await query(`INSERT INTO pending_actions(user_id,conversation_id,space_id,title,content,document_id,base_version_id)
           VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id`,[actor.id,conversationId,args.spaceId,args.title,args.content,docId,baseVersionId]);
-         pendingActions.push({id:r.rows[0].id,title:args.title,content:args.content});
+         pendingActions.push({id:r.rows[0].id,title:args.title,content:args.content,spaceName:writableSpaces.find(s=>s.id===args.spaceId)?.name||'Espaço autorizado'});
          output={status:'PREVIEW_ONLY',actionId:r.rows[0].id,similarArticles:dup.rows,requiresExplicitConfirmation:true,message:'Prévia preparada. Usuário deve confirmar no botão antes de criar rascunho; a IA não pode confirmar sozinha.'};
        } else {output={error:'Ferramenta indisponível'};}
      } catch(error){output={error:error instanceof Error?error.message:'Falha na ferramenta'};}
