@@ -6,7 +6,7 @@ type User={id:string;email:string;role:'ADMIN'|'APPROVER'|'USER';mustChangePassw
 type Space={id:string;name:string;visibility:string;can_read:boolean;can_edit:boolean;can_approve:boolean};
 type Doc={id:string;title:string;kind:string;space_name:string};
 type Message={id?:string;role:'user'|'assistant';content:string;sources?:{documentId:string;versionId:string;versionNumber?:number;title:string}[];feedback_rating?:'GOOD'|'BAD'|null;feedback_comment?:string|null};
-type Pending={id:string;title:string;content:string;spaceName?:string};
+type Pending={id:string;title:string;content:string;spaceName?:string;documentId?:string;beforeContent?:string};
 type SimilarArticle={id:string;title:string;kind:'ARTICLE'|'PDF'};
 type DuplicatePrompt={source:'panel'|'pending';matches:SimilarArticle[];title:string;spaceId?:string;content?:string;pendingId?:string};
 type DuplicateResponseError=Error&{code?:string;matches?:SimilarArticle[]};
@@ -314,7 +314,10 @@ function App(){
  </div>}
  </div>)}
   {busy&&<p className="hint"><LoaderCircle className="spin" size={16}/> Consultando conhecimento...</p>}
-  {pending.map(p=><div className="pending" key={p.id}><strong>Prévia: {p.title}</strong><small>Destino: {p.spaceName||'Espaço autorizado'}</small><p>{p.content.slice(0,900)}</p><button onClick={()=>confirmPending(p.id)}><Check size={16}/> Confirmar criação de rascunho</button></div>)}
+  {pending.map(p=><div className="pending" key={p.id}><strong>Prévia: {p.title}</strong><small>Destino: {p.spaceName||'Espaço autorizado'}</small>{p.documentId?<><p>Atualização de artigo existente — a versão publicada permanecerá intacta até a aprovação.</p><details className="diff-preview"><summary>Ver diferenças entre o artigo publicado e a proposta</summary>{(()=>{
+  const changes=textDiff(p.beforeContent||'',p.content);
+  return changes.unchanged?<p className="hint">O conteúdo proposto não apresenta diferenças.</p>:<div className="diff-columns"><div><strong>Anterior</strong><pre className="diff-removed">{changes.removed||'Nenhum trecho removido'}</pre></div><div><strong>Proposto</strong><pre className="diff-added">{changes.added||'Nenhum trecho adicionado'}</pre></div></div>;
+ })()}</details><button className="secondary" type="button" onClick={()=>void openDoc(p.documentId!)}>Abrir artigo publicado</button></>:<p>{p.content.slice(0,900)}</p>}<button onClick={()=>confirmPending(p.id)}><Check size={16}/> {p.documentId?'Confirmar proposta de atualização':'Confirmar criação de rascunho'}</button></div>)}
   </div><form className="composer" onSubmit={send}><textarea placeholder="Digite sua pergunta..." value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();void send(e as unknown as React.FormEvent);}}}/><button disabled={busy||conversationLoading||!input.trim()} aria-label="Enviar mensagem"><Send size={19}/></button></form></section></div>}
  {tab==='knowledge'&&<div className="columns"><section className="panel"><h2>Artigos e documentos publicados</h2>{docs.length===0?<p className="hint">Nenhum documento publicado ainda.</p>:docs.map(d=><button className="item" key={d.id} onClick={()=>openDoc(d.id)}><BookOpen size={17}/><span>{d.title}<small>{d.space_name} · {d.kind}</small></span></button>)}
  {selectedDoc&&<article className="document"><h3>{selectedDoc.title}</h3><small>Versão {selectedDoc.version.version_number}</small><div className="formatted">{selectedDoc.version.content}</div>{selectedDoc.kind==='ARTICLE'&&selectedDoc.isCurrent!==false&&spaces.some(s=>s.id===selectedDoc.space_id&&s.can_edit)&&<button className="secondary" onClick={startEditing}>Criar revisão deste artigo</button>}{selectedDoc.kind==='PDF'&&selectedDoc.isCurrent!==false&&spaces.some(s=>s.id===selectedDoc.space_id&&s.can_edit)&&<button className="secondary" onClick={startPdfRevision}>Enviar nova versão deste PDF</button>}</article>}

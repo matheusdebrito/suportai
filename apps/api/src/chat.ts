@@ -44,8 +44,10 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
      ) f ON true
      WHERE m.conversation_id=$1 AND m.auth_revision=$2
      ORDER BY m.created_at DESC,m.id DESC LIMIT 100`,[id,a.auth_revision,a.id]);
-   const pending=await query(`SELECT p.id,p.title,p.content,s.name AS "spaceName"
+   const pending=await query(`SELECT p.id,p.title,p.content,p.document_id AS "documentId",
+       base.content AS "beforeContent",s.name AS "spaceName"
      FROM pending_actions p JOIN spaces s ON s.id=p.space_id
+     LEFT JOIN document_versions base ON base.id=p.base_version_id
      LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2
      WHERE p.conversation_id=$1 AND p.user_id=$2
        AND p.result_version_id IS NULL AND p.expires_at>now()
