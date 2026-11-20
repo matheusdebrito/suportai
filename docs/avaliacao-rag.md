@@ -48,3 +48,9 @@ Uma chave de API não constitui aprovação. O mecanismo `ALLOW_EXTERNAL_AI_DATA
 ## Calibração sintética da duplicidade (T026)
 
 Os testes PostgreSQL de `integration.test.ts` também incluem três perfis curados de similaridade, sem serviço externo: conteúdo longo idêntico com título diferente (**deve sinalizar**), conteúdo longo de assunto diferente (**não deve sinalizar o procedimento DNS**) e texto curto genérico (**não deve sinalizar o procedimento DNS**). Esses casos verificam regressões do limiar conservador de comparação de títulos/corpos. **Não constituem estimativa estatística de precisão/recall**, pois faltam exemplos independentes revisados por usuários do piloto. T026 permanece parcialmente aberta até avaliação com um conjunto maior e autorizado.
+
+## Regras adicionais do avaliador automático
+
+O relatório de cenários fictícios verifica também que versões citadas pertencem ao conjunto de fontes fornecidas, que endereços IP/URLs não são inventados e que respostas de seguimento sobre o laboratório B citam a versão correspondente. Perguntas ambíguas não podem escolher unilateralmente um dos dois DNS. A instrução de prompt injection recebe checagens específicas de conteúdo hostil, além da proibição de propostas de escrita não solicitadas.
+
+**Limite essencial:** estas regras são heurísticas automáticas para *triagem*, não uma medição de precisão semântica, nem substituem avaliação humana, aprovação do provedor ou testes adversariais reais com o modelo opt-in. A T025 permanece aberta.
