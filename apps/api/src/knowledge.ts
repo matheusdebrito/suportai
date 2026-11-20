@@ -63,7 +63,7 @@ async function createVersion(actor:Actor,spaceId:string,title:string,content:str
 async function authorizedDoc(actor:Actor,documentId:string) {
  const r=await query('SELECT d.*,s.visibility FROM documents d JOIN spaces s ON s.id=d.space_id WHERE d.id=$1',[documentId]);
  const doc=r.rows[0];
- if(!doc) throw Object.assign(new Error('Documento não encontrado'),{statusCode:404});
+ if(!doc || doc.archived_at) throw Object.assign(new Error('Documento não encontrado'),{statusCode:404});
  const p=await spacePermission(actor,doc.space_id);
  if(!p?.read) throw Object.assign(new Error('Documento não encontrado'),{statusCode:404});
  return {doc,p};
@@ -131,6 +131,59 @@ export function registerKnowledge(app:FastifyInstance) {
    return {id:doc.id,title:doc.title,kind:doc.kind,space_id:doc.space_id,version:version.rows[0],
      isCurrent:doc.current_version_id===params.versionId};
  });
+
+ // Archiving is an explicit editorial action. It only changes document visibility,
+ // never deletes the version history, source bytes or previously audited decisions.
+ app.get('/knowledge/archived',async req=>{
+   const actor=await requireActor(req);
+   if(actor.role!=='APPROVER')return {documents:[]};
+   const rows=await query(\`SELECT d.id,d.title,d.kind,d.archived_at,d.current_version_id,
+       s.name AS space_name FROM documents d
+       JOIN spaces s ON s.id=d.space_id
+       JOIN space_grants g ON g.space_id=d.space_id AND g.user_id=$1
+       WHERE d.archived_at IS NOT NULL AND d.current_version_id IS NOT NULL
+         AND g.can_approve=true AND (s.visibility='SHARED' OR g.can_read=true)
+       ORDER BY d.archived_at DESC,d.id DESC LIMIT 100\`,[actor.id]);
+   return {documents:rows.rows};
+ });
+ for(const action of ['archive','restore'] as const){
+   app.post('/knowledge/documents/:id/'+action,async(req,reply)=>{
+     const actor=await requireActor(req);
+     const id=(req.params as {id:string}).id;
+     const body=req.body as {confirm?:unknown}|undefined;
+     if(body?.confirm!==true)return reply.code(400).send({error:'Confirmação humana obrigatória'});
+     const outcome=await transaction(async c=>{
+       await requireCurrentActor(c,actor);
+       const found=await c.query(\`SELECT d.id,d.archived_at,d.current_version_id,
+         s.visibility,g.can_read,g.can_approve FROM documents d
+         JOIN spaces s ON s.id=d.space_id
+         LEFT JOIN space_grants g ON g.space_id=d.space_id AND g.user_id=$2
+         WHERE d.id=$1 FOR UPDATE OF d\`,[id,actor.id]);
+       const doc=found.rows[0];
+       if(!doc||actor.role!=='APPROVER'||!doc.can_approve
+         ||!(doc.visibility==='SHARED'||doc.can_read))return 'NOT_FOUND';
+       if(!doc.current_version_id)return 'NO_PUBLISHED';
+       if(action==='archive'){
+         if(doc.archived_at)return 'UNCHANGED';
+         await c.query('UPDATE documents SET archived_at=now() WHERE id=$1',[id]);
+       }else{
+         if(!doc.archived_at)return 'UNCHANGED';
+         const version=await c.query('SELECT status,index_status FROM document_versions WHERE id=$1 AND document_id=$2',
+           [doc.current_version_id,id]);
+         if(version.rows[0]?.status!=='PUBLISHED'||version.rows[0]?.index_status!=='READY')
+           return 'NOT_READY';
+         await c.query('UPDATE documents SET archived_at=NULL WHERE id=$1',[id]);
+       }
+       await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,$2,$3)",
+         [actor.id,action==='archive'?'KNOWLEDGE_ARCHIVED':'KNOWLEDGE_RESTORED',id]);
+       return 'UPDATED';
+     });
+     if(outcome==='NOT_FOUND')return reply.code(404).send({error:'Documento não encontrado ou não autorizado'});
+     if(outcome==='NO_PUBLISHED'||outcome==='NOT_READY')
+       return reply.code(409).send({error:'Documento sem versão publicada e indexada'});
+     return {ok:true,archived:action==='archive'};
+   });
+ }
  app.post('/knowledge/articles',async(req,reply)=>{
    const a=await requireActor(req);
    const b=req.body as {spaceId?:unknown;title?:unknown;content?:unknown;duplicateReason?:unknown}|undefined;
@@ -189,13 +242,13 @@ export function registerKnowledge(app:FastifyInstance) {
     LEFT JOIN document_versions base ON base.id=v.base_version_id
     LEFT JOIN ingestion_jobs j ON j.version_id=v.id
     LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$1
-    WHERE v.status='IN_REVIEW' AND v.superseded_by IS NULL AND (s.visibility='SHARED' OR COALESCE(g.can_read,false)) AND COALESCE(g.can_approve,false)
+    WHERE v.status='IN_REVIEW' AND d.archived_at IS NULL AND v.superseded_by IS NULL AND (s.visibility='SHARED' OR COALESCE(g.can_read,false)) AND COALESCE(g.can_approve,false)
     ORDER BY v.created_at DESC LIMIT 100`,[a.id]);
    return {reviews:r.rows};
  });
  app.post('/knowledge/versions/:id/retry',async(req,reply)=>{
    const a=await requireActor(req);const id=(req.params as {id:string}).id;
-   const r=await query('SELECT d.space_id,v.status,v.index_status FROM document_versions v JOIN documents d ON d.id=v.document_id WHERE v.id=$1',[id]);
+   const r=await query('SELECT d.space_id,v.status,v.index_status FROM document_versions v JOIN documents d ON d.id=v.document_id WHERE v.id=$1 AND d.archived_at IS NULL',[id]);
    if(!r.rowCount) return reply.code(404).send({error:'Versão não encontrada'});
    const p=await spacePermission(a,r.rows[0].space_id);
    if(!p?.edit) return reply.code(403).send({error:'Sem permissão'});
@@ -214,7 +267,7 @@ export function registerKnowledge(app:FastifyInstance) {
    const id=(req.params as {id:string}).id;
    const state=await transaction(async c=>{
      await requireCurrentActor(c,a);
-     const r=await c.query(`SELECT v.id,v.authored_by,v.status,s.visibility,g.can_read,g.can_edit
+     const r=await c.query(`SELECT v.id,v.authored_by,v.status,d.archived_at,s.visibility,g.can_read,g.can_edit
        FROM document_versions v JOIN documents d ON d.id=v.document_id
        JOIN spaces s ON s.id=d.space_id
        LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2
@@ -222,7 +275,7 @@ export function registerKnowledge(app:FastifyInstance) {
      const version=r.rows[0];
      if(!version||version.authored_by!==a.id)return 'NOT_FOUND';
      if(!(version.can_edit && (version.visibility==='SHARED'||version.can_read)))return 'FORBIDDEN';
-     if(version.status!=='DRAFT')return 'CONFLICT';
+     if(version.archived_at||version.status!=='DRAFT')return 'CONFLICT';
      await c.query("UPDATE document_versions SET status='IN_REVIEW' WHERE id=$1",[id]);
      await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'KNOWLEDGE_SUBMITTED_REVIEW',$2)",[a.id,id]);
      return 'OK';
@@ -239,12 +292,13 @@ export function registerKnowledge(app:FastifyInstance) {
    if(b?.confirm!==true) return reply.code(400).send({error:'Confirmação humana obrigatória'});
    const outcome=await transaction(async c=>{
      await requireCurrentActor(c,a);
-     const r=await c.query(`SELECT v.*,d.space_id,d.current_version_id,s.visibility,g.can_read,g.can_approve
+     const r=await c.query(`SELECT v.*,d.space_id,d.current_version_id,d.archived_at,s.visibility,g.can_read,g.can_approve
         FROM document_versions v JOIN documents d ON d.id=v.document_id JOIN spaces s ON s.id=d.space_id
         LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2 WHERE v.id=$1 FOR UPDATE OF v,d`,[id,a.id]);
      const v=r.rows[0];
      if(!v) return 'NOT_FOUND';
      if(a.role!=='APPROVER'||!(v.can_approve && (v.visibility==='SHARED'||v.can_read))) return 'FORBIDDEN';
+     if(v.archived_at)return 'ARCHIVED';
      if(v.status==='PUBLISHED'&&v.current_version_id===v.id) return 'OK';
      if(v.status!=='IN_REVIEW'||v.index_status!=='READY') return 'NOT_READY';
      if(v.current_version_id!==v.base_version_id) return 'STALE';
@@ -258,6 +312,7 @@ export function registerKnowledge(app:FastifyInstance) {
    if(outcome==='FORBIDDEN') return reply.code(403).send({error:'Aprovação não autorizada'});
    if(outcome==='NOT_READY') return reply.code(409).send({error:'Versão não está revisada/indexada'});
    if(outcome==='STALE') return reply.code(409).send({error:'Outra versão foi publicada. Atualize a revisão antes de publicar'});
+   if(outcome==='ARCHIVED') return reply.code(409).send({error:'Documento arquivado. Restaure-o antes de publicar outra versão'});
    return {ok:true};
  });
 
@@ -422,7 +477,7 @@ export function registerKnowledge(app:FastifyInstance) {
      let docId=pending.document_id;let version=1;
      let similarCount=0;
      if(docId){
-       const old=await c.query('SELECT current_version_id FROM documents WHERE id=$1 FOR UPDATE',[docId]);
+       const old=await c.query('SELECT current_version_id,archived_at FROM documents WHERE id=$1 FOR UPDATE',[docId]);
        if(!old.rowCount||old.rows[0].current_version_id!==pending.base_version_id) return {error:'STALE'};
        const count=await c.query('SELECT COALESCE(MAX(version_number),0)+1 AS next FROM document_versions WHERE document_id=$1',[docId]);
        version=Number(count.rows[0].next);
