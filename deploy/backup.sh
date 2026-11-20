@@ -24,7 +24,8 @@ trap 'rm -f "$tmp"' EXIT
 "${compose[@]}" exec -T db pg_dump -U suportai -d suportai --format=custom --no-owner --no-acl > "$tmp"
 test -s "$tmp"
 "${compose[@]}" exec -T db pg_restore --list < "$tmp" > /dev/null
-mv -n -- "$tmp" "$final"
+ln -- "$tmp" "$final"
+rm -f "$tmp"
 sha256sum "$final" > "$final.sha256"
 echo "Backup locally verified. Encrypt and copy it off-host under the approved retention policy."
 echo "File: $final"
