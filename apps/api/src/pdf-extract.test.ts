@@ -1,7 +1,8 @@
 import {test} from 'node:test';
 import {readFile} from 'node:fs/promises';
+import {createServer} from 'node:http';
 import assert from 'node:assert/strict';
-import {PDFDocument,StandardFonts} from 'pdf-lib';
+import {PDFDocument,PDFName,PDFString,StandardFonts} from 'pdf-lib';
 import {extractPdfText} from './pdf-extract.js';
 
 test('PDF extraction runs in a subprocess and returns digital text',async()=>{
@@ -65,4 +66,40 @@ test('a password-encrypted PDF is rejected without exposing parser internals',as
  assert.ok(encrypted.includes(Buffer.from('/Encrypt')));
  await assert.rejects(()=>extractPdfText(encrypted),
    /PDF inválido|PDF sem texto extraível|Não foi possível extrair/);
+});
+
+test('untrusted PDF URI actions do not trigger local network requests during extraction',async()=>{
+ const requests:string[]=[];
+ const server=createServer((req,res)=>{
+   requests.push(req.url||'');
+   res.writeHead(200,{'Content-Type':'text/plain'});
+   res.end('unexpected request from PDF');
+ });
+ await new Promise<void>((resolve,reject)=>{
+   server.once('error',reject);
+   server.listen(0,'127.0.0.1',resolve);
+ });
+ try{
+   const address=server.address();
+   if(!address||typeof address==='string')throw new Error('Local canary port unavailable');
+   const uri='http://127.0.0.1:'+address.port+'/external-pdf-link-canary';
+   const pdf=await PDFDocument.create();
+   const page=pdf.addPage([640,420]);
+   const font=await pdf.embedFont(StandardFonts.Helvetica);
+   page.drawText('Laboratorio ficticio: conferir registros e consultar o resultado de cada teste sem abrir links.',{
+     x:35,y:330,size:12,font,maxWidth:550
+   });
+   const action=pdf.context.obj({S:PDFName.of('URI'),URI:PDFString.of(uri)});
+   const annotation=pdf.context.obj({
+     Type:PDFName.of('Annot'),Subtype:PDFName.of('Link'),
+     Rect:[35,200,300,230],Border:[0,0,0],A:action
+   });
+   const annotationRef=pdf.context.register(annotation);
+   page.node.set(PDFName.of('Annots'),pdf.context.obj([annotationRef]));
+   const text=await extractPdfText(Buffer.from(await pdf.save({useObjectStreams:false})));
+   assert.match(text,/conferir registros/);
+   assert.deepEqual(requests,[],'A parser must never dereference a PDF URI action');
+ }finally{
+   await new Promise<void>(resolve=>server.close(()=>resolve()));
+ }
 });

@@ -16,7 +16,7 @@ Antes de produção com arquivos internos, executar amostras controladas de PDF 
 
 - [x] Testes sintéticos automatizados dos casos descritos acima.
 - [x] PDF autenticamente criptografado (arquivo sintético legítimo) em processo filho, com validação API/Chromium; isolamento de SO continua pendente.
-- [ ] Teste de redirecionamentos/links externos sem rede.
+- [x] PDF com ação URI apontando para servidor-canário local: extração não fez nenhuma requisição. **Isso não comprova bloqueio de rede pelo SO**; ainda é necessário teste de rede isolada no host de produção.
 - [ ] Validar limites de CPU e memória no sistema operacional escolhido.
 - [ ] Avaliar e corrigir alertas de dependências do parser.
 - [ ] Teste de recuperação de worker sob falha/timeout no ambiente de implantação.
