@@ -1,6 +1,6 @@
 # Tarefas — SuportAI MVP
 
-**Status:** planejamento e implementação parcial em uma branch. Não marcar tarefas completas sem testes de integração bem-sucedidos.
+**Status:** implementação incremental na `main`; não considerar o MVP pronto enquanto houver critérios sem validação prática.
 
 - [ ] T001 [REQ-001, REQ-027, REQ-029; AC-001, AC-023, AC-025] Validar login, bootstrap de admin, criação de usuários, reset de senha e revogação com PostgreSQL real; comandos: npm run db:migrate, npm run test.
 - [ ] T002 [REQ-003, REQ-004, REQ-021, REQ-028; AC-002, AC-003, AC-024] Testar leitura restrita por API e RAG com usuários/grants independentes, incluindo revogação durante chamadas ao LLM.
@@ -25,3 +25,6 @@ Concluir somente após execução real com banco, API, worker e UI, além de rev
 - [x] T015 [REQ-018, REQ-020, AC-013, AC-014] Aprovador solicita ajustes/rejeita com parecer; autor cria nova versão de artigo sem sobrescrever a anterior; autorização e concorrência validadas em integração PostgreSQL.
 - [ ] T016 [REQ-012, REQ-018] Permitir substituição de PDF após ajustes sem criar documento novo (ainda fora deste incremento).
 - [ ] T017 [REQ-015, AC-011] Verificar visualmente a comparação antes/depois nas interfaces de edição e revisão.
+
+- [x] T018 [REQ-016, AC-012] Identificação de artigos publicados semelhantes no mesmo espaço antes da criação por painel ou conversa; prosseguir exige justificativa e gera evento auditável. Testado com PostgreSQL.
+- [ ] T019 [REQ-016, AC-012] Verificar no navegador o fluxo de sugestões e abertura de artigo existente; melhorar similaridade além de títulos quando houver dados reais suficientes.
