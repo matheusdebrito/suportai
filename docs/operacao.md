@@ -78,3 +78,15 @@ Além de contagens, validar integridade referencial, usuários, versões publica
 - Detecção de segredos é heurística, não substitui classificação/revisão humana.
 - Modelo externo depende de autorização de processamento; configuração da chave sozinha não habilita o envio de dados.
 - Logs não devem conter arquivos, senhas, tokens temporários ou conteúdo privado.
+
+## Pré-verificação antes de implantar
+
+Executar **no ambiente de destino**, com os valores de configuração provisionados por mecanismo seguro (não imprimir segredos):
+
+```bash
+NODE_ENV=production npm run preflight -w @suportai/api
+```
+
+O comando valida uma lista curta de pré-requisitos: HTTPS em `APP_ORIGIN`, URL de banco presente, ausência de segredos de bootstrap e configuração coerente de envio externo de IA. Ele não abre conexões nem escreve no banco.
+
+**Preflight verde não aprova produção.** Verificar manualmente isolamento do processamento de PDFs, TLS/reverse proxy, teste de restauração em banco separado, backups externos, RPO/RTO, monitoramento do worker e filas, política de retenção, implantação/rollback e autorização da empresa para usar dados internos e provedor de IA.
