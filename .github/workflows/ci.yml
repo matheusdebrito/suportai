@@ -47,10 +47,13 @@ jobs:
           printf 'postgres://suportai:test_password@db:5432/suportai' > "$temp/database_url"
           : > "$temp/ai_key"
           mkdir -p "$temp/socket"
-          SUPORTAI_DB_PASSWORD_FILE="$temp/db_password" SUPORTAI_DATABASE_URL_FILE="$temp/database_url" \
-          SUPORTAI_AI_KEY_FILE="$temp/ai_key" PDF_SOCKET_DIR="$temp/socket" \
-          SUPORTAI_DOMAIN=suportai.example.org SUPORTAI_TLS_CONTACT=ti@example.org \
-          APP_ORIGIN=https://suportai.example.org \
+          export SUPORTAI_DB_PASSWORD_FILE="$temp/db_password"
+          export SUPORTAI_DATABASE_URL_FILE="$temp/database_url"
+          export SUPORTAI_AI_KEY_FILE="$temp/ai_key"
+          export PDF_SOCKET_DIR="$temp/socket"
+          export SUPORTAI_DOMAIN=suportai.example.org
+          export SUPORTAI_TLS_CONTACT=ti@example.org
+          export APP_ORIGIN=https://suportai.example.org
           docker compose -f deploy/compose.production.yml config --quiet
           docker compose -f deploy/compose.production.yml config --format json > "$temp/compose.json"
           node - "$temp/compose.json" <<'NODE'
