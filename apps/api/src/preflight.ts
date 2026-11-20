@@ -26,7 +26,8 @@ export function inspectProductionConfig(env:Record<string,string|undefined>):str
  return issues;
 }
 export function isProductionPreflightEntrypoint(path:string|undefined):boolean{
- return /(?:^|[\\/])preflight\\.(?:js|ts)$/.test(path??'');
+ const filename=path?.replaceAll(String.fromCharCode(92),'/').split('/').pop();
+ return filename==='preflight.ts'||filename==='preflight.js';
 }
 if(isProductionPreflightEntrypoint(process.argv[1])){
  const issues=inspectProductionConfig(process.env);
