@@ -75,6 +75,32 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
      ORDER BY p.expires_at DESC LIMIT 10`,[id,a.id]);
    return {id,messages:messages.rows.reverse(),pendingActions:pending.rows};
  });
+ app.delete('/conversations/:id',async(req,reply)=>{
+   const actor=await requireActor(req);
+   const id=(req.params as {id:string}).id;
+   const body=req.body as {confirm?:unknown}|undefined;
+   if(body?.confirm!==true)return reply.code(400).send({error:'Confirmação obrigatória'});
+   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))
+     return reply.code(404).send({error:'Conversa não encontrada'});
+   const deleted=await transaction(async c=>{
+     await requireCurrentActor(c,actor);
+     const own=await c.query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2 FOR UPDATE',[id,actor.id]);
+     if(!own.rowCount)return false;
+     // Keep confirmed knowledge/audit; detach it from the conversation before deletion.
+     await c.query('UPDATE pending_actions SET conversation_id=NULL '+
+       'WHERE conversation_id=$1 AND user_id=$2 AND result_version_id IS NOT NULL',[id,actor.id]);
+     await c.query('DELETE FROM pending_actions WHERE conversation_id=$1 AND user_id=$2',[id,actor.id]);
+     await c.query('DELETE FROM feedback WHERE message_id IN '+
+       '(SELECT id FROM messages WHERE conversation_id=$1)',[id]);
+     // ON DELETE CASCADE removes messages; grants and knowledge are untouched.
+     await c.query('DELETE FROM conversations WHERE id=$1 AND user_id=$2',[id,actor.id]);
+     await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'CONVERSATION_DELETED',$2)",
+       [actor.id,id]);
+     return true;
+   });
+   if(!deleted)return reply.code(404).send({error:'Conversa não encontrada'});
+   return {ok:true};
+ });
  app.post('/conversations/:id/messages',async(req,reply)=>{
    const a=await requireActor(req);const id=(req.params as {id:string}).id;
    const b=req.body as {message?:unknown}|undefined;
@@ -102,7 +128,12 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
     WHERE m.conversation_id=$1 AND m.auth_revision=$2
     ORDER BY m.created_at DESC,m.id DESC LIMIT 8`,[id,a.auth_revision,a.id]);
    const history=previous.rows.reverse();
-   const sent=await query("INSERT INTO messages(conversation_id,role,content,auth_revision) VALUES($1,'user',$2,$3) RETURNING id",[id,b.message,a.auth_revision]);
+   await transaction(async c=>{
+     await requireCurrentActor(c,a);
+     const owned=await c.query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2 FOR SHARE',[id,a.id]);
+     if(!owned.rowCount)throw Object.assign(new Error('Conversa removida'),{statusCode:404});
+     await c.query("INSERT INTO messages(conversation_id,role,content,auth_revision) VALUES($1,'user',$2,$3)",[id,b.message,a.auth_revision]);
+   });
    try {
      const output=await runAgent(a,id,b.message,history);
      // Hold a shared account lock while saving the reply. Permission changes
@@ -110,6 +141,8 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
      const sources=output.sources.map(s=>({documentId:s.documentId,versionId:s.versionId,versionNumber:s.versionNumber,title:s.title,ordinal:s.ordinal}));
      const saved=await transaction(async c=>{
        await requireCurrentActor(c,a);
+       const conversation=await c.query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2 FOR SHARE',[id,a.id]);
+       if(!conversation.rowCount)throw Object.assign(new Error('Conversa removida'),{statusCode:404});
        // Serializing on each cited document prevents an archived or superseded
        // procedure being presented as current after the model has responded.
        for(const source of sources){
@@ -132,6 +165,8 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
    }catch(error){
      if((error as {statusCode?:number})?.statusCode===403)
        return reply.code(403).send({error:'Permissões alteradas durante a consulta; entre novamente para continuar'});
+     if((error as {statusCode?:number})?.statusCode===404)
+       return reply.code(404).send({error:'A conversa foi excluída enquanto o agente respondia'});
      if((error as {statusCode?:number})?.statusCode===409)
        return reply.code(409).send({error:'O procedimento consultado foi arquivado ou atualizado. Refaça a pergunta para buscar a versão atual.'});
      req.log.error({err:error instanceof Error?error.message:'unknown'},'Agent execution failed');
