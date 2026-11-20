@@ -11,6 +11,7 @@ import {actorForSession} from './security.js';
 if(!process.env.TEST_DATABASE_URL){
   test('integration requires TEST_DATABASE_URL', {skip:'No isolated PostgreSQL test database configured'},()=>{});
 }else{
+ if(process.env.DATABASE_URL!==process.env.TEST_DATABASE_URL) throw new Error('Integration tests require DATABASE_URL to equal TEST_DATABASE_URL');
  test('end-to-end permission, ingestion and publication flow',async()=>{
   const app=await buildApp();
   let worker:ReturnType<typeof spawn>|undefined;
