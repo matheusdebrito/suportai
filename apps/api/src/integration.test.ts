@@ -356,14 +356,14 @@ if(!process.env.TEST_DATABASE_URL){
    assert.equal(invalidPdf.statusCode,415);
 
    const correctedBytes=await makeTestPdf('Checklist revisado de seguranca: registre resultados de logs, backups, disponibilidade e validacao de servicos.');
-   const corrections=await Promise.all([0,1].map(async()=>{
+   const pdfCorrections=await Promise.all([0,1].map(async()=>{
      const payload=pdfForm(correctedBytes);
      return app.inject({method:'POST',url:'/knowledge/versions/'+pdfOriginalId+'/correct-pdf',
        headers:{...auth(reader.cookie),'content-type':payload.type},payload:payload.body});
    }));
-   assert.deepEqual(corrections.map(r=>r.statusCode).sort(),[201,409],
+   assert.deepEqual(pdfCorrections.map(r=>r.statusCode).sort(),[201,409],
      'Concurrent PDF corrections must generate only one replacement');
-   const newPdfVersion=corrections.find(r=>r.statusCode===201)!.json() as {documentId:string;versionId:string};
+   const newPdfVersion=pdfCorrections.find(r=>r.statusCode===201)!.json() as {documentId:string;versionId:string};
    assert.equal(newPdfVersion.documentId,pdfDocumentId);
    assert.notEqual(newPdfVersion.versionId,pdfOriginalId);
    const obsoletePdf=await app.inject({method:'GET',url:'/knowledge/drafts/'+pdfOriginalId,headers:auth(reader.cookie)});
