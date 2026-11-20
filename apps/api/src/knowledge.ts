@@ -221,7 +221,7 @@ export function registerKnowledge(app:FastifyInstance) {
        WHERE v.id=$1 FOR UPDATE OF v`,[id,a.id]);
      const version=r.rows[0];
      if(!version||version.authored_by!==a.id)return 'NOT_FOUND';
-     if(!(version.version.can_edit && (version.visibility==='SHARED'||version.can_read)))return 'FORBIDDEN';
+     if(!(version.can_edit && (version.visibility==='SHARED'||version.can_read)))return 'FORBIDDEN';
      if(version.status!=='DRAFT')return 'CONFLICT';
      await c.query("UPDATE document_versions SET status='IN_REVIEW' WHERE id=$1",[id]);
      await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'KNOWLEDGE_SUBMITTED_REVIEW',$2)",[a.id,id]);
@@ -244,7 +244,7 @@ export function registerKnowledge(app:FastifyInstance) {
         LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2 WHERE v.id=$1 FOR UPDATE OF v,d`,[id,a.id]);
      const v=r.rows[0];
      if(!v) return 'NOT_FOUND';
-     if(a.role!=='APPROVER'||!(v.v.can_approve && (v.visibility==='SHARED'||v.can_read))) return 'FORBIDDEN';
+     if(a.role!=='APPROVER'||!(v.can_approve && (v.visibility==='SHARED'||v.can_read))) return 'FORBIDDEN';
      if(v.status==='PUBLISHED'&&v.current_version_id===v.id) return 'OK';
      if(v.status!=='IN_REVIEW'||v.index_status!=='READY') return 'NOT_READY';
      if(v.current_version_id!==v.base_version_id) return 'STALE';
@@ -277,7 +277,7 @@ export function registerKnowledge(app:FastifyInstance) {
        'WHERE v.id=$1 FOR UPDATE OF v,d',[id,actor.id]);
      const item=r.rows[0];
      if(!item)return 'NOT_FOUND';
-     if(actor.role!=='APPROVER'||!(item.item.can_approve && (item.visibility==='SHARED'||item.can_read)))return 'FORBIDDEN';
+     if(actor.role!=='APPROVER'||!(item.can_approve && (item.visibility==='SHARED'||item.can_read)))return 'FORBIDDEN';
      if(item.status!=='IN_REVIEW')return 'CONFLICT';
      await c.query("UPDATE document_versions SET status='CHANGES_REQUESTED',reviewed_by=$2,reviewed_at=now(),review_note=$3 WHERE id=$1",[id,actor.id,note]);
      await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'KNOWLEDGE_CHANGES_REQUESTED',$2)",[actor.id,item.document_id]);
@@ -392,7 +392,7 @@ export function registerKnowledge(app:FastifyInstance) {
        'WHERE v.id=$1 FOR UPDATE OF v,d',[id,actor.id]);
      const ver=r.rows[0];
      if(!ver)return 'NOT_FOUND';
-     if(actor.role!=='APPROVER'||!(ver.ver.can_approve && (ver.visibility==='SHARED'||ver.can_read)))return 'FORBIDDEN';
+     if(actor.role!=='APPROVER'||!(ver.can_approve && (ver.visibility==='SHARED'||ver.can_read)))return 'FORBIDDEN';
      if(ver.status!=='IN_REVIEW')return 'CONFLICT';
      await c.query("UPDATE document_versions SET status='REJECTED',review_note=$3,reviewed_by=$2,reviewed_at=now() WHERE id=$1",[id,actor.id,note]);
      await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'KNOWLEDGE_REJECTED',$2)",[actor.id,ver.document_id]);
