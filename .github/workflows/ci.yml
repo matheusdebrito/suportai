@@ -37,6 +37,21 @@ jobs:
       - run: npm test
       - run: npm run rag:evaluate -w @suportai/api # dry-run only, zero external requests
       - run: npm run build
+      - name: Validate hardened production Compose configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          temp="$(mktemp -d)"
+          trap 'rm -rf "$temp"' EXIT
+          printf 'test_password' > "$temp/db_password"
+          printf 'postgres://suportai:test_password@db:5432/suportai' > "$temp/database_url"
+          : > "$temp/ai_key"
+          mkdir -p "$temp/socket"
+          SUPORTAI_DB_PASSWORD_FILE="$temp/db_password" SUPORTAI_DATABASE_URL_FILE="$temp/database_url" \
+          SUPORTAI_AI_KEY_FILE="$temp/ai_key" PDF_SOCKET_DIR="$temp/socket" \
+          SUPORTAI_DOMAIN=suportai.example.org SUPORTAI_TLS_CONTACT=ti@example.org \
+          APP_ORIGIN=https://suportai.example.org \
+          docker compose -f deploy/compose.production.yml config --quiet
       # Browser tests use a different database from request/integration tests.
       - name: Create isolated browser-test database
         run: |
