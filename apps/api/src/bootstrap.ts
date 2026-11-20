@@ -1,0 +1,10 @@
+import argon2 from 'argon2';
+import { query, pool } from './db.js';
+const email = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
+const password = process.env.BOOTSTRAP_ADMIN_PASSWORD;
+if (!email || !password || password.length < 12) throw new Error('Set BOOTSTRAP_ADMIN_EMAIL and a strong BOOTSTRAP_ADMIN_PASSWORD (12+ chars)');
+const count = await query('SELECT count(*)::int AS total FROM users WHERE role=$1',['ADMIN']);
+if (count.rows[0].total > 0) throw new Error('Admin already exists; refusing bootstrap');
+await query('INSERT INTO users(email,password_hash,role) VALUES($1,$2,$3)',[email,await argon2.hash(password),'ADMIN']);
+await pool.end();
+console.log('Admin created. Remove BOOTSTRAP_ADMIN_PASSWORD from your environment');
