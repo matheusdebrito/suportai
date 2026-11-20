@@ -1,0 +1,25 @@
+name: Production dependency audit
+on:
+  pull_request:
+    paths:
+      - 'package.json'
+      - 'apps/api/package.json'
+      - 'apps/web/package.json'
+      - '.github/workflows/dependency-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # Resolve the same manifest ranges as the deploy build, without
+      # running install scripts or shipping any company data to npm.
+      - name: Resolve dependency manifests without executing install scripts
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Block high and critical runtime dependency vulnerabilities
+        run: npm audit --omit=dev --audit-level=high
