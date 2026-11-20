@@ -41,7 +41,7 @@ async function createVersion(actor:Actor,spaceId:string,title:string,content:str
      if(kind==='ARTICLE'){
        // Serialize checks in this space to avoid stale preflight results.
        await c.query('SELECT id FROM spaces WHERE id=$1 FOR UPDATE',[spaceId]);
-       const matches=await findSimilarPublished(spaceId,title,c);
+       const matches=await findSimilarPublished(spaceId,title,c,content);
        similarCount=matches.length;
        if(matches.length && !validDuplicateReason(duplicateReason)) throw new SimilarArticlesError(matches);
      }
@@ -484,7 +484,7 @@ export function registerKnowledge(app:FastifyInstance) {
      } else {
        if(!p.read)return {error:'FORBIDDEN'};
        await c.query('SELECT id FROM spaces WHERE id=$1 FOR UPDATE',[pending.space_id]);
-       const matches=await findSimilarPublished(pending.space_id,pending.title,c);
+       const matches=await findSimilarPublished(pending.space_id,pending.title,c,pending.content);
        similarCount=matches.length;
        if(matches.length && !validDuplicateReason(duplicateReason)) return {error:'SIMILAR_ARTICLES',matches};
        const doc=await c.query("INSERT INTO documents(space_id,title,kind) VALUES($1,$2,'ARTICLE') RETURNING id",[pending.space_id,pending.title]);
