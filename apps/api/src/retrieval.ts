@@ -27,7 +27,7 @@ export function relaxedLexicalQuery(text:string):string{
 }
 // Defense in depth for articles published before secret scanning was tightened.
 export function safeRetrievedSources(sources:Source[],limit:number):Source[]{
- return sources.filter(x=>!hasSecrets(x.content)).slice(0,Math.max(0,limit));
+ return sources.filter(x=>!hasSecrets(x.title)&&!hasSecrets(x.content)).slice(0,Math.max(0,limit));
 }
 export async function searchKnowledge(actor:Actor, text:string, limit=5):Promise<Source[]> {
   const safe=text.trim().slice(0,500);
@@ -36,7 +36,8 @@ export async function searchKnowledge(actor:Actor, text:string, limit=5):Promise
   let vector:string|null=null;
   try { const arr=await embedText(safe);vector=arr?JSON.stringify(arr):null; } catch { /* textual fallback */ }
   const r=await query(`WITH allowed AS (
-   SELECT c.version_id,c.ordinal,c.content,c.embedding,c.search_vector,d.id AS document_id,d.title,v.version_number
+   SELECT c.version_id,c.ordinal,c.content,c.embedding,c.search_vector,
+     to_tsvector('simple',d.title) AS title_vector,d.id AS document_id,d.title,v.version_number
    FROM knowledge_chunks c JOIN document_versions v ON v.id=c.version_id
    JOIN documents d ON d.id=v.document_id AND d.current_version_id=v.id
    JOIN spaces s ON s.id=d.space_id
@@ -48,11 +49,15 @@ export async function searchKnowledge(actor:Actor, text:string, limit=5):Promise
    ts_rank_cd(search_vector,plainto_tsquery('simple',$2)) AS lexical,
    CASE WHEN $5::text='' THEN 0::real
      ELSE ts_rank_cd(search_vector,to_tsquery('simple',$5)) END AS relaxed,
+   ts_rank_cd(title_vector,plainto_tsquery('simple',$2)) AS title_lexical,
+   CASE WHEN $5::text='' THEN 0::real
+     ELSE ts_rank_cd(title_vector,to_tsquery('simple',$5)) END AS title_relaxed,
    CASE WHEN $3::vector IS NULL OR embedding IS NULL THEN 0::float
      ELSE 1-(embedding <=> $3::vector) END AS semantic
    FROM allowed)
-   SELECT *, (lexical*4+relaxed+GREATEST(semantic,0)) AS score FROM ranked
-   WHERE lexical>0 OR relaxed>0 OR semantic>0.45
+   SELECT *, (lexical*4+relaxed+title_lexical*6+title_relaxed*2+
+     GREATEST(semantic,0)) AS score FROM ranked
+   WHERE lexical>0 OR relaxed>0 OR title_lexical>0 OR title_relaxed>0 OR semantic>0.45
    ORDER BY score DESC LIMIT $4`,[actor.id,safe,vector,Math.min(Math.max(1,limit*3),16),relaxed]);
   return safeRetrievedSources(r.rows.map(x=>({
    documentId:x.document_id,versionId:x.version_id,versionNumber:Number(x.version_number),
