@@ -46,3 +46,19 @@ Commands above are instructions for an authorized operator, **not commands run b
 - If any check fails, keep the pilot closed.
 
 A Compose file cannot itself prove actual network isolation, kernel security controls, dependency security, external provider privacy or an executed recovery plan.
+
+## Worker egress for an approved external AI provider
+
+The default deployment in `deploy/compose.production.yml` deliberately connects the worker only to the `database` internal network. **Therefore, external embeddings are unavailable in the offline/default topology**; local lexical retrieval remains operational.
+
+**After** a named organizational approval of the provider, retention policy, information categories, billing and host firewall allowlist, an operator may opt into `deploy/compose.external-ai.yml`. This overlay attaches **only the worker** to a second bridge network that can route outbound; the PDF parser stays `network_mode: none` without DB/AI secrets. The API already has outbound reachability through its frontend network, but external calls still require `ALLOW_EXTERNAL_AI_DATA_PROCESSING=true` plus an approved key.
+
+Never apply the overlay merely because a key exists. Set the approval flag in the operator-controlled environment file, keep the firewall restricted to the verified provider endpoints, and validate the combined compose before use:
+
+```bash
+docker compose --env-file /secure/suportai.env \
+  -f deploy/compose.production.yml -f deploy/compose.external-ai.yml \
+  config --quiet
+```
+
+This is a configuration option only: the CI validates topology without transmitting documents, reaching the provider or deploying. **The Compose bridge network alone does not restrict destination domains**, so host-level egress controls and real network verification remain mandatory. T010/T025 and production approval are still open.

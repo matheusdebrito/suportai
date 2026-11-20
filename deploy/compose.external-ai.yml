@@ -1,0 +1,11 @@
+# Optional worker Internet egress ONLY after provider, destination firewall,
+# retention policy and processing costs are formally approved.
+# Do not apply this file in the default/offline deployment.
+services:
+  worker:
+    networks:
+      - database
+      - ai-egress
+networks:
+  ai-egress:
+    driver: bridge
