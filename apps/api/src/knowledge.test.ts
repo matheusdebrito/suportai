@@ -4,6 +4,8 @@ import {hasSecrets,chunks} from './knowledge.js';
 test('detects private keys and credential-like assignments',()=>{
  assert.equal(hasSecrets('-----BEGIN PRIVATE KEY-----'),true);
  assert.equal(hasSecrets('api_key = abcdefghijklmnop'),true);
+ assert.equal(hasSecrets('Authorization: Bearer abcdefghijklmnopqrstuvwxyz'),true);
+ assert.equal(hasSecrets('github_pat_abcdefghijklmnopqrstuvwxyz123456'),true);
  assert.equal(hasSecrets('Configure o driver da impressora'),false);
 });
 test('chunks do not drop final bytes',()=>{

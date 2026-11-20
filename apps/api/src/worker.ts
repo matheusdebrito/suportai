@@ -1,3 +1,4 @@
+import './env.js';
 import {PDFParse} from 'pdf-parse';
 import {pool,query} from './db.js';
 import {chunks,hasSecrets} from './knowledge.js';

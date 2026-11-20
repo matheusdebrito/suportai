@@ -1,3 +1,4 @@
+import './env.js';
 import argon2 from 'argon2';
 import { query, pool } from './db.js';
 const email = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
