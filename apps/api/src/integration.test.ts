@@ -52,7 +52,9 @@ if(!process.env.TEST_DATABASE_URL){
    const editorActor=await actorForSession(reader.cookie.split('=')[1]);
    assert.ok(editorActor);
    let draftCalls=0;
-   const agentMock={chat:{completions:{create:async()=>{
+   const requests:any[]=[];
+   const agentMock={chat:{completions:{create:async(request:any)=>{
+     requests.push(request);
      draftCalls++;
      return {choices:[{message:draftCalls===1
       ? {role:'assistant',content:null,tool_calls:[{id:'prepare-1',type:'function',function:{name:'prepare_article',arguments:JSON.stringify({
@@ -64,15 +66,45 @@ if(!process.env.TEST_DATABASE_URL){
    }}}} as unknown as OpenAI;
    const generated=await respond(editorActor!,conversationId,'Adicione este procedimento de NTP ao cérebro',[],agentMock);
    assert.equal(generated.pendingActions.length,1);
+   assert.equal(generated.pendingActions[0].spaceName,'Conhecimento geral');
+   assert.match(JSON.stringify(requests[0].messages),new RegExp(shared),'O modelo recebe apenas espaços autorizados para escrever');
    const pendingId=generated.pendingActions[0].id;
    const beforeConfirmation=await query('SELECT result_version_id FROM pending_actions WHERE id=$1',[pendingId]);
    assert.equal(beforeConfirmation.rows[0].result_version_id,null);
+   const pendingInChat=await app.inject({method:'GET',url:`/conversations/${conversationId}`,headers:auth(reader.cookie)});
+   assert.equal(pendingInChat.statusCode,200,pendingInChat.body);
+   assert.equal(pendingInChat.json().pendingActions.length,1);
+   assert.equal(pendingInChat.json().pendingActions[0].spaceName,'Conhecimento geral');
+   const otherUserChat=await app.inject({method:'GET',url:`/conversations/${conversationId}`,headers:auth(reviewer.cookie)});
+   assert.equal(otherUserChat.statusCode,404);
+   const savedMessage=await app.inject({method:'POST',url:`/conversations/${conversationId}/messages`,headers:auth(reader.cookie),payload:{message:'Preciso de ajuda para diagnosticar NTP'}});
+   assert.equal(savedMessage.statusCode,200,savedMessage.body);
+   const conversationList=await app.inject({method:'GET',url:'/conversations',headers:auth(reader.cookie)});
+   assert.equal(conversationList.statusCode,200);
+   assert.ok(conversationList.json().conversations.some((c:any)=>c.id===conversationId&&c.title.includes('diagnosticar NTP')));
+   const reviewerConversations=await app.inject({method:'GET',url:'/conversations',headers:auth(reviewer.cookie)});
+   assert.equal(reviewerConversations.statusCode,200);
+   assert.equal(reviewerConversations.json().conversations.some((c:any)=>c.id===conversationId),false);
+   const reopened=await app.inject({method:'GET',url:`/conversations/${conversationId}`,headers:auth(reader.cookie)});
+   assert.equal(reopened.json().messages.length,2);
+   assert.equal(reopened.json().pendingActions.length,1);
    const confirmed=await app.inject({method:'POST',url:`/knowledge/pending/${pendingId}/confirm`,headers:auth(reader.cookie)});
    assert.equal(confirmed.statusCode,200,confirmed.body);
    const draftDoc=await query('SELECT current_version_id FROM documents WHERE id=$1',[confirmed.json().documentId]);
    assert.equal(draftDoc.rows[0].current_version_id,null,'A preview must not publish content');
    const draftHidden=await app.inject({method:'GET',url:`/knowledge/documents/${confirmed.json().documentId}`,headers:auth(reader.cookie)});
    assert.equal(draftHidden.statusCode,404);
+   const mine=await app.inject({method:'GET',url:'/knowledge/mine',headers:auth(reader.cookie)});
+   assert.equal(mine.statusCode,200,mine.body);
+   assert.ok(mine.json().drafts.some((d:any)=>d.version_id===confirmed.json().versionId));
+   const others=await app.inject({method:'GET',url:'/knowledge/mine',headers:auth(reviewer.cookie)});
+   assert.equal(others.statusCode,200);
+   assert.equal(others.json().drafts.some((d:any)=>d.version_id===confirmed.json().versionId),false);
+   const ownDraft=await app.inject({method:'GET',url:`/knowledge/drafts/${confirmed.json().versionId}`,headers:auth(reader.cookie)});
+   assert.equal(ownDraft.statusCode,200,ownDraft.body);
+   assert.match(ownDraft.json().content,/chronyc tracking/);
+   const forbiddenDraft=await app.inject({method:'GET',url:`/knowledge/drafts/${confirmed.json().versionId}`,headers:auth(reviewer.cookie)});
+   assert.equal(forbiddenDraft.statusCode,404);
 
    const sharedDraft=await app.inject({method:'POST',url:'/knowledge/articles',headers:auth(reader.cookie),payload:{spaceId:shared,title:'Procedimento DNS '+id,content:'Para verificar resolução de nomes no Linux utilize dig e confira o servidor DNS autoritativo e o retorno esperado.'}});
    assert.equal(sharedDraft.statusCode,201,sharedDraft.body);
@@ -98,6 +130,8 @@ if(!process.env.TEST_DATABASE_URL){
    assert.equal(published.statusCode,200,published.body);
    const allowedRead=await app.inject({method:'GET',url:`/knowledge/documents/${sharedDoc.documentId}`,headers:auth(reader.cookie)});
    assert.equal(allowedRead.statusCode,200,allowedRead.body);
+   assert.equal(allowedRead.json().space_id,shared);
+   assert.equal(allowedRead.json().version.id,sharedDoc.versionId);
    const originalSource=await app.inject({method:'GET',url:`/knowledge/documents/${sharedDoc.documentId}/versions/${sharedDoc.versionId}`,headers:auth(reader.cookie)});
    assert.equal(originalSource.statusCode,200,originalSource.body);
    assert.equal(originalSource.json().isCurrent,true);
@@ -107,6 +141,11 @@ if(!process.env.TEST_DATABASE_URL){
    const revisionId=revision.json().versionId as string;
    const draftSource=await app.inject({method:'GET',url:`/knowledge/documents/${sharedDoc.documentId}/versions/${revisionId}`,headers:auth(reader.cookie)});
    assert.equal(draftSource.statusCode,404);
+   const ownRevision=await app.inject({method:'GET',url:`/knowledge/drafts/${revisionId}`,headers:auth(reader.cookie)});
+   assert.equal(ownRevision.statusCode,200);
+   assert.match(ownRevision.json().content,/verificar o DNS/);
+   const unauthorizedRevision=await app.inject({method:'GET',url:`/knowledge/drafts/${revisionId}`,headers:auth(reviewer.cookie)});
+   assert.equal(unauthorizedRevision.statusCode,404);
    await app.inject({method:'POST',url:`/knowledge/versions/${revisionId}/submit-review`,headers:auth(reader.cookie)});
    let revisionReady=false;
    for(let i=0;i<45;i++){

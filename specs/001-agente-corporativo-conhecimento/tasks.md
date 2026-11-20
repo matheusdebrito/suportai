@@ -16,3 +16,8 @@
 ## Critérios de encerramento
 
 Concluir somente após execução real com banco, API, worker e UI, além de revisão de controle de acesso, vazamento de dados, fallback de LLM e idempotência. O PR não representa deploy aprovado.
+
+- [x] T011 [REQ-006, REQ-010, AC-005] Recuperar conversas anteriores e propostas pendentes com isolamento por usuário; API validada em teste de integração com PostgreSQL.
+- [x] T012 [REQ-014..REQ-021, AC-010..AC-014] Consultar rascunhos próprios e suas revisões, ocultando conteúdo de terceiros; API validada por teste de integração.
+- [ ] T013 [REQ-006, REQ-014..REQ-021] Validar manualmente a interface de histórico, rascunhos e atualização de artigos no navegador (typecheck/build não equivalem a E2E).
+- [ ] T014 [REQ-006..REQ-010] Validar escolha de espaço pelo modelo real em pedidos ambíguos, sem IDs fornecidos pelo usuário.
