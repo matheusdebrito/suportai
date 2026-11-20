@@ -25,8 +25,10 @@ export function inspectProductionConfig(env:Record<string,string|undefined>):str
    issues.push('ALLOW_EXTERNAL_AI_DATA_PROCESSING deve ser true ou false');
  return issues;
 }
-const cli=process.argv[1]?.endsWith('/preflight.ts')||process.argv[1]?.endsWith('\\preflight.ts');
-if(cli){
+export function isProductionPreflightEntrypoint(path:string|undefined):boolean{
+ return /(?:^|[\\/])preflight\\.(?:js|ts)$/.test(path??'');
+}
+if(isProductionPreflightEntrypoint(process.argv[1])){
  const issues=inspectProductionConfig(process.env);
  if(issues.length){
    process.stderr.write('Preflight de configuração: PENDÊNCIAS\n'+issues.map(x=>'- '+x).join('\n')+'\n');
