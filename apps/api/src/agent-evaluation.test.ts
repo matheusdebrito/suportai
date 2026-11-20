@@ -33,7 +33,7 @@ function model(answers:any[],requests:any[]):OpenAI{
    return {choices:[{message:next,finish_reason:'stop'}]};
  }}}} as unknown as OpenAI;
 }
-const fakeSearch=(items:Source[],queries:string[])=>async(_actor:Actor,text:string,_limit:number)=>{
+const fakeSearch=(items:Source[],queries:string[])=>async(_actor:Actor,text:string,_limit=5)=>{
  queries.push(text);
  return items;
 };
