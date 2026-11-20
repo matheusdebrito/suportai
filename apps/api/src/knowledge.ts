@@ -93,12 +93,28 @@ export function registerKnowledge(app:FastifyInstance) {
  app.get('/knowledge/reviews',async req=>{
    const a=await requireActor(req);
    if(a.role!=='APPROVER') return {reviews:[]};
-   const r=await query(`SELECT v.id AS version_id,v.status,v.index_status,v.content,d.id AS document_id,d.title,s.name AS space_name
+   const r=await query(`SELECT v.id AS version_id,v.status,v.index_status,v.content,j.error AS ingestion_error,d.id AS document_id,d.title,s.name AS space_name
     FROM document_versions v JOIN documents d ON d.id=v.document_id JOIN spaces s ON s.id=d.space_id
+    LEFT JOIN ingestion_jobs j ON j.version_id=v.id
     LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$1
     WHERE v.status IN ('DRAFT','IN_REVIEW') AND (s.visibility='SHARED' OR COALESCE(g.can_approve,false))
     ORDER BY v.created_at DESC LIMIT 100`,[a.id]);
    return {reviews:r.rows};
+ });
+ app.post('/knowledge/versions/:id/retry',async(req,reply)=>{
+   const a=await requireActor(req);const id=(req.params as {id:string}).id;
+   const r=await query('SELECT d.space_id,v.status,v.index_status FROM document_versions v JOIN documents d ON d.id=v.document_id WHERE v.id=$1',[id]);
+   if(!r.rowCount) return reply.code(404).send({error:'Versão não encontrada'});
+   const p=await spacePermission(a,r.rows[0].space_id);
+   if(!p?.edit) return reply.code(403).send({error:'Sem permissão'});
+   if(!['DRAFT','IN_REVIEW'].includes(r.rows[0].status)||r.rows[0].index_status!=='FAILED') return reply.code(409).send({error:'Não há falha pendente de reprocessamento'});
+   await transaction(async c=>{
+      const updated=await c.query("UPDATE ingestion_jobs SET status='PENDING',error=NULL,updated_at=now() WHERE version_id=$1 AND status='FAILED' RETURNING version_id",[id]);
+      if(!updated.rowCount) throw Object.assign(new Error('Job não pode ser reprocessado'),{statusCode:409});
+      await c.query("UPDATE document_versions SET index_status='PENDING' WHERE id=$1",[id]);
+      await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'KNOWLEDGE_REINDEX_REQUESTED',$2)",[a.id,id]);
+   });
+   return {ok:true};
  });
  app.post('/knowledge/versions/:id/submit-review',async(req,reply)=>{
    const a=await requireActor(req);
