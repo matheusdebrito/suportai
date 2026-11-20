@@ -30,6 +30,9 @@ export function safeRetrievedSources(sources:Source[],limit:number):Source[]{
  return sources.filter(x=>!hasSecrets(x.title)&&!hasSecrets(x.content)).slice(0,Math.max(0,limit));
 }
 export async function searchKnowledge(actor:Actor, text:string, limit=5):Promise<Source[]> {
+  // Check the complete input before truncation. Model-generated search
+  // queries are untrusted and must never forward credentials to embeddings.
+  if(hasSecrets(text))return [];
   const safe=text.trim().slice(0,500);
   if(!safe) return [];
   const relaxed=relaxedLexicalQuery(safe);

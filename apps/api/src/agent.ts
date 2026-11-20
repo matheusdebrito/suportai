@@ -76,6 +76,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          if(searchCalls>=3) throw new Error('Limite de consultas ao cérebro nesta mensagem');
          searchCalls++;
          if(typeof args.query!=='string'||args.query.length>500) throw new Error('Consulta inválida');
+         if(hasSecrets(args.query))throw new Error('Consulta contém possível credencial; remova dados sensíveis');
          const results=await searchKnowledge(actor,args.query,5);
          for(const result of results){
            if(sources.length>=12) break;
