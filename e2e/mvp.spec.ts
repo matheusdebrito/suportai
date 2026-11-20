@@ -168,6 +168,7 @@ test.describe('fluxo editorial com worker real',()=>{
    await expect(page.locator('.diff-removed')).toContainText('Confira o DNS');
    await page.getByRole('button',{name:'Salvar proposta de revisão'}).click();
    await waitIndexed(title);
+   await page.getByRole('button',{name:'Atualizar',exact:true}).click();
    const articleDraft=page.locator('.draft-item',{hasText:title});
    await articleDraft.getByRole('button',{name:'Enviar para revisão'}).click();
    await page.getByRole('button',{name:'Revisão',exact:true}).click();
