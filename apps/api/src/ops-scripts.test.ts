@@ -12,5 +12,6 @@ for(const file of ['backup.sh','verify-restore.sh','monitor.sh']){
    const source=readFileSync(path,'utf8');
    assert.match(source,/set -euo pipefail/);
    assert.doesNotMatch(source,/DROP DATABASE|TRUNCATE TABLE|--clean/);
+   if(file==='verify-restore.sh')assert.doesNotMatch(source,/compose\.production\.yml|SUPORTAI_ENV_FILE|dropdb/);
  });
 }

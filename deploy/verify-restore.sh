@@ -22,7 +22,7 @@ trap cleanup EXIT
 # Trust authentication is safe ONLY because the dedicated validation
 # container has no network namespace or published ports, and no secrets.
 docker run -d --name "$container" --network none --memory 2g --cpus 1 \
-  --pids-limit 128 --cap-drop ALL --security-opt no-new-privileges \
+  --pids-limit 128 --security-opt no-new-privileges \
   -e POSTGRES_USER=suportai -e POSTGRES_DB=suportai_restore \
   -e POSTGRES_HOST_AUTH_METHOD=trust \
   -v "$restore_dir:/var/lib/postgresql/data" \
