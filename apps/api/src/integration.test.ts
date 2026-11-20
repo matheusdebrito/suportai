@@ -73,6 +73,21 @@ if(!process.env.TEST_DATABASE_URL){
 
    const forbiddenAdmin=await app.inject({method:'POST',url:'/admin/users',headers:auth(reader.cookie),payload:{email:'bad@example.test',role:'ADMIN'}});
    assert.equal(forbiddenAdmin.statusCode,403);
+   const noOpsForReader=await app.inject({method:'GET',url:'/admin/operations',headers:auth(reader.cookie)});
+   assert.equal(noOpsForReader.statusCode,403);
+   const noOpsForApprover=await app.inject({method:'GET',url:'/admin/operations',headers:auth(reviewer.cookie)});
+   assert.equal(noOpsForApprover.statusCode,403);
+   const opsForAdmin=await app.inject({method:'GET',url:'/admin/operations',headers:auth(admin.cookie)});
+   assert.equal(opsForAdmin.statusCode,200,opsForAdmin.body);
+   const metrics=opsForAdmin.json();
+   assert.equal(typeof metrics.ingestion.pending,'number');
+   assert.equal(typeof metrics.ingestion.running,'number');
+   assert.equal(typeof metrics.ingestion.stalled,'number');
+   assert.equal(typeof metrics.knowledge.published,'number');
+   assert.equal(typeof metrics.conversation.answers_7d,'number');
+   assert.equal(typeof metrics.feedback.bad_7d,'number');
+   assert.equal(typeof metrics.externalAiEnabled,'boolean');
+   assert.equal(Object.keys(metrics).some(key=>/password|token|secret|content|query/i.test(key)),false);
 
    // An explicit chat request prepares a preview but never publishes anything.
    const proposed=await app.inject({method:'POST',url:'/conversations',headers:auth(reader.cookie)});

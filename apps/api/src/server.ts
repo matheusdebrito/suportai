@@ -7,6 +7,7 @@ import {pool,query} from './db.js';
 import {registerAuth} from './auth.js';
 import {registerKnowledge} from './knowledge.js';
 import {registerChat} from './chat.js';
+import {registerOperations} from './operations.js';
 import {respond} from './agent.js';
 export async function buildApp(options:{agentResponder?:typeof respond}={}){
  const app=Fastify({logger:{redact:['req.headers.authorization','req.headers.cookie','res.headers.set-cookie']},bodyLimit:200_000});
@@ -25,6 +26,7 @@ export async function buildApp(options:{agentResponder?:typeof respond}={}){
    catch{return reply.code(503).send({status:'unavailable'});}
  });
  registerAuth(app);
+ registerOperations(app);
  registerKnowledge(app);
  registerChat(app,options.agentResponder??respond);
  app.setErrorHandler((error,req,reply)=>{

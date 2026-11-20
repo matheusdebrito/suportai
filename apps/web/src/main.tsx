@@ -3,6 +3,13 @@ import {createRoot} from 'react-dom/client';
 import {BrainCircuit,MessageCircle,BookOpen,ShieldCheck,Users,Send,Plus,LogOut,FileUp,Check,RotateCcw,LoaderCircle,ThumbsUp,ThumbsDown} from 'lucide-react';
 import './styles.css';
 type User={id:string;email:string;role:'ADMIN'|'APPROVER'|'USER';mustChangePassword:boolean};
+type Operations={
+ observedAt:string;externalAiEnabled:boolean;
+ ingestion:{pending:number;running:number;completed:number;failed:number;stalled:number;last_completed_at:string|null};
+ knowledge:{published:number;archived:number};
+ conversation:{answers_7d:number;questions_7d:number};
+ feedback:{good_7d:number;bad_7d:number};
+};
 type Space={id:string;name:string;visibility:string;can_read:boolean;can_edit:boolean;can_approve:boolean};
 type Doc={id:string;title:string;kind:string;space_name:string};
 type Message={id?:string;role:'user'|'assistant';content:string;sources?:{documentId:string;versionId:string;versionNumber?:number;title:string}[];feedback_rating?:'GOOD'|'BAD'|null;feedback_comment?:string|null};
@@ -79,6 +86,7 @@ function App(){
  const [reviewDecision,setReviewDecision]=useState<{id:string;action:'reject'|'request-changes'}|null>(null);
  const [reviewNote,setReviewNote]=useState('');
  const [users,setUsers]=useState<Array<{id:string;email:string;role:string;active:boolean}>>([]);
+ const [operations,setOperations]=useState<Operations|null>(null);
  const [newEmail,setNewEmail]=useState('');
  const [newRole,setNewRole]=useState<'USER'|'APPROVER'|'ADMIN'>('USER');
  const [temporary,setTemporary]=useState('');
@@ -91,7 +99,10 @@ function App(){
    const [reviews,hidden]=await Promise.all([api<{reviews:Review[]}>('/knowledge/reviews'),api<{documents:ArchivedDoc[]}>('/knowledge/archived')]);
    setReview(reviews.reviews);setArchived(hidden.documents);
   }
-  if(user?.role==='ADMIN'){const result=await api<{users:typeof users}>('/admin/users');setUsers(result.users);}
+  if(user?.role==='ADMIN'){
+   const [accounts,health]=await Promise.all([api<{users:typeof users}>('/admin/users'),api<Operations>('/admin/operations')]);
+   setUsers(accounts.users);setOperations(health);
+  }
  }
  function failed(e:unknown){setError(e instanceof Error?e.message:'Falha desconhecida');}
  function duplicateDetected(e:unknown,prompt:Omit<DuplicatePrompt,'matches'>):boolean{
@@ -179,7 +190,7 @@ function App(){
 
  async function login(e:React.FormEvent){e.preventDefault();setError('');try{const r=await api<{user:User}>('/auth/login',{method:'POST',body:JSON.stringify({email,password})});setPassword('');setUser(r.user);}catch(e){failed(e);}}
  async function changePassword(e:React.FormEvent){e.preventDefault();setError('');try{await api('/auth/change-password',{method:'POST',body:JSON.stringify({resetToken,newPassword})});const u=await api<User>('/auth/me');setUser(u);setResetToken('');setNewPassword('');setShowReset(false);}catch(e){failed(e);}}
- async function logout(){await api('/auth/logout',{method:'POST'}).catch(()=>{});setUser(null);setMessages([]);setConversationId(null);setConversations([]);setDrafts([]);setPending([]);setSelectedDoc(null);setArchived([]);setCorrectionOf(null);setPdfTarget(null);setFeedbackEditor(null);setReviewNote('');setReviewDecision(null);setDuplicatePrompt(null);}
+ async function logout(){await api('/auth/logout',{method:'POST'}).catch(()=>{});setUser(null);setMessages([]);setConversationId(null);setConversations([]);setDrafts([]);setPending([]);setSelectedDoc(null);setOperations(null);setArchived([]);setCorrectionOf(null);setPdfTarget(null);setFeedbackEditor(null);setReviewNote('');setReviewDecision(null);setDuplicatePrompt(null);}
  async function send(e:React.FormEvent){
   e.preventDefault();if(!input.trim()||busy||conversationLoading)return;setBusy(true);setError('');
   const text=input;setInput('');setMessages(m=>[...m,{role:'user',content:text}]);
@@ -375,7 +386,22 @@ function App(){
   <button className="secondary" onClick={()=>void restoreDoc(item.id)}>Restaurar versão publicada</button>
  </div>)}
  </section>}
- {tab==='admin'&&<div className="columns"><section className="panel"><h2>Cadastrar colaborador</h2><form onSubmit={createUser}><label>E-mail<input required type="email" value={newEmail} onChange={e=>setNewEmail(e.target.value)}/></label><label>Perfil<select value={newRole} onChange={e=>setNewRole(e.target.value as typeof newRole)}><option value="USER">Colaborador</option><option value="APPROVER">Aprovador de conhecimento</option><option value="ADMIN">Administrador</option></select></label><button>Criar usuário</button></form>{temporary&&<div className="pending"><strong>Código temporário (visível apenas agora)</strong><code>{temporary}</code><p className="hint">Entregue ao usuário por canal seguro. Válido por 15 minutos.</p><button className="secondary" onClick={()=>{void navigator.clipboard.writeText(temporary);}}>Copiar</button></div>}</section><section className="panel"><h2>Usuários</h2>{users.map(u=><div className="item user-item" key={u.id}><span>{u.email}<small>{u.active?'Ativo':'Inativo'} · {u.role}</small></span><button className="secondary" onClick={()=>resetUser(u.id)} disabled={u.id===user.id}><RotateCcw size={14}/> Redefinir</button><select aria-label={'Perfil de '+u.email} value={u.role} disabled={u.id===user.id} onChange={e=>void updateUser(u.id,{role:e.target.value as 'USER'|'APPROVER'|'ADMIN'})}><option value="USER">Colaborador</option><option value="APPROVER">Aprovador</option><option value="ADMIN">Administrador</option></select><button className="secondary" disabled={u.id===user.id} onClick={()=>{if(u.active&&!window.confirm('Desativar '+u.email+' e invalidar as sessões existentes?'))return;void updateUser(u.id,{active:!u.active});}}>{u.active?'Desativar':'Ativar'}</button><select aria-label={'Conceder acesso a '+u.email} defaultValue="" onChange={e=>{if(e.target.value){const [space,mode]=e.target.value.split('|');void grant(u.id,space,mode);}e.target.value='';}}><option value="">Alterar permissões do conhecimento...</option>{spaces.flatMap(s=>([['READ','Somente leitura'],['EDIT','Leitura e edição'],['APPROVE','Leitura, edição e aprovação'],['NONE','Revogar acesso']] as const).map(([mode,label])=><option key={s.id+mode} value={s.id+'|'+mode}>{s.name} — {label}</option>))}</select></div>)}</section></div>}
+ {tab==='admin'&&<div className="columns"><section className="panel"><h2>Cadastrar colaborador</h2><form onSubmit={createUser}><label>E-mail<input required type="email" value={newEmail} onChange={e=>setNewEmail(e.target.value)}/></label><label>Perfil<select value={newRole} onChange={e=>setNewRole(e.target.value as typeof newRole)}><option value="USER">Colaborador</option><option value="APPROVER">Aprovador de conhecimento</option><option value="ADMIN">Administrador</option></select></label><button>Criar usuário</button></form>{temporary&&<div className="pending"><strong>Código temporário (visível apenas agora)</strong><code>{temporary}</code><p className="hint">Entregue ao usuário por canal seguro. Válido por 15 minutos.</p><button className="secondary" onClick={()=>{void navigator.clipboard.writeText(temporary);}}>Copiar</button></div>}</section><section className="panel"><h2>Usuários</h2>{users.map(u=><div className="item user-item" key={u.id}><span>{u.email}<small>{u.active?'Ativo':'Inativo'} · {u.role}</small></span><button className="secondary" onClick={()=>resetUser(u.id)} disabled={u.id===user.id}><RotateCcw size={14}/> Redefinir</button><select aria-label={'Perfil de '+u.email} value={u.role} disabled={u.id===user.id} onChange={e=>void updateUser(u.id,{role:e.target.value as 'USER'|'APPROVER'|'ADMIN'})}><option value="USER">Colaborador</option><option value="APPROVER">Aprovador</option><option value="ADMIN">Administrador</option></select><button className="secondary" disabled={u.id===user.id} onClick={()=>{if(u.active&&!window.confirm('Desativar '+u.email+' e invalidar as sessões existentes?'))return;void updateUser(u.id,{active:!u.active});}}>{u.active?'Desativar':'Ativar'}</button><select aria-label={'Conceder acesso a '+u.email} defaultValue="" onChange={e=>{if(e.target.value){const [space,mode]=e.target.value.split('|');void grant(u.id,space,mode);}e.target.value='';}}><option value="">Alterar permissões do conhecimento...</option>{spaces.flatMap(s=>([['READ','Somente leitura'],['EDIT','Leitura e edição'],['APPROVE','Leitura, edição e aprovação'],['NONE','Revogar acesso']] as const).map(([mode,label])=><option key={s.id+mode} value={s.id+'|'+mode}>{s.name} — {label}</option>))}</select></div>)}</section><section className="panel"><div className="drafts-header"><h2>Operação do SuportAI</h2><button className="secondary" onClick={()=>void refresh().catch(failed)}><RotateCcw size={14}/> Atualizar</button></div>
+ {operations?<><div className="ops-grid">
+  <div><strong>{operations.knowledge.published}</strong><small>Documentos publicados</small></div>
+  <div><strong>{operations.knowledge.archived}</strong><small>Arquivados</small></div>
+  <div><strong>{operations.ingestion.pending}</strong><small>Na fila</small></div>
+  <div><strong>{operations.ingestion.running}</strong><small>Processando</small></div>
+  <div><strong>{operations.ingestion.failed}</strong><small>Falhas registradas</small></div>
+  <div><strong>{operations.ingestion.stalled}</strong><small>Processamentos atrasados</small></div>
+  <div><strong>{operations.conversation.questions_7d}</strong><small>Perguntas (7 dias)</small></div>
+  <div><strong>{operations.conversation.answers_7d}</strong><small>Respostas (7 dias)</small></div>
+  <div><strong>{operations.feedback.good_7d}</strong><small>Úteis (7 dias)</small></div>
+  <div><strong>{operations.feedback.bad_7d}</strong><small>Não úteis (7 dias)</small></div>
+ </div>
+ <p className="hint">IA externa: {operations.externalAiEnabled?'Habilitada por configuração':'Desabilitada'} · Último processamento: {operations.ingestion.last_completed_at?new Date(operations.ingestion.last_completed_at).toLocaleString('pt-BR'):'Nenhum'} · Atualizado: {new Date(operations.observedAt).toLocaleString('pt-BR')}</p>
+ <p className="hint">Indicadores agregados, sem conteúdo de conversas ou documentos. Não substitui logs, alertas nem avaliação de qualidade com modelo real.</p></>:<p className="hint">Carregando indicadores operacionais...</p>}
+ </section></div>}
  </main></div>;
 }
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
