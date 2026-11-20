@@ -67,11 +67,11 @@ if(!process.env.TEST_DATABASE_URL){
    const pendingId=generated.pendingActions[0].id;
    const beforeConfirmation=await query('SELECT result_version_id FROM pending_actions WHERE id=$1',[pendingId]);
    assert.equal(beforeConfirmation.rows[0].result_version_id,null);
-   const confirmed=await app.inject({method:'POST',url:/`/knowledge/pending/${pendingId}/confirm`,headers:auth(reader.cookie)});
+   const confirmed=await app.inject({method:'POST',url:`/knowledge/pending/${pendingId}/confirm`,headers:auth(reader.cookie)});
    assert.equal(confirmed.statusCode,200,confirmed.body);
    const draftDoc=await query('SELECT current_version_id FROM documents WHERE id=$1',[confirmed.json().documentId]);
    assert.equal(draftDoc.rows[0].current_version_id,null,'A preview must not publish content');
-   const draftHidden=await app.inject({method:'GET',url:/`/knowledge/documents/${confirmed.json().documentId}`,headers:auth(reader.cookie)});
+   const draftHidden=await app.inject({method:'GET',url:`/knowledge/documents/${confirmed.json().documentId}`,headers:auth(reader.cookie)});
    assert.equal(draftHidden.statusCode,404);
 
    const sharedDraft=await app.inject({method:'POST',url:'/knowledge/articles',headers:auth(reader.cookie),payload:{spaceId:shared,title:'Procedimento DNS '+id,content:'Para verificar resolução de nomes no Linux utilize dig e confira o servidor DNS autoritativo e o retorno esperado.'}});
