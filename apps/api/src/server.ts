@@ -7,7 +7,8 @@ import {pool,query} from './db.js';
 import {registerAuth} from './auth.js';
 import {registerKnowledge} from './knowledge.js';
 import {registerChat} from './chat.js';
-export async function buildApp(){
+import {respond} from './agent.js';
+export async function buildApp(options:{agentResponder?:typeof respond}={}){
  const app=Fastify({logger:{redact:['req.headers.authorization','req.headers.cookie','res.headers.set-cookie']},bodyLimit:200_000});
  const origin=process.env.APP_ORIGIN||'http://localhost:5173';
  await app.register(cors,{origin,credentials:true});
@@ -25,7 +26,7 @@ export async function buildApp(){
  });
  registerAuth(app);
  registerKnowledge(app);
- registerChat(app);
+ registerChat(app,options.agentResponder??respond);
  app.setErrorHandler((error,req,reply)=>{
    const err=error as Error & {statusCode?:number};
    const code=typeof err.statusCode==='number' && err.statusCode>=400 && err.statusCode<500?err.statusCode:500;

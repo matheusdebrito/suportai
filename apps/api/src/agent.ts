@@ -1,6 +1,6 @@
 import {client} from './llm.js';
-import {query} from './db.js';
-import {spacePermission,type Actor} from './security.js';
+import {query,transaction} from './db.js';
+import {spacePermission,requireCurrentActor,type Actor} from './security.js';
 import {searchKnowledge,type Source} from './retrieval.js';
 import {hasSecrets} from './knowledge.js';
 import type OpenAI from 'openai';
@@ -86,8 +86,18 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
            baseVersionId=d.rows[0].current_version_id;
          }
          const dup=await query('SELECT id,title FROM documents WHERE space_id=$1 AND lower(title)=lower($2) AND archived_at IS NULL LIMIT 3',[args.spaceId,args.title]);
-         const r=await query(`INSERT INTO pending_actions(user_id,conversation_id,space_id,title,content,document_id,base_version_id)
-          VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id`,[actor.id,conversationId,args.spaceId,args.title,args.content,docId,baseVersionId]);
+         const r=await transaction(async c=>{
+           await requireCurrentActor(c,actor);
+           const perm=await c.query(`SELECT s.visibility,g.can_edit FROM spaces s
+             LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2 WHERE s.id=$1`,
+             [args.spaceId,actor.id]);
+           const allowed=perm.rows[0];
+           if(!allowed || !(allowed.visibility==='SHARED'||allowed.can_edit))
+             throw new Error('Permissão de escrita revogada');
+           return c.query(`INSERT INTO pending_actions(user_id,conversation_id,space_id,title,content,document_id,base_version_id)
+             VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+             [actor.id,conversationId,args.spaceId,args.title,args.content,docId,baseVersionId]);
+         });
          pendingActions.push({id:r.rows[0].id,title:args.title,content:args.content,spaceName:writableSpaces.find(s=>s.id===args.spaceId)?.name||'Espaço autorizado'});
          output={status:'PREVIEW_ONLY',actionId:r.rows[0].id,similarArticles:dup.rows,requiresExplicitConfirmation:true,message:'Prévia preparada. Usuário deve confirmar no botão antes de criar rascunho; a IA não pode confirmar sozinha.'};
        } else {output={error:'Ferramenta indisponível'};}

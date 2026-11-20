@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { query } from './db.js';
+import type pg from 'pg';
 export type Actor = { id: string; role: 'USER'|'APPROVER'|'ADMIN'; auth_revision: number; must_change_password: boolean };
 export function token() { return randomBytes(32).toString('base64url'); }
 export function hashToken(value:string) { return createHash('sha256').update(value).digest('hex'); }
@@ -24,4 +25,12 @@ export async function spacePermission(actor:Actor, spaceId:string) {
  LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2 WHERE s.id=$1`,[spaceId,actor.id]);
  const x=r.rows[0]; if(!x) return null;
  return {read:canRead(x.visibility,x),edit:canEdit(x.visibility,x),approve:canApprove(actor.role,x.visibility,x)};
+}
+
+/** Serialize security-sensitive writes with account changes (role, active, grants). */
+export async function requireCurrentActor(client:pg.PoolClient,actor:Actor):Promise<void>{
+ const current=await client.query('SELECT active,role,auth_revision,must_change_password FROM users WHERE id=$1 FOR SHARE',[actor.id]);
+ const u=current.rows[0];
+ if(!u?.active || u.role!==actor.role || u.auth_revision!==actor.auth_revision || u.must_change_password)
+   throw Object.assign(new Error('Permissões alteradas; entre novamente para continuar'),{statusCode:403});
 }

@@ -157,6 +157,8 @@ if(!process.env.TEST_DATABASE_URL){
    const sharedDraft=await app.inject({method:'POST',url:'/knowledge/articles',headers:auth(reader.cookie),payload:{spaceId:shared,title:'Procedimento DNS '+id,content:'Para verificar resolução de nomes no Linux utilize dig e confira o servidor DNS autoritativo e o retorno esperado.'}});
    assert.equal(sharedDraft.statusCode,201,sharedDraft.body);
    const sharedDoc=sharedDraft.json() as {documentId:string;versionId:string};
+   const otherAuthorSubmit=await app.inject({method:'POST',url:`/knowledge/versions/${sharedDoc.versionId}/submit-review`,headers:auth(reviewer.cookie)});
+   assert.equal(otherAuthorSubmit.statusCode,404,'Writers must not submit someone else\'s draft');
    const earlyReview=await app.inject({method:'POST',url:`/knowledge/versions/${sharedDoc.versionId}/submit-review`,headers:auth(reader.cookie)});
    assert.equal(earlyReview.statusCode,200);
    const earlyPublish=await app.inject({method:'POST',url:`/knowledge/versions/${sharedDoc.versionId}/publish`,headers:auth(reviewer.cookie),payload:{confirm:true}});
@@ -552,6 +554,40 @@ if(!process.env.TEST_DATABASE_URL){
    const obsoleteFeedback=await app.inject({method:'POST',url:'/feedback',headers:auth(changedCookie),
      payload:{messageId:assistantMessageId,rating:'GOOD'}});
    assert.equal(obsoleteFeedback.statusCode,404,'Old conversation must not remain rateable after a permission revision');
+
+   // A model already calculating an answer must not save or return it after
+   // permissions change. Use a deterministic provider delay; no real AI needed.
+   let signalStarted:()=>void=()=>{};
+   const modelStarted=new Promise<void>(resolve=>{signalStarted=resolve;});
+   let releaseModel:()=>void=()=>{};
+   const modelRelease=new Promise<void>(resolve=>{releaseModel=resolve;});
+   const raceApp=await buildApp({agentResponder:async()=>{
+     signalStarted();
+     await modelRelease;
+     return {answer:'A privileged response that must be discarded.',sources:[],pendingActions:[]};
+   }});
+   try{
+     const raceConversation=await raceApp.inject({method:'POST',url:'/conversations',
+       headers:auth(changedCookie)});
+     assert.equal(raceConversation.statusCode,200,raceConversation.body);
+     const raceConversationId=raceConversation.json().id as string;
+     const pendingResponse=raceApp.inject({method:'POST',
+       url:'/conversations/'+raceConversationId+'/messages',
+       headers:auth(changedCookie),payload:{message:'What is the internal procedure?'}});
+     await modelStarted;
+     const revokeDuringModel=await app.inject({method:'POST',url:'/admin/spaces/'+restricted+'/grants',
+       headers:auth(admin.cookie),payload:{userId:reader.id,read:false,edit:false,approve:false}});
+     assert.equal(revokeDuringModel.statusCode,200,revokeDuringModel.body);
+     releaseModel();
+     const afterRevoke=await pendingResponse;
+     assert.equal(afterRevoke.statusCode,403,afterRevoke.body);
+     const persisted=await query("SELECT count(*)::int AS total FROM messages WHERE conversation_id=$1 AND role='assistant'",[raceConversationId]);
+     assert.equal(persisted.rows[0].total,0,'Assistant messages must not persist after permission revision');
+   }finally{
+     releaseModel();
+     await raceApp.close();
+   }
+
 
   } finally {
    worker?.kill('SIGTERM');

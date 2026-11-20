@@ -1,9 +1,10 @@
 import type {FastifyInstance} from 'fastify';
-import {query} from './db.js';
+import {query,transaction} from './db.js';
 import {requireActor} from './auth.js';
+import {requireCurrentActor} from './security.js';
 import {respond} from './agent.js';
 import {hasSecrets} from './knowledge.js';
-export function registerChat(app:FastifyInstance) {
+export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond) {
  app.post('/conversations',async req=>{
    const actor=await requireActor(req);
    const r=await query('INSERT INTO conversations(user_id) VALUES($1) RETURNING id',[actor.id]);
@@ -63,15 +64,20 @@ export function registerChat(app:FastifyInstance) {
    const history=previous.rows.reverse();
    const sent=await query("INSERT INTO messages(conversation_id,role,content,auth_revision) VALUES($1,'user',$2,$3) RETURNING id",[id,b.message,a.auth_revision]);
    try {
-     const output=await respond(a,id,b.message,history);
-     // Revocation during LLM execution must invalidate the result.
-     const latest=await query('SELECT active,auth_revision FROM users WHERE id=$1',[a.id]);
-     if(!latest.rows[0]?.active||latest.rows[0].auth_revision!==a.auth_revision) return reply.code(403).send({error:'Permissões alteradas durante a consulta; reinicie a conversa'});
+     const output=await runAgent(a,id,b.message,history);
+     // Hold a shared account lock while saving the reply. Permission changes
+     // must serialize either entirely before or after this commit.
      const sources=output.sources.map(s=>({documentId:s.documentId,versionId:s.versionId,versionNumber:s.versionNumber,title:s.title,ordinal:s.ordinal}));
-     const saved=await query(`INSERT INTO messages(conversation_id,role,content,sources,auth_revision)
-       VALUES($1,'assistant',$2,$3,$4) RETURNING id`,[id,output.answer,JSON.stringify(sources),a.auth_revision]);
-     return {id:saved.rows[0].id,answer:output.answer,sources,pendingActions:output.pendingActions};
+     const saved=await transaction(async c=>{
+       await requireCurrentActor(c,a);
+       const result=await c.query(`INSERT INTO messages(conversation_id,role,content,sources,auth_revision)
+         VALUES($1,'assistant',$2,$3,$4) RETURNING id`,[id,output.answer,JSON.stringify(sources),a.auth_revision]);
+       return result.rows[0].id as string;
+     });
+     return {id:saved,answer:output.answer,sources,pendingActions:output.pendingActions};
    }catch(error){
+     if((error as {statusCode?:number})?.statusCode===403)
+       return reply.code(403).send({error:'Permissões alteradas durante a consulta; entre novamente para continuar'});
      req.log.error({err:error instanceof Error?error.message:'unknown'},'Agent execution failed');
      return reply.code(503).send({error:'Não foi possível consultar o agente agora. Tente novamente.'});
    }

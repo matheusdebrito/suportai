@@ -1,7 +1,7 @@
 import type {FastifyInstance} from 'fastify';
 import {query,transaction,audit} from './db.js';
 import {requireActor} from './auth.js';
-import {spacePermission,type Actor} from './security.js';
+import {spacePermission,requireCurrentActor,type Actor} from './security.js';
 import {findSimilarPublished, validDuplicateReason, SimilarArticlesError} from './similar.js';
 export function hasSecrets(text:string) {
  return /-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----|(?:api[_-]?key|secret|senha|password|token|authorization)\s*[:=]\s*(?:bearer\s+)?["']?[a-z0-9_\-/+=]{12,}|(?:ghp|gho|ghu|ghs|ghr)_[a-z0-9]{30,}|github_pat_[a-z0-9_]{25,}|sk-[a-z0-9_-]{20,}|AKIA[0-9A-Z]{16}/i.test(text);
@@ -27,6 +27,7 @@ async function createVersion(actor:Actor,spaceId:string,title:string,content:str
  if(duplicateReason && hasSecrets(duplicateReason)) throw Object.assign(new Error('Remova credenciais da justificativa'),{statusCode:422});
  if(kind==='ARTICLE' && !p.read)throw Object.assign(new Error('Permissão de leitura obrigatória para verificar artigos existentes'),{statusCode:403});
  const result=await transaction(async c=>{
+   await requireCurrentActor(c,actor);
    let docId=documentId;
    let versionNo=1;
    let similarCount=0;
@@ -200,6 +201,7 @@ export function registerKnowledge(app:FastifyInstance) {
    if(!p?.edit) return reply.code(403).send({error:'Sem permissão'});
    if(!['DRAFT','IN_REVIEW'].includes(r.rows[0].status)||r.rows[0].index_status!=='FAILED') return reply.code(409).send({error:'Não há falha pendente de reprocessamento'});
    await transaction(async c=>{
+      await requireCurrentActor(c,a);
       const updated=await c.query("UPDATE ingestion_jobs SET status='PENDING',error=NULL,updated_at=now() WHERE version_id=$1 AND status='FAILED' RETURNING version_id",[id]);
       if(!updated.rowCount) throw Object.assign(new Error('Job não pode ser reprocessado'),{statusCode:409});
       await c.query("UPDATE document_versions SET index_status='PENDING' WHERE id=$1",[id]);
@@ -210,12 +212,25 @@ export function registerKnowledge(app:FastifyInstance) {
  app.post('/knowledge/versions/:id/submit-review',async(req,reply)=>{
    const a=await requireActor(req);
    const id=(req.params as {id:string}).id;
-   const v=await query('SELECT d.space_id,v.authored_by FROM document_versions v JOIN documents d ON d.id=v.document_id WHERE v.id=$1',[id]);
-   if(!v.rowCount) return reply.code(404).send({error:'Versão não encontrada'});
-   const p=await spacePermission(a,v.rows[0].space_id);
-   if(!p?.edit) return reply.code(403).send({error:'Sem permissão'});
-   const r=await query("UPDATE document_versions SET status='IN_REVIEW' WHERE id=$1 AND status='DRAFT' RETURNING id",[id]);
-   return r.rowCount?{ok:true}:reply.code(409).send({error:'Estado inválido'});
+   const state=await transaction(async c=>{
+     await requireCurrentActor(c,a);
+     const r=await c.query(`SELECT v.id,v.authored_by,v.status,s.visibility,g.can_edit
+       FROM document_versions v JOIN documents d ON d.id=v.document_id
+       JOIN spaces s ON s.id=d.space_id
+       LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2
+       WHERE v.id=$1 FOR UPDATE OF v`,[id,a.id]);
+     const version=r.rows[0];
+     if(!version||version.authored_by!==a.id)return 'NOT_FOUND';
+     if(!(version.visibility==='SHARED'||version.can_edit))return 'FORBIDDEN';
+     if(version.status!=='DRAFT')return 'CONFLICT';
+     await c.query("UPDATE document_versions SET status='IN_REVIEW' WHERE id=$1",[id]);
+     await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'KNOWLEDGE_SUBMITTED_REVIEW',$2)",[a.id,id]);
+     return 'OK';
+   });
+   if(state==='NOT_FOUND')return reply.code(404).send({error:'Rascunho não encontrado'});
+   if(state==='FORBIDDEN')return reply.code(403).send({error:'Permissão de edição revogada'});
+   if(state==='CONFLICT')return reply.code(409).send({error:'Estado inválido'});
+   return {ok:true};
  });
  app.post('/knowledge/versions/:id/publish',async(req,reply)=>{
    const a=await requireActor(req);
@@ -223,6 +238,7 @@ export function registerKnowledge(app:FastifyInstance) {
    const b=req.body as {confirm?:unknown}|undefined;
    if(b?.confirm!==true) return reply.code(400).send({error:'Confirmação humana obrigatória'});
    const outcome=await transaction(async c=>{
+     await requireCurrentActor(c,a);
      const r=await c.query(`SELECT v.*,d.space_id,d.current_version_id,s.visibility,g.can_approve
         FROM document_versions v JOIN documents d ON d.id=v.document_id JOIN spaces s ON s.id=d.space_id
         LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2 WHERE v.id=$1 FOR UPDATE OF v,d`,[id,a.id]);
@@ -254,6 +270,7 @@ export function registerKnowledge(app:FastifyInstance) {
    if(note.length<10||note.length>2000||hasSecrets(note))
      return reply.code(400).send({error:'Justificativa obrigatória (10 a 2.000 caracteres, sem credenciais)'});
    const state=await transaction(async c=>{
+     await requireCurrentActor(c,actor);
      const r=await c.query('SELECT v.document_id,v.status,s.visibility,g.can_approve FROM document_versions v '+
        'JOIN documents d ON d.id=v.document_id JOIN spaces s ON s.id=d.space_id '+
        'LEFT JOIN space_grants g ON g.user_id=$2 AND g.space_id=s.id '+
@@ -280,6 +297,7 @@ export function registerKnowledge(app:FastifyInstance) {
    if(content.length<20||content.length>100000||hasSecrets(content))
      return reply.code(400).send({error:'Artigo corrigido inválido ou contém possível credencial'});
    const result=await transaction(async c=>{
+     await requireCurrentActor(c,actor);
      const r=await c.query('SELECT v.id,v.document_id,v.authored_by,v.status,v.superseded_by,v.base_version_id,'+
        'd.space_id,d.kind,d.current_version_id,d.archived_at FROM document_versions v '+
        'JOIN documents d ON d.id=v.document_id WHERE v.id=$1 FOR UPDATE OF v,d',[id]);
@@ -325,6 +343,7 @@ export function registerKnowledge(app:FastifyInstance) {
    const file=await req.file({limits:{fileSize:8*1024*1024,files:1}});
    const bytes=await readPdfBytes(file);
    const result=await transaction(async c=>{
+     await requireCurrentActor(c,actor);
      const r=await c.query('SELECT v.id,v.document_id,v.authored_by,v.status,v.superseded_by,v.base_version_id,'+
        'd.space_id,d.kind,d.current_version_id,d.archived_at FROM document_versions v '+
        'JOIN documents d ON d.id=v.document_id WHERE v.id=$1 FOR UPDATE OF v,d',[id]);
@@ -366,6 +385,7 @@ export function registerKnowledge(app:FastifyInstance) {
    if(note.length<10||note.length>2000||hasSecrets(note))
      return reply.code(400).send({error:'Informe a justificativa (10 a 2.000 caracteres, sem credenciais)'});
    const state=await transaction(async c=>{
+     await requireCurrentActor(c,actor);
      const r=await c.query('SELECT v.status,v.document_id,s.visibility,g.can_approve FROM document_versions v '+
        'JOIN documents d ON d.id=v.document_id JOIN spaces s ON s.id=d.space_id '+
        'LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2 '+
@@ -390,6 +410,7 @@ export function registerKnowledge(app:FastifyInstance) {
    const duplicateReason=typeof body?.duplicateReason==='string'?body.duplicateReason.trim():undefined;
    if(duplicateReason && hasSecrets(duplicateReason))return reply.code(422).send({error:'Remova credenciais da justificativa'});
    const result=await transaction(async c=>{
+     await requireCurrentActor(c,a);
      const r=await c.query('SELECT * FROM pending_actions WHERE id=$1 AND user_id=$2 FOR UPDATE',[id,a.id]);
      const pending=r.rows[0];
      if(!pending) return {error:'NOT_FOUND'};
