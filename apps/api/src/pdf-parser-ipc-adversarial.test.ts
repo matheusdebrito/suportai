@@ -73,3 +73,16 @@ test('socket client rejects a fake PDF header before contacting a parser',async(
   /PDF inválido/
  );
 });
+
+test('socket client refuses empty HTTP 200 responses instead of indexing empty text',async()=>{
+ await withFakeParser((req,res)=>{
+  req.resume();
+  res.writeHead(200,{'content-type':'text/plain'});
+  res.end('   ');
+ },async socket=>{
+  await assert.rejects(
+   extractPdfViaSocket(PDF,socket),
+   error=>error instanceof Error && error.message==='PDF sem texto extraível; necessário texto digital'
+  );
+ });
+});
