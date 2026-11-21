@@ -17,6 +17,14 @@ export function createPdfParserServer(){
    if(req.headers['content-type']!=='application/pdf'){
      reply(res,415,'PDF inválido');return;
    }
+   // Reject a declared oversized upload before buffering or starting the parser.
+   // The streaming byte counter below remains authoritative for chunked uploads.
+   const declaredSize=req.headers['content-length'];
+   if(declaredSize!==undefined && /^\d+$/.test(declaredSize)
+      && Number(declaredSize)>MAX_BYTES){
+     reply(res,413,'PDF excede o limite de 8 MB');
+     return;
+   }
    const parts:Buffer[]=[];
    let size=0;
    try{
@@ -28,6 +36,9 @@ export function createPdfParserServer(){
      const text=await extractPdfTextLocally(Buffer.concat(parts));
      reply(res,200,text);
    }catch(error){
+     // Early 413 responses may close the request while its iterator unwinds.
+     // Never attempt a second HTTP response on a completed connection.
+     if(res.headersSent || res.writableEnded || res.destroyed)return;
      const safe=safeWorkerFailure(error);
      reply(res,422,safe==='Falha interna de processamento; contate a equipe de TI'
        ?'PDF inválido ou não foi possível extrair o texto':safe);
