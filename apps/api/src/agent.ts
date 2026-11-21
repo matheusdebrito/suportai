@@ -121,7 +121,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          if(hasSecrets(args.title)||hasSecrets(args.content)) throw new Error('Possíveis credenciais no título ou conteúdo do artigo');
          // A valid writable ID is not proof the user intended that destination.
          // Existing-article revisions are already tied to their original space.
-         if(!args.documentId){
+         if(typeof args.documentId!=='string'||!args.documentId.trim()){
            const selected=explicitlyTargetedSpace(userMessage,history,writableSpaces);
            if(!selected)throw new Error('Informe em qual espaço de conhecimento deseja criar o artigo');
            if(selected.id!==args.spaceId)throw new Error('O espaço escolhido não corresponde ao pedido do usuário');
