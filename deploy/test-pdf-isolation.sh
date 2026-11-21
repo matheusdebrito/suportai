@@ -45,7 +45,7 @@ done
 docker exec "$name" node -e "if(!require('node:fs').statSync('/run/suportai/pdf-parser.sock').isSocket())process.exit(1)"
 test "$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$name")" = none
 test "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' "$name")" = true
-docker exec "$name" node apps/api/dist/pdf-isolation-preflight.js | grep -q "Controles básicos do processo: OK"
+docker exec "$name" node apps/api/dist/pdf-isolation-preflight.js | grep -F "Controles básicos do processo: OK" >/dev/null
 
 # The parser has no credentials, and even direct TCP egress is unavailable.
 docker exec "$name" node -e '
