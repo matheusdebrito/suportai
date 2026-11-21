@@ -91,7 +91,11 @@ export async function executeSyntheticEvaluation(provider:OpenAI){
  }
  return records;
 }
-const invoked=process.argv[1]?.endsWith('/rag-evaluation.ts')||process.argv[1]?.endsWith('\\rag-evaluation.ts');
+export function isRagEvaluationEntrypoint(path:string|undefined):boolean{
+ const filename=path?.replaceAll(String.fromCharCode(92),'/').split('/').pop();
+ return filename==='rag-evaluation.ts'||filename==='rag-evaluation.js';
+}
+const invoked=isRagEvaluationEntrypoint(process.argv[1]);
 if(invoked){
  const run=process.argv.includes('--run');
  if(!run){
