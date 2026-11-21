@@ -47,6 +47,8 @@ export function extractPdfViaSocket(bytes:Buffer,socketPath:string,timeoutMs=DEF
            'PDF inválido ou não foi possível extrair o texto'
          ]);
          finish(new Error(allowed.has(response)?response:'Leitor de PDF isolado recusou o documento'));
+       }else if(!response.trim()){
+         finish(new Error('PDF sem texto extraível; necessário texto digital'));
        }else finish(undefined,response);
      });
      res.on('error',()=>finish(new Error('Leitor de PDF isolado indisponível')));
