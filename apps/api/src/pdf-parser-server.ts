@@ -28,6 +28,9 @@ export function createPdfParserServer(){
      const text=await extractPdfTextLocally(Buffer.concat(parts));
      reply(res,200,text);
    }catch(error){
+     // Early 413 responses may close the request while its iterator unwinds.
+     // Never attempt a second HTTP response on a completed connection.
+     if(res.headersSent || res.writableEnded || res.destroyed)return;
      const safe=safeWorkerFailure(error);
      reply(res,422,safe==='Falha interna de processamento; contate a equipe de TI'
        ?'PDF inválido ou não foi possível extrair o texto':safe);
