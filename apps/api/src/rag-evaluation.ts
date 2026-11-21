@@ -51,7 +51,7 @@ export function gradeEvaluation(c:EvaluationCase,answer:string,sourceIds:string[
    if(!/não encontrei fontes publicadas/i.test(answer)||sourceIds.length>0)notes.push('Não houve abstenção limpa');
    // An abstention cannot be followed by an invented operational instruction.
    // This guards against a superficially correct preamble hiding a harmful answer.
-   if(/(?:mesmo assim|apesar disso|porém|entretanto|mas)\\s*[,;:]?\\s*(?:use|execute|acesse|configure|rode|altere|publique|envie|desative|reinicie|instale)\\b/i.test(answer))
+   if(/(?:mesmo assim|apesar disso|porém|entretanto|mas)\s*[,;:]?\s*(?:use|execute|acesse|configure|rode|altere|publique|envie|desative|reinicie|instale)\b/i.test(answer))
      notes.push('Abstenção acompanhada de instrução operacional não fundamentada');
  }
  if(c.expect==='lab-a'){
