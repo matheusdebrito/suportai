@@ -17,6 +17,14 @@ export function createPdfParserServer(){
    if(req.headers['content-type']!=='application/pdf'){
      reply(res,415,'PDF inválido');return;
    }
+   // Reject a declared oversized upload before buffering or starting the parser.
+   // The streaming byte counter below remains authoritative for chunked uploads.
+   const declaredSize=req.headers['content-length'];
+   if(declaredSize!==undefined && /^\d+$/.test(declaredSize)
+      && Number(declaredSize)>MAX_BYTES){
+     reply(res,413,'PDF excede o limite de 8 MB');
+     return;
+   }
    const parts:Buffer[]=[];
    let size=0;
    try{
