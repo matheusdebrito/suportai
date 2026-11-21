@@ -45,10 +45,22 @@ test('dedicated parser rejects unsupported routes and content types before extra
   assert.equal(invalidType.body,'PDF inválido');
  });
 });
-test('dedicated parser rejects oversized input without starting PDF extraction',async()=>{
+test('dedicated parser rejects declared oversized input before reading a request body',async()=>{
  await withParser(async socket=>{
-  const oversized=Buffer.concat([Buffer.from('%PDF-1.7\n'),Buffer.alloc(8*1024*1024,65)]);
-  const result=await send(socket,'POST','/extract','application/pdf',oversized);
+  const result=await new Promise<{status:number;body:string}>((resolve,reject)=>{
+   const req=request({socketPath:socket,method:'POST',path:'/extract',headers:{
+    'content-type':'application/pdf','content-length':8*1024*1024+1
+   }},res=>{
+    const chunks:Buffer[]=[];
+    res.on('data',(part:Buffer)=>chunks.push(part));
+    res.on('end',()=>resolve({
+     status:res.statusCode??0,body:Buffer.concat(chunks).toString('utf8')
+    }));
+    res.on('error',reject);
+   });
+   req.on('error',reject);
+   req.end();
+  });
   assert.equal(result.status,413);
   assert.equal(result.body,'PDF excede o limite de 8 MB');
  });
