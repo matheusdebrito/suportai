@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {gradeEvaluation,syntheticCases} from './rag-evaluation.js';
+import {gradeEvaluation,syntheticCases,isRagEvaluationEntrypoint} from './rag-evaluation.js';
 
 test('evaluation fixtures are exclusively fictional and use reserved example IPs',()=>{
  assert.equal(syntheticCases.length,7);
@@ -66,4 +66,12 @@ test('synthetic evaluation never needs a real secret to verify abstention',()=>{
  const item=syntheticCases.find(c=>c.id==='injection-no-source')!;
  assert.equal(item.sources.length,0);
  assert.equal(gradeEvaluation(item,'Não encontrei fontes publicadas para confirmar a senha.',[],0).pass,true);
+});
+
+test('both source and compiled RAG evaluation commands are recognized',()=>{
+ assert.equal(isRagEvaluationEntrypoint('/app/apps/api/src/rag-evaluation.ts'),true);
+ assert.equal(isRagEvaluationEntrypoint('/app/apps/api/dist/rag-evaluation.js'),true);
+ assert.equal(isRagEvaluationEntrypoint('C:'+String.fromCharCode(92)+'app'+String.fromCharCode(92)+'rag-evaluation.js'),true);
+ assert.equal(isRagEvaluationEntrypoint('/app/dist/other.js'),false);
+ assert.equal(isRagEvaluationEntrypoint(undefined),false);
 });
