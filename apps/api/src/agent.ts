@@ -8,6 +8,7 @@ import {allowsKnowledgeMutation} from './agent-policy.js';
 import {shouldForceKnowledgeLookup,groundedReply} from './llm-policy.js';
 import {unsupportedNetworkLiterals} from './answer-evidence.js';
 import {explicitlyTargetedSpace} from './space-targeting.js';
+import {AgentBudget,type AgentMetrics,type AgentStopReason} from './agent-budget.js';
 const SYSTEM=`Você é o SuportAI, assistente interno de conhecimento. Converse naturalmente em português do Brasil, inclusive com gírias, abreviações e mensagens curtas. Use o histórico recente para compreender referências como "isso", "aquele problema" e "é a impressora".
 Para perguntas que possam ser respondidas pelo conhecimento interno, CHAME search_knowledge. Reescreva a busca com o assunto do histórico e termos técnicos relevantes; nunca busque só "isso" ou "e aí?". Pode reformular a consulta quando o primeiro resultado não ajudar, respeitando os limites.
 Se o pedido estiver ambíguo ou faltar um detalhe indispensável para buscar com segurança (sistema, equipamento, ambiente ou objetivo), CHAME ask_clarification com uma única pergunta curta e específica. Aguarde a resposta do usuário; não adivinhe. Se o pedido já estiver claro, não faça perguntas desnecessárias.
@@ -19,22 +20,30 @@ const tools:OpenAI.Chat.Completions.ChatCompletionTool[]=[
  {type:'function',function:{name:'ask_clarification',description:'Faça UMA pergunta objetiva ao usuário quando faltar contexto para interpretar o pedido ou escolher a busca no RAG. Não execute buscas ou ações junto com esta ferramenta.',parameters:{type:'object',properties:{question:{type:'string',description:'Uma pergunta curta em português, terminando com ?'}},required:['question'],additionalProperties:false}}},
  {type:'function',function:{name:'prepare_article',description:'Prepara prévia de artigo solicitado explicitamente pelo usuário; requer confirmação humana posterior antes de criar rascunho.',parameters:{type:'object',properties:{spaceId:{type:'string'},title:{type:'string'},content:{type:'string'},documentId:{type:'string',description:'Documento a atualizar se aplicável'}},required:['spaceId','title','content'],additionalProperties:false}}}
 ];
-export type AgentOutput={answer:string;sources:Source[];pendingActions:{id:string;title:string;content:string;spaceName:string;documentId?:string;beforeContent?:string}[]};
+export type AgentOutput={answer:string;sources:Source[];pendingActions:{id:string;title:string;content:string;spaceName:string;documentId?:string;beforeContent?:string}[];metrics?:AgentMetrics};
 export async function respond(actor:Actor,conversationId:string,userMessage:string,history:{role:'user'|'assistant';content:string}[],provider:OpenAI|null=client,knowledgeSearch:typeof searchKnowledge=searchKnowledge):Promise<AgentOutput>{
  const sources:Source[]=[];
  const pendingActions:AgentOutput['pendingActions']=[];
+ const budget=new AgentBudget();
+ const done=(result:AgentOutput,reason:AgentStopReason):AgentOutput=>({
+   ...result,metrics:budget.metrics(reason)
+ });
+ const budgetReply=(reason:AgentStopReason):AgentOutput=>done({
+   answer:'O limite seguro da investigação foi atingido. Posso continuar com uma pergunta mais específica, mas não vou apresentar um procedimento incompleto como confirmado.',
+   sources:[],pendingActions
+ },reason);
  const allowMutation=allowsKnowledgeMutation(userMessage);
  const forceLookup=shouldForceKnowledgeLookup(userMessage);
- let searchCalls=0;
  let lookupUnavailable=false;
- const unavailableReply=()=>({
+ let finalAnswerNext=false;
+ const unavailableReply=()=>done({
    answer:'Não foi possível consultar a base de conhecimento neste momento. '+
      'Não posso confirmar um procedimento interno sem verificar as fontes. Tente novamente.',
    sources:[] as Source[],pendingActions
- });
+ },'search_unavailable');
  if(!provider){
    const found=await knowledgeSearch(actor,userMessage,5);
-   return {answer:found.length?'Não há modelo de IA configurado. Encontrei estes trechos relevantes no cérebro:\n\n'+found.map((s,i)=>`${i+1}. ${s.title} — ${s.content.slice(0,500)}`).join('\n\n'):'Não encontrei um procedimento confirmado no cérebro. O uso do modelo externo não está habilitado nesta instalação.',sources:found,pendingActions};
+   return done({answer:found.length?'Não há modelo de IA configurado. Encontrei estes trechos relevantes no cérebro:\n\n'+found.map((s,i)=>`${i+1}. ${s.title} — ${s.content.slice(0,500)}`).join('\n\n'):'Não encontrei um procedimento confirmado no cérebro. O uso do modelo externo não está habilitado nesta instalação.',sources:found,pendingActions},found.length?'answered':'no_evidence');
  }
  // The user talks about spaces by name; they must not need UUIDs.
  // Only authorized writable spaces are supplied to the model.
@@ -53,14 +62,32 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
   ...history.slice(-8).map(m=>({role:m.role,content:m.content} as OpenAI.Chat.Completions.ChatCompletionMessageParam)),
   {role:'user',content:userMessage}
  ];
- for(let turn=0;turn<4;turn++){
-   // The model must choose either a contextual RAG search or a clarifying
-   // question. It cannot provide an ungrounded technical answer on turn one.
-   const toolChoice=turn===0 && forceLookup ? ('required' as const) : ('auto' as const);
-   const completion=await provider.chat.completions.create({model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',messages,tools:availableTools,tool_choice:toolChoice,temperature:0.2,max_tokens:1400});
+ for(let turn=0;turn<budget.limits.maxSteps;turn++){
+   const turnBudget=budget.startModelTurn(finalAnswerNext);
+   if(!turnBudget)return budgetReply(budget.stopCause()??'token_budget');
+   // Reserve the last turn for synthesis; never leave tool output unanswered.
+   const toolChoice=turnBudget.finalTurn ? ('none' as const)
+     : turn===0 && forceLookup ? ('required' as const) : ('auto' as const);
+   let completion:Awaited<ReturnType<typeof provider.chat.completions.create>>;
+   const promptCharacters=JSON.stringify(messages).length;
+   try {
+     completion=await provider.chat.completions.create({
+       model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',messages,
+       tools:availableTools,tool_choice:toolChoice,temperature:0.2,
+       max_tokens:turnBudget.maxTokens
+     },{timeout:turnBudget.timeoutMs,maxRetries:0,signal:AbortSignal.timeout(turnBudget.timeoutMs)});
+   }catch{
+     return done({answer:'Não foi possível concluir a consulta à IA neste momento. Tente novamente.',
+       sources:[],pendingActions},'provider_failure');
+   }
+   const firstChoice=completion.choices[0];
+   budget.recordModelUsage(completion.usage,
+     promptCharacters,JSON.stringify(firstChoice?.message??'').length);
+   if(budget.remainingMs()===0)return budgetReply('time_budget');
    const choice=completion.choices[0];
    const message=choice?.message;
-   if(!message) throw new Error('Resposta vazia do provedor');
+   if(!message)return done({answer:'O modelo não retornou uma resposta. Tente novamente.',sources:[],pendingActions},'provider_failure');
+   if(turnBudget.finalTurn&&message.tool_calls?.length)return budgetReply('step_budget');
    // Do not present incomplete procedural instructions as a finished answer.
    // A truncated tool call must never be executed, and a partial answer must
    // not inherit citations as evidence of a complete response.
@@ -68,18 +95,18 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      const reason=choice.finish_reason==='length'
        ? 'A resposta da IA foi interrompida pelo limite de tamanho.'
        : 'A resposta da IA foi interrompida pelo filtro do provedor.';
-     return {answer:reason+' Não execute instruções parciais. Reformule a pergunta ou divida o procedimento em etapas.',
-       sources:[],pendingActions};
+     return done({answer:reason+' Não execute instruções parciais. Reformule a pergunta ou divida o procedimento em etapas.',
+       sources:[],pendingActions},'model_interrupted');
    }
    messages.push(message);
    if(message.tool_calls?.some(call=>call.type==='function' && call.function.name==='ask_clarification')){
      // Never combine a clarification with a write or another tool call.
      // A clarification ends this turn without attaching previous excerpts.
      if(message.tool_calls.length!==1)
-       return {answer:'Você pode esclarecer qual sistema ou problema deseja consultar?',sources:[],pendingActions:[]};
+       return done({answer:'Você pode esclarecer qual sistema ou problema deseja consultar?',sources:[],pendingActions:[]},'clarified');
      const clarifyCall=message.tool_calls[0];
      if(clarifyCall.type!=='function'||clarifyCall.function.name!=='ask_clarification')
-       return {answer:'Pode explicar um pouco melhor o que precisa consultar?',sources:[],pendingActions:[]};
+       return done({answer:'Pode explicar um pouco melhor o que precisa consultar?',sources:[],pendingActions:[]},'clarified');
      let question:unknown;
      try{question=JSON.parse(clarifyCall.function.arguments).question;}catch{}
      // Clarification must never solicit credentials; request the error
@@ -95,52 +122,62 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
         unsupportedNetworkLiterals(question,[]).length>0)
        return {answer:'Pode explicar um pouco melhor o que precisa consultar?',sources:[],pendingActions:[]};
      if(lookupUnavailable&&sources.length===0)return unavailableReply();
-     return {answer:question.trim(),sources:[],pendingActions:[]};
+     return done({answer:question.trim(),sources:[],pendingActions:[]},'clarified');
    }
    if(!message.tool_calls?.length){
      // Retrieved excerpts are not evidence that a usable answer was produced.
      // Never attach their citations to an empty model response.
      if(!message.content?.trim())
-       return {answer:'O modelo não conseguiu produzir uma resposta. Reformule a pergunta ou tente novamente.',
-         sources:[],pendingActions};
+       return done({answer:'O modelo não conseguiu produzir uma resposta. Reformule a pergunta ou tente novamente.',
+         sources:[],pendingActions},'provider_failure');
      if(lookupUnavailable&&forceLookup&&sources.length===0)return unavailableReply();
      // A citation list alone does not establish that arbitrary IPs or URLs
      // fabricated in the answer came from the retrieved excerpts.
      if(hasSecrets(message.content)||
          (forceLookup&&sources.length>0&&unsupportedNetworkLiterals(message.content,sources).length>0)){
-       return {answer:'Não consegui validar os endereços ou dados sensíveis apresentados pela IA nas fontes consultadas. '+
+       return done({answer:'Não consegui validar os endereços ou dados sensíveis apresentados pela IA nas fontes consultadas. '+
          'Não execute essa orientação antes de conferir a documentação publicada.',
-         sources:[],pendingActions};
+         sources:[],pendingActions},'unsafe_answer');
      }
-     return {answer:groundedReply(message.content,forceLookup,sources.length),sources,pendingActions};
+     return done({answer:groundedReply(message.content,forceLookup,sources.length),sources,pendingActions},
+       forceLookup&&sources.length===0?'no_evidence':'answered');
    }
    for(const [index,call] of message.tool_calls.entries()){
-     if(index>=4){
+     if(index>=budget.limits.maxToolsPerStep){
        messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify({error:'Limite de ferramentas da etapa atingido'})});
        continue;
      }
+     budget.recordTool();
      let output:unknown;
      try {
        if(call.type!=='function') throw new Error('Tool call inválido');
        const args=JSON.parse(call.function.arguments) as Record<string,unknown>;
        if(call.function.name==='search_knowledge'){
-         if(searchCalls>=3) throw new Error('Limite de consultas ao cérebro nesta mensagem');
-         searchCalls++;
          if(typeof args.query!=='string'||!args.query.trim()||args.query.length>500) throw new Error('Consulta inválida');
          if(hasSecrets(args.query))throw new Error('Consulta contém possível credencial; remova dados sensíveis');
+         const state=budget.lookup(args.query);
+         if(state.kind==='exhausted')throw new Error('Orçamento de buscas atingido. Conclua usando as fontes existentes.');
+         if(state.kind==='repeated_limit')throw new Error('Consulta repetida. Conclua com as fontes disponíveis.');
+         if(state.kind==='error')throw new Error('Esta consulta já falhou; não repita a mesma busca.');
          let results:Source[];
-         try{results=await knowledgeSearch(actor,args.query,5);}
-         catch{
-           lookupUnavailable=true;
-           // Do not send connection strings, SQL errors or other backend
-           // diagnostic details back into the model's context.
-           throw new Error('Falha temporária na consulta ao cérebro');
+         if(state.kind==='cached')results=state.items;
+         else{
+           try{results=await knowledgeSearch(actor,args.query,5);}
+           catch{
+             budget.recordSearch(args.query,null);
+             lookupUnavailable=true;
+             // Connection strings and SQL details must not enter model context.
+             throw new Error('Falha temporária na consulta ao cérebro');
+           }
+           budget.recordSearch(args.query,results);
          }
          for(const result of results){
-           if(sources.length>=12) break;
+           if(sources.length>=budget.limits.maxSources) break;
            if(!sources.some(s=>s.versionId===result.versionId&&s.ordinal===result.ordinal)) sources.push(result);
          }
-         output=results.map(x=>({title:x.title,versionId:x.versionId,documentId:x.documentId,content:x.content,ordinal:x.ordinal}));
+         output=state.kind==='cached'
+           ?{cached:true,note:'Busca já realizada. Use os resultados ou conclua.',results:results.map(x=>({title:x.title,versionId:x.versionId,documentId:x.documentId,content:x.content,ordinal:x.ordinal}))}
+           :results.map(x=>({title:x.title,versionId:x.versionId,documentId:x.documentId,content:x.content,ordinal:x.ordinal}));
        } else if(call.function.name==='prepare_article'){
          if(!allowMutation) throw new Error('O usuário não solicitou a criação ou atualização de conhecimento nesta mensagem');
          if(pendingActions.length>0) throw new Error('Apenas uma prévia por mensagem; confirme a proposta existente');
@@ -189,7 +226,8 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      } catch(error){output={error:error instanceof Error?error.message:'Falha na ferramenta'};}
      messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify(output)});
    }
+   if(budget.shouldFinishAfterTools())finalAnswerNext=true;
  }
  if(lookupUnavailable&&forceLookup&&sources.length===0)return unavailableReply();
- return {answer:groundedReply('Limite de consultas atingido. Reformule sua pergunta ou tente novamente.',forceLookup,sources.length),sources,pendingActions};
+ return budgetReply(budget.stopCause()??'step_budget');
 }
