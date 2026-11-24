@@ -73,8 +73,8 @@ export class AgentBudget{
  stopCause():AgentStopReason|null{
   if(this.remainingMs()<1_000)return 'time_budget';
   if(this.steps>=this.limits.maxSteps)return 'step_budget';
-  if(this.completionTokens>=this.limits.maxCompletionTokens||
-     this.promptTokens+this.completionTokens>=this.limits.maxTotalTokens)return 'token_budget';
+  if(this.limits.maxCompletionTokens-this.completionTokens<256||
+     this.limits.maxTotalTokens-this.promptTokens-this.completionTokens<256)return 'token_budget';
   return null;
  }
  startModelTurn(forceFinal=false):{maxTokens:number;timeoutMs:number;finalTurn:boolean}|null{
