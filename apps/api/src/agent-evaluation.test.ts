@@ -59,7 +59,7 @@ test('T025 contract: no evidence causes deterministic abstention, never invented
  ],calls);
  const output=await respond(actor,randomUUID(),'Qual é a VPN interna?',[],fake,fakeSearch([],searches));
  assert.equal(searches.length,1);
- assert.equal(calls[0].tool_choice.function.name,'search_knowledge');
+ assert.equal(calls[0].tool_choice,'required');
  assert.match(output.answer,/não encontrei fontes publicadas/i);
  assert.match(output.answer,/não um procedimento interno validado/i);
  assert.doesNotMatch(output.answer,/vpn\.falso|senha-falsa|segundo a política oficial/i);
