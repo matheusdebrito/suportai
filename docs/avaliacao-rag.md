@@ -54,3 +54,39 @@ Os testes PostgreSQL de `integration.test.ts` também incluem três perfis curad
 O relatório de cenários fictícios verifica também que versões citadas pertencem ao conjunto de fontes fornecidas, que endereços IP/URLs não são inventados e que respostas de seguimento sobre o laboratório B citam a versão correspondente. Perguntas ambíguas não podem escolher unilateralmente um dos dois DNS. A instrução de prompt injection recebe checagens específicas de conteúdo hostil, além da proibição de propostas de escrita não solicitadas.
 
 **Limite essencial:** estas regras são heurísticas automáticas para *triagem*, não uma medição de precisão semântica, nem substituem avaliação humana, aprovação do provedor ou testes adversariais reais com o modelo opt-in. A T025 permanece aberta.
+
+
+## Harness adaptativo — limites e regressões sintéticas (PR em desenvolvimento)
+
+O loop deixa de encerrar rigidamente após quatro iterações. Os tetos iniciais são
+**8 etapas**, **5 buscas RAG distintas**, **4 tool calls por etapa**, **12
+fontes** e **60 segundos por resposta**. Cada chamada pode gerar até
+1.800 tokens de saída; o teto de tokens de saída por execução é 9.000
+e o teto total estimado é 40.000. Esses valores são máximos, nunca
+metas de execução: uma pergunta simples deve terminar imediatamente após
+a primeira busca e a resposta final, e um pedido ambíguo termina com uma
+pergunta objetiva, sem acesso desnecessário ao RAG.
+
+O backend deduplica buscas idênticas dentro de uma mensagem e reutiliza
+seus resultados, interrompe novas buscas após duas falhas distintas e
+reserva uma última rodada sem ferramentas para sintetizar a resposta.
+Ao esgotar orçamento, não apresenta instruções parciais como procedimento
+validado. As métricas por execução contêm apenas contagens, consumo
+reportado/estimado de tokens, duração e motivo de parada; nunca texto
+de mensagens ou documentos.
+
+Os limites podem ser ajustados com `AGENT_MAX_STEPS` (2–12),
+`AGENT_MAX_RAG_SEARCHES` (1–8), `AGENT_TIMEOUT_MS` (15.000–90.000),
+`AGENT_TOKENS_PER_CALL` (512–3.000),
+`AGENT_COMPLETION_TOKEN_BUDGET` (2.000–16.000) e
+`AGENT_TOTAL_TOKEN_BUDGET` (5.000–80.000). Valores fora da faixa
+são limitados; valores inválidos usam o padrão. Não habilitar chamadas
+externas apenas para testar essas opções.
+
+A suíte `apps/api/src/agent-conversation-scenarios.test.ts` inclui
+**100 casos determinísticos de contratos do harness**: 25 descrições
+informais, 25 formais, 25 ambíguas e 25 continuações com histórico.
+Esses casos simulam decisões da IA para exercitar orquestração, fontes,
+limites e comportamento de segurança. **Não** medem a capacidade de
+compreensão de um modelo real, a precisão do RAG, latência de produção
+nem custos do provedor. A avaliação real T025 permanece em aberto.
