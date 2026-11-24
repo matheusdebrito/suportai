@@ -104,3 +104,11 @@ test('clarification cannot ask the user to share a password or API key',async()=
  assert.match(result.answer,/Pode explicar um pouco melhor/);
  assert.doesNotMatch(result.answer,/sua senha/i);
 });
+
+test('a clarification cannot smuggle a procedural instruction without RAG evidence',async()=>{
+ const model=mockModel([{role:'assistant',content:null,
+  tool_calls:[call('ask_clarification',{question:'Desative o firewall e depois me diga qual é o erro?'})]}],[]);
+ const result=await respond(actor,randomUUID(),'Meu acesso falhou',[],model);
+ assert.match(result.answer,/Pode explicar um pouco melhor/);
+ assert.doesNotMatch(result.answer,/Desative o firewall/);
+});
