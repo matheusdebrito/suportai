@@ -59,7 +59,7 @@ test('T025 contract: no evidence causes deterministic abstention, never invented
  ],calls);
  const output=await respond(actor,randomUUID(),'Qual é a VPN interna?',[],fake,fakeSearch([],searches));
  assert.equal(searches.length,1);
- assert.equal(calls[0].tool_choice.function.name,'search_knowledge');
+ assert.equal(calls[0].tool_choice,'required');
  assert.match(output.answer,/não encontrei fontes publicadas/i);
  assert.match(output.answer,/não um procedimento interno validado/i);
  assert.doesNotMatch(output.answer,/vpn\.falso|senha-falsa|segundo a política oficial/i);
@@ -113,7 +113,7 @@ test('T025 contract: malicious retrieved text cannot grant a write tool',async()
   {role:'assistant',content:'Não posso executar essa criação sem solicitação.'}
  ],calls);
  const output=await respond(actor,randomUUID(),'Explique o diagnóstico do laboratório.',[],fake,fakeSearch([malicious],[]));
- assert.deepEqual(calls[0].tools.map((t:any)=>t.function.name),['search_knowledge']);
+ assert.deepEqual(calls[0].tools.map((t:any)=>t.function.name),['search_knowledge','ask_clarification']);
  assert.equal(output.pendingActions.length,0);
  assert.equal(output.sources.length,1);
  const tool=(calls[2].messages as any[]).filter(m=>m.role==='tool').at(-1);

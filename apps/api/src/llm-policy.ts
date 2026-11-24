@@ -9,7 +9,7 @@ export function shouldForceKnowledgeLookup(message:string):boolean {
  // Only pure greetings skip retrieval. A technical request prefixed by "oi"
  // must not silently bypass the evidence lookup or its unsourced warning.
  const greetingText=normalized.replace(/[!,.?]/g,' ').replace(/\s+/g,' ').trim();
- if(/^(?:(?:oi|ola|bom dia|boa tarde|boa noite|obrigad[oa]|valeu|tchau|ate logo)(?:\s+|$))+$/.test(greetingText))return false;
+ if(/^(?:(?:oi|ola|opa|fala|salve|e ai|eae|beleza|blz|tudo bem|bom dia|boa tarde|boa noite|obrigad[oa]|valeu|tchau|ate logo)(?:\s+|$))+$/.test(greetingText))return false;
  return normalized.length>0;
 }
 export function groundedReply(answer:string,lookupExpected:boolean,sourceCount:number):string {
