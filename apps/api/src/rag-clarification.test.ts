@@ -96,3 +96,11 @@ test('a model that ignores required tool choice cannot give unsourced internal p
  assert.match(result.answer,/não encontrei fontes publicadas/i);
  assert.doesNotMatch(result.answer,/Desative imediatamente/i);
 });
+
+test('clarification cannot ask the user to share a password or API key',async()=>{
+ const model=mockModel([{role:'assistant',content:null,
+  tool_calls:[call('ask_clarification',{question:'Qual é sua senha de acesso?'})]}],[]);
+ const result=await respond(actor,randomUUID(),'Não consigo acessar minha conta',[],model);
+ assert.match(result.answer,/Pode explicar um pouco melhor/);
+ assert.doesNotMatch(result.answer,/sua senha/i);
+});
