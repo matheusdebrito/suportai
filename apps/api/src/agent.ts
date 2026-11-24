@@ -68,7 +68,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
    // Reserve the last turn for synthesis; never leave tool output unanswered.
    const toolChoice=turnBudget.finalTurn ? ('none' as const)
      : turn===0 && forceLookup ? ('required' as const) : ('auto' as const);
-   let completion:Awaited<ReturnType<typeof provider.chat.completions.create>>;
+   let completion:OpenAI.Chat.Completions.ChatCompletion;
    const promptCharacters=JSON.stringify(messages).length;
    try {
      completion=await provider.chat.completions.create({
@@ -84,6 +84,11 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
    budget.recordModelUsage(completion.usage,
      promptCharacters,JSON.stringify(firstChoice?.message??'').length);
    if(budget.remainingMs()===0)return budgetReply('time_budget');
+   // When a response exhausts the token budget, do not execute any requested mutation.
+   if(firstChoice?.message?.tool_calls?.length &&
+      (budget.completionTokens>=budget.limits.maxCompletionTokens||
+       budget.promptTokens+budget.completionTokens>=budget.limits.maxTotalTokens))
+     return budgetReply('token_budget');
    const choice=completion.choices[0];
    const message=choice?.message;
    if(!message)return done({answer:'O modelo não retornou uma resposta. Tente novamente.',sources:[],pendingActions},'provider_failure');
@@ -120,7 +125,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
         !question.trim().endsWith('?')||(question.match(/\?/g)?.length??0)!==1||
         /[\r\n]/.test(question)||hasSecrets(question)||asksForSecret||proposesAction||
         unsupportedNetworkLiterals(question,[]).length>0)
-       return {answer:'Pode explicar um pouco melhor o que precisa consultar?',sources:[],pendingActions:[]};
+       return done({answer:'Pode explicar um pouco melhor o que precisa consultar?',sources:[],pendingActions:[]},'clarified');
      if(lookupUnavailable&&sources.length===0)return unavailableReply();
      return done({answer:question.trim(),sources:[],pendingActions:[]},'clarified');
    }
