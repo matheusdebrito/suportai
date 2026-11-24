@@ -84,8 +84,9 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      try{question=JSON.parse(clarifyCall.function.arguments).question;}catch{}
      // Clarification must never solicit credentials; request the error
      // message, system name or environment instead of passwords or tokens.
-     const asksForSecret=typeof question==='string' &&
-       /\b(?:qual(?:\s+e)?(?:\s+a|\s+o|\s+sua|\s+seu)?\s+(?:senha|token|password|api[_ -]?key)|(?:informe|envie|diga|compartilhe|cole|digite)\s+(?:(?:a|o|sua|seu)\s+)?(?:senha|token|password|api[_ -]?key|credenciais?))\b/i.test(question);
+     const normalizedQuestion=typeof question==='string'
+       ? question.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase() : '';
+     const asksForSecret=/\b(?:senhas?|password|tokens?|credenciais?|api[_ -]?key|chave\s+(?:de\s+)?(?:acesso|api))\b/.test(normalizedQuestion);
      const proposesAction=typeof question==='string' &&
        /(?:^|[.!;]\s*)(?:execute|rode|reinicie|instale|desative|configure|altere|apague|exclua|acesse|use)\b/i.test(question);
      if(typeof question!=='string'||question.trim().length<8||question.trim().length>300||
