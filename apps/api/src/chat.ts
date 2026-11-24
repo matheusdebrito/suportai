@@ -137,6 +137,8 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
    });
    try {
      const output=await runAgent(a,id,b.message,history);
+     // Numeric-only diagnostic signal. Never log prompts, document excerpts or secrets.
+     if(output.metrics)req.log.info({agent:output.metrics},'Agent turn finished');
      // Hold a shared account lock while saving the reply. Permission changes
      // must serialize either entirely before or after this commit.
      const sources=output.sources.map(s=>({documentId:s.documentId,versionId:s.versionId,versionNumber:s.versionNumber,title:s.title,ordinal:s.ordinal}));
