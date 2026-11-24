@@ -77,8 +77,11 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      // A clarification ends this turn without attaching previous excerpts.
      if(message.tool_calls.length!==1)
        return {answer:'Você pode esclarecer qual sistema ou problema deseja consultar?',sources:[],pendingActions:[]};
+     const clarifyCall=message.tool_calls[0];
+     if(clarifyCall.type!=='function'||clarifyCall.function.name!=='ask_clarification')
+       return {answer:'Pode explicar um pouco melhor o que precisa consultar?',sources:[],pendingActions:[]};
      let question:unknown;
-     try{question=JSON.parse(message.tool_calls[0].function.arguments).question;}catch{}
+     try{question=JSON.parse(clarifyCall.function.arguments).question;}catch{}
      if(typeof question!=='string'||question.trim().length<8||question.trim().length>300||
         !question.trim().endsWith('?')||hasSecrets(question)||unsupportedNetworkLiterals(question,[]).length>0)
        return {answer:'Pode explicar um pouco melhor o que precisa consultar?',sources:[],pendingActions:[]};
