@@ -42,7 +42,7 @@ test('simple question finishes after one RAG lookup and one synthesis (not eight
 });
 test('five RAG lookups trigger a final synthesis call with tools disabled',async()=>{
  const calls:any[]=[];const searches:string[]=[];
- const queue=Array.from({length:5},(_,i)=>({
+ const queue:any[]=Array.from({length:5},(_,i)=>({
   role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'procedimento '+(i+1)},'q'+i)]
  }));
  queue.push({role:'assistant',content:'Não encontrei o procedimento; informe o ambiente.'});
@@ -57,7 +57,7 @@ test('five RAG lookups trigger a final synthesis call with tools disabled',async
 });
 test('duplicate searches are served from cache and the model must eventually synthesize',async()=>{
  const calls:any[]=[];let reads=0;
- const queue=Array.from({length:3},(_,i)=>({
+ const queue:any[]=Array.from({length:3},(_,i)=>({
   role:'assistant',content:null,
   tool_calls:[tool('search_knowledge',{query:i===0?'Pesquisa DNS':'  pesquisa   dns  '},'q'+i)]
  }));
@@ -72,7 +72,7 @@ test('duplicate searches are served from cache and the model must eventually syn
 });
 test('the eighth iteration forbids tool execution even if the model attempts it',async()=>{
  const calls:any[]=[];let reads=0;
- const queue=Array.from({length:8},(_,i)=>({
+ const queue:any[]=Array.from({length:8},(_,i)=>({
   role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'consulta única '+i},'q'+i)]
  }));
  const output=await respond(actor,randomUUID(),'Me ajude no diagnóstico',[],
