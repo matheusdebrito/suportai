@@ -9,6 +9,7 @@ import {shouldForceKnowledgeLookup,groundedReply} from './llm-policy.js';
 import {unsupportedNetworkLiterals} from './answer-evidence.js';
 import {explicitlyTargetedSpace} from './space-targeting.js';
 import {AgentBudget,type AgentMetrics,type AgentStopReason} from './agent-budget.js';
+import {boundedRead} from './agent-deadline.js';
 const SYSTEM=`Você é o SuportAI, assistente interno de conhecimento. Converse naturalmente em português do Brasil, inclusive com gírias, abreviações e mensagens curtas. Use o histórico recente para compreender referências como "isso", "aquele problema" e "é a impressora".
 Para perguntas que possam ser respondidas pelo conhecimento interno, CHAME search_knowledge. Reescreva a busca com o assunto do histórico e termos técnicos relevantes; nunca busque só "isso" ou "e aí?". Pode reformular a consulta quando o primeiro resultado não ajudar, respeitando os limites.
 Se o pedido estiver ambíguo ou faltar um detalhe indispensável para buscar com segurança (sistema, equipamento, ambiente ou objetivo), CHAME ask_clarification com uma única pergunta curta e específica. Aguarde a resposta do usuário; não adivinhe. Se o pedido já estiver claro, não faça perguntas desnecessárias.
@@ -42,16 +43,18 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
    sources:[] as Source[],pendingActions
  },'search_unavailable');
  if(!provider){
-   const found=await knowledgeSearch(actor,userMessage,5);
+   const found=await boundedRead(knowledgeSearch(actor,userMessage,5),
+     Math.min(15_000,Math.max(1,budget.remainingMs()-500)));
    return done({answer:found.length?'Não há modelo de IA configurado. Encontrei estes trechos relevantes no cérebro:\n\n'+found.map((s,i)=>`${i+1}. ${s.title} — ${s.content.slice(0,500)}`).join('\n\n'):'Não encontrei um procedimento confirmado no cérebro. O uso do modelo externo não está habilitado nesta instalação.',sources:found,pendingActions},found.length?'answered':'no_evidence');
  }
  // The user talks about spaces by name; they must not need UUIDs.
  // Only authorized writable spaces are supplied to the model.
  const writableSpaces:{id:string;name:string}[]=allowMutation
-   ? (await query(`SELECT s.id,s.name FROM spaces s
+   ? (await boundedRead(query(`SELECT s.id,s.name FROM spaces s
        LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$1
        WHERE COALESCE(g.can_edit,false) AND (s.visibility='SHARED' OR COALESCE(g.can_read,false))
-       ORDER BY s.name LIMIT 30`,[actor.id])).rows : [];
+       ORDER BY s.name LIMIT 30`,[actor.id]),
+       Math.min(15_000,Math.max(1,budget.remainingMs()-500)))).rows : [];
  const availableTools=allowMutation && writableSpaces.length>0
    ? tools : tools.filter(t=>t.type==='function' && (t.function.name==='search_knowledge'||t.function.name==='ask_clarification'));
  const messages:OpenAI.Chat.Completions.ChatCompletionMessageParam[]=[
@@ -167,7 +170,8 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          let results:Source[];
          if(state.kind==='cached')results=state.items;
          else{
-           try{results=await knowledgeSearch(actor,args.query,5);}
+           try{results=await boundedRead(knowledgeSearch(actor,args.query,5),
+             Math.min(15_000,Math.max(1,budget.remainingMs()-500)));}
            catch{
              budget.recordSearch(args.query,null);
              lookupUnavailable=true;
