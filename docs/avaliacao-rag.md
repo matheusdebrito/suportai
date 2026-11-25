@@ -37,6 +37,12 @@ Para cada cenário, marcar **APROVADO**, **FALHOU** ou **NÃO VERIFICADO**, incl
 
 Uma chave de API não constitui aprovação. O mecanismo `ALLOW_EXTERNAL_AI_DATA_PROCESSING` continua desabilitado por padrão. A avaliação real depende de decisão humana sobre provedor, custos, retenção e autorização de processamento; esta documentação não altera essa decisão.
 
+## Relevância e evidência por afirmação
+
+- `retrieval-ranking.test.ts` compara Recall@3 e MRR@3 no PostgreSQL com três consultas lexicais fictícias e verifica relevância mínima com vetores sintéticos. A reordenação executa localmente sobre os candidatos autorizados. Os resultados do corpus controlado servem para regressões.
+- `npm run rag:evaluate -w @suportai/api -- --grounding` lista 13 casos fictícios sem chamadas externas. Os rótulos incluem pré-requisitos e negações, ambientes, versões conflitantes, fontes revogadas, citações, números, IPs e instruções inseridas em trechos.
+- Após a autorização específica existente para provedor e custo, `npm run rag:evaluate -w @suportai/api -- --grounding --run` mede falso aceite entre os casos que deveriam ser rejeitados e falso bloqueio entre os que deveriam ser aceitos. Os testes com respostas simuladas avaliam os controles de citação e o cálculo dessas taxas. A eficácia semântica com um modelo real segue pendente.
+
 ## Executável opcional para modelo real — somente fixtures sintéticas
 
 - `npm run rag:evaluate -w @suportai/api`: imprime **somente** a lista de cenários; nenhum dado é enviado nem há conexão de rede.

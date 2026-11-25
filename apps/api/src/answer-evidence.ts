@@ -19,3 +19,10 @@ export function unsupportedNetworkLiterals(answer:string,sources:Pick<Source,'co
  const supported=new Set(sources.flatMap(s=>networkLiterals(s.content)));
  return [...new Set(networkLiterals(answer))].filter(value=>!supported.has(value));
 }
+
+export function unsupportedNumbers(statement:string,quotes:string[]):boolean{
+ const numeric=(text:string)=>[...text.replace(/^\s*\d+[.)]\s+/,'').matchAll(/(?<![\p{L}\d])[-+]?\d+(?:[.,]\d+)*(?:\s*%)?(?![\p{L}\d]|[.,]\d)/gu)]
+   .map(match=>match[0].replace(/\s+/g,''));
+ const supported=new Set(quotes.flatMap(numeric));
+ return numeric(statement).some(value=>!supported.has(value));
+}

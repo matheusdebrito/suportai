@@ -170,7 +170,8 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
      if(output.metrics)req.log.info({agent:output.metrics},'Agent turn finished');
      // Hold a shared account lock while saving the reply. Permission changes
      // must serialize either entirely before or after this commit.
-     const sources=output.sources.map(s=>({documentId:s.documentId,versionId:s.versionId,versionNumber:s.versionNumber,title:s.title,ordinal:s.ordinal}));
+     const sources=output.sources.map(s=>({documentId:s.documentId,versionId:s.versionId,versionNumber:s.versionNumber,title:s.title,ordinal:s.ordinal,
+       ...(s.historical?{historical:true}:{}),...(s.excerpts?{excerpts:s.excerpts}:{})}));
      const saved=await transaction(async c=>{
        await requireCurrentActor(c,a);
        const conversation=await c.query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2 FOR SHARE',[id,a.id]);
@@ -186,10 +187,11 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
            JOIN document_versions v ON v.document_id=d.id AND v.id=$2
            JOIN spaces s ON s.id=d.space_id
            LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$3
-           WHERE d.id=$1 AND d.current_version_id=$2 AND d.archived_at IS NULL
-             AND v.status='PUBLISHED' AND v.index_status='READY'
+           WHERE d.id=$1 AND d.archived_at IS NULL AND v.index_status='READY'
+             AND (CASE WHEN $4::boolean THEN d.current_version_id<>v.id AND v.status='ARCHIVED'
+                       ELSE d.current_version_id=v.id AND v.status='PUBLISHED' END)
              AND (s.visibility='SHARED' OR COALESCE(g.can_read,false))
-           FOR SHARE OF d`,[source.documentId,source.versionId,a.id]);
+           FOR SHARE OF d`,[source.documentId,source.versionId,a.id,source.historical===true]);
          if(!live.rowCount)
            throw Object.assign(new Error('Fonte arquivada ou atualizada durante a resposta'),{statusCode:409});
        }

@@ -792,19 +792,43 @@ if(!process.env.TEST_DATABASE_URL){
    const comparisonRequests:OpenAI.Chat.Completions.ChatCompletionMessageParam[][]=[];
    const comparisonModel={chat:{completions:{create:async(request:OpenAI.Chat.Completions.ChatCompletionCreateParams)=>{
      comparisonRequests.push([...request.messages]);
+     if(request.response_format?.type==='json_object'){
+       const {evidence}=JSON.parse(String(request.messages[1].content)) as {evidence:{evidence:number;versionId:string}[]};
+       const old=evidence.find(item=>item.versionId===newPdfVersion.versionId);
+       const current=evidence.find(item=>item.versionId===newestDraft.versionId);
+       assert.ok(old&&current);
+       return {choices:[{message:{content:JSON.stringify({verdict:'supported',claims:[
+         {unit:1,kind:'historical',refs:[{evidence:old.evidence,quote:'registre resultados de logs'}]},
+         {unit:2,kind:'current',refs:[{evidence:current.evidence,quote:'valide os backups'}]}
+       ]})}}]};
+     }
      const next=['get_knowledge_document','list_document_versions','list_document_versions'][comparisonRequests.length-1];
      const message=next ? {role:'assistant',content:null,tool_calls:[{id:`comparison-${comparisonRequests.length}`,type:'function',
        function:{name:next,arguments:JSON.stringify({documentId:pdfDocumentId})}}]} :
-       {role:'assistant',content:'Use a versão vigente. As demais são históricas.'};
+       {role:'assistant',content:'A versão anterior orientava registrar resultados de logs. A versão vigente orienta validar os backups.'};
      return {choices:[{message}]};
    }}}} as unknown as OpenAI;
-   const compared=await respond(naturalActor!,conversationId,'Compare as versões do PDF e indique a vigente.',[],comparisonModel);
-   const timeline=comparisonRequests.at(-1)?.filter(message=>message.role==='tool');
+   const compared=await respond(naturalActor!,conversationId,'Compare as versões do PDF e indique a vigente.',[],comparisonModel,
+     undefined,{verifyEvidence:true});
+   const timeline=comparisonRequests.at(-2)?.filter(message=>message.role==='tool');
    assert.match(String(timeline?.find(message=>message.tool_call_id==='comparison-2')?.content),/Versões antigas são históricas/);
    assert.match(String(timeline?.find(message=>message.tool_call_id==='comparison-3')?.content),/Leitura já realizada/);
    assert.equal(compared.metrics?.duplicateReads,1);
    assert.ok((compared.metrics?.evidenceCount??0)>1);
-   assert.deepEqual(compared.sources.map(source=>source.versionId),[newestDraft.versionId]);
+   assert.deepEqual(compared.sources.map(source=>source.versionId),[newPdfVersion.versionId,newestDraft.versionId]);
+   assert.equal(compared.sources[0].historical,true);
+   assert.match(compared.answer,/anterior.*\[1\].*vigente.*\[2\]/);
+   const comparisonApp=await buildApp({agentResponder:async()=>compared});
+   try{
+     const opened=await comparisonApp.inject({method:'POST',url:'/conversations',headers:auth(reader.cookie)});
+     const comparedConversation=opened.json().id;
+     const sent=await comparisonApp.inject({method:'POST',url:`/conversations/${comparedConversation}/messages`,
+       headers:auth(reader.cookie),payload:{message:'Compare as versões do checklist.'}});
+     assert.equal(sent.statusCode,200,sent.body);
+     assert.deepEqual(sent.json().sources.map((source:any)=>source.excerpts),[['registre resultados de logs'],['valide os backups']]);
+     const reopened=await comparisonApp.inject({method:'GET',url:`/conversations/${comparedConversation}`,headers:auth(reader.cookie)});
+     assert.deepEqual(reopened.json().messages.at(-1).sources,sent.json().sources);
+   }finally{await comparisonApp.close();}
 
 
    // Negative PDF fixtures: failures must be explicit and must never publish partial content.

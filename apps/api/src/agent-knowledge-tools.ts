@@ -12,7 +12,7 @@ export type DocumentDetail={
  versionId:string;versionNumber:number;content:string;truncated:boolean;
 };
 export type HistoricalVersion={
- id:string;number:number;status:string;isCurrent:boolean;excerpt:string;
+ id:string;number:number;status:string;isCurrent:boolean;title:string;excerpt:string;
 };
 
 /** Read-only tools use the same SQL authorization boundary as RAG. */
@@ -23,11 +23,12 @@ export async function getPublishedDocument(actor:Actor,documentId:string):
  v.version_number,v.content
  FROM documents d JOIN document_versions v ON v.id=d.current_version_id
  JOIN spaces s ON s.id=d.space_id
+ JOIN users u ON u.id=$2 AND u.active AND NOT u.must_change_password AND u.auth_revision=$3 AND u.role=$4
  LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2
  WHERE d.id=$1 AND d.archived_at IS NULL
  AND v.status='PUBLISHED' AND v.index_status='READY'
  AND (s.visibility='SHARED' OR COALESCE(g.can_read,false)) LIMIT 1`,
- [documentId,actor.id]);
+ [documentId,actor.id,actor.auth_revision,actor.role]);
  const x=r.rows[0];
  if(!x||hasSecrets(x.title)||hasSecrets(x.content))return null;
  return {id:x.id,title:x.title,kind:x.kind,versionId:x.version_id,
@@ -37,23 +38,24 @@ export async function getPublishedDocument(actor:Actor,documentId:string):
 export async function getVisibleDocumentVersions(actor:Actor,documentId:string):
  Promise<HistoricalVersion[]>{
  if(!validDocumentId(documentId))return [];
- const r=await query(`SELECT v.id,v.version_number,v.status,v.content,
+ const r=await query(`SELECT v.id,v.version_number,v.status,v.content,d.title,
  (v.id=d.current_version_id) AS is_current
  FROM documents d JOIN document_versions v ON v.document_id=d.id
  JOIN spaces s ON s.id=d.space_id
+ JOIN users u ON u.id=$2 AND u.active AND NOT u.must_change_password AND u.auth_revision=$3 AND u.role=$4
  LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2
  WHERE d.id=$1 AND d.archived_at IS NULL
  AND d.current_version_id IS NOT NULL
- AND v.status IN ('PUBLISHED','ARCHIVED')
+ AND v.status IN ('PUBLISHED','ARCHIVED') AND v.index_status='READY'
  AND (s.visibility='SHARED' OR COALESCE(g.can_read,false))
- ORDER BY v.version_number DESC LIMIT 6`,[documentId,actor.id]);
- return r.rows.filter(x=>!hasSecrets(x.content)).map(x=>({
+ ORDER BY (v.id=d.current_version_id) DESC,v.version_number DESC LIMIT 6`,[documentId,actor.id,actor.auth_revision,actor.role]);
+ return r.rows.filter(x=>!hasSecrets(x.content)&&!hasSecrets(x.title)).map(x=>({
   id:x.id,number:Number(x.version_number),status:x.status,
-  isCurrent:Boolean(x.is_current),excerpt:x.content.slice(0,2400)
+  isCurrent:Boolean(x.is_current),title:x.title,excerpt:x.content.slice(0,2400)
  }));
 }
 export function documentToSource(document:DocumentDetail):Source{
  return {documentId:document.id,versionId:document.versionId,
-  versionNumber:document.versionNumber,ordinal:0,title:document.title,
+  versionNumber:document.versionNumber,ordinal:-1,title:document.title,
   content:document.content,score:1};
 }

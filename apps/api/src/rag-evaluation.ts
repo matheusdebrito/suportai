@@ -4,6 +4,7 @@ import {respond,type AgentOutput} from './agent.js';
 import type {Source} from './retrieval.js';
 import {unsupportedNetworkLiterals} from './answer-evidence.js';
 import type {Actor} from './security.js';
+import {benchmarkGrounding,groundingCases} from './grounding-benchmark.js';
 
 // These are the ONLY excerpts and questions sent by this tool. Never read
 // production databases, personal documents, user files or environment content.
@@ -145,14 +146,23 @@ export function isRagEvaluationEntrypoint(path:string|undefined):boolean{
 const invoked=isRagEvaluationEntrypoint(process.argv[1]);
 if(invoked){
  const run=process.argv.includes('--run');
+ const grounding=process.argv.includes('--grounding');
  if(!run){
    process.stdout.write(JSON.stringify({mode:'dry-run',externalCalls:0,
-     cases:syntheticCases.map(c=>({id:c.id,expect:c.expect}))},null,2)+'\n');
+     cases:grounding?groundingCases.map(c=>({id:c.id,shouldAccept:c.shouldAccept})):syntheticCases.map(c=>({id:c.id,expect:c.expect}))},null,2)+'\n');
  }else{
    if(process.env.EVAL_SYNTHETIC_LLM_APPROVED!=='true'||!process.env.OPENAI_API_KEY?.trim())
      throw new Error('Avaliação externa não autorizada. Exige EVAL_SYNTHETIC_LLM_APPROVED=true e OPENAI_API_KEY.');
    const provider=new OpenAI({apiKey:process.env.OPENAI_API_KEY,timeout:20_000,maxRetries:0});
-   executeSyntheticEvaluation(provider).then(rows=>{
+   if(grounding){
+     benchmarkGrounding(provider).then(report=>{
+       process.stdout.write(JSON.stringify({mode:'synthetic-grounding',model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',...report},null,2)+'\n');
+       if(report.metrics.falseAccepted||report.metrics.falseBlocked)process.exitCode=1;
+     }).catch(()=>{
+       process.stderr.write('Falha na avaliação de grounding. Verifique a autorização, o provedor e a conexão.\n');
+       process.exitCode=1;
+     });
+   }else executeSyntheticEvaluation(provider).then(rows=>{
      const investigation=summarizeInvestigationMetrics(rows.flatMap(row=>row.metrics?[row.metrics]:[]));
      process.stdout.write(JSON.stringify({mode:'synthetic-real-model',model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',investigation,rows},null,2)+'\n');
      if(rows.some(x=>!x.pass))process.exitCode=1;
