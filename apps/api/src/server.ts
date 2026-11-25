@@ -10,12 +10,14 @@ import {registerChat} from './chat.js';
 import {registerOperations} from './operations.js';
 import {respond} from './agent.js';
 import {safeErrorType} from './safe-errors.js';
+import {registerTelemetryHooks} from './telemetry.js';
 export async function buildApp(options:{agentResponder?:typeof respond}={}){
  const app=Fastify({logger:{redact:['req.headers.authorization','req.headers.cookie','res.headers.set-cookie']},bodyLimit:200_000});
  const origin=process.env.APP_ORIGIN||'http://localhost:5173';
  await app.register(cors,{origin,credentials:true});
  await app.register(cookie);
  await app.register(multipart,{limits:{fileSize:8*1024*1024,files:1}});
+ registerTelemetryHooks(app);
  app.addHook('onRequest',async(req,reply)=>{
    if(['POST','PATCH','PUT','DELETE'].includes(req.method) && req.headers.cookie){
      if(req.headers.origin!==origin) return reply.code(403).send({error:'Origem não autorizada'});

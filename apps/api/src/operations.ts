@@ -2,6 +2,7 @@ import type {FastifyInstance} from 'fastify';
 import {query} from './db.js';
 import {requireActor,requireAdmin} from './auth.js';
 import {isModelConfigured} from './llm.js';
+import {computeAggregatedTelemetry} from './telemetry.js';
 
 // Aggregate-only metrics: no prompts, document text, credentials or user emails.
 export function registerOperations(app:FastifyInstance){
@@ -32,5 +33,17 @@ export function registerOperations(app:FastifyInstance){
    return {observedAt:new Date().toISOString(),externalAiEnabled:isModelConfigured(),
      ingestion:jobs.rows[0],knowledge:documents.rows[0],
      conversation:activity.rows[0],feedback:feedback.rows[0]};
+ });
+
+ app.get('/admin/telemetry',async req=>{
+   const actor=await requireActor(req);
+   requireAdmin(actor);
+   const {from,to}=req.query as {from?:string;to?:string};
+   const fromDate=from?new Date(from):new Date(Date.now()-7*24*60*60*1000);
+   const toDate=to?new Date(to):new Date();
+   if(isNaN(fromDate.getTime())||isNaN(toDate.getTime())){
+     return {error:'Invalid date format. Use ISO 8601 (e.g., 2026-11-25T00:00:00Z)'};
+   }
+   return computeAggregatedTelemetry(fromDate,toDate);
  });
 }

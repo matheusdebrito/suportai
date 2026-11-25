@@ -9,6 +9,7 @@ import {safeErrorType} from './safe-errors.js';
 import {withConversationTurnLock} from './conversation-lock.js';
 import {listInvestigationSubjects,readInvestigationState,saveInvestigationState,visibleInvestigationVersions} from './investigation-state.js';
 import {routeInvestigation,updateInvestigationFromMessage} from './investigation-dialogue.js';
+import {recordTurnTelemetry} from './telemetry.js';
 
 const inaccessibleContext=`EXISTS (
   SELECT 1 FROM unnest(m.context_source_version_ids) AS context(version_id)
@@ -120,6 +121,43 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
    if(typeof b?.message!=='string'||b.message.trim().length===0||b.message.length>4000) return reply.code(400).send({error:'Mensagem inválida'});
    const userMessage=b.message;
    if(hasSecrets(userMessage)) return reply.code(422).send({error:'Possível credencial detectada. Remova senhas e tokens antes de enviar.'});
+
+   // Idempotency-Key: optional header for client-controlled deduplication.
+   // If provided, must be a valid UUID v4. Returns existing response if key was already processed.
+   const idempotencyKey=req.headers['idempotency-key'] as string|undefined;
+   if(idempotencyKey && !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey)){
+     return reply.code(400).send({error:'Idempotency-Key deve ser UUID v4'});
+   }
+
+   // Fast path: check for existing message with this idempotency key BEFORE acquiring lock.
+   // This avoids lock contention for retries and returns immediately.
+   if(idempotencyKey){
+     const existing=await query(
+       `SELECT m.id, m.investigation_id FROM messages m
+        WHERE m.conversation_id=$1 AND m.idempotency_key=$2 AND m.role='user'`,
+       [id,idempotencyKey]
+     );
+     if(existing.rowCount){
+       // Find the assistant response for the same investigation
+       const assistantMsg=await query(
+         `SELECT id, content, sources, created_at FROM messages
+          WHERE conversation_id=$1 AND role='assistant' AND investigation_id=$2
+          ORDER BY created_at ASC LIMIT 1`,
+         [id,existing.rows[0].investigation_id]
+       );
+       if(assistantMsg.rowCount){
+         return {
+           id:assistantMsg.rows[0].id,
+           answer:assistantMsg.rows[0].content,
+           sources:assistantMsg.rows[0].sources,
+           pendingActions:[],
+           idempotent:true
+         };
+       }
+       // If no assistant message yet (shouldn't happen), fall through to normal processing
+     }
+   }
+
    // Acquire before reading the conversation or writing the user message.
    // Competing turns get 409 instead of racing with stale history.
    const turn=await withConversationTurnLock(id,async()=>{
@@ -160,8 +198,8 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
      await requireCurrentActor(c,a);
      const owned=await c.query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2 FOR SHARE',[id,a.id]);
      if(!owned.rowCount)throw Object.assign(new Error('Conversa removida'),{statusCode:404});
-     await c.query("INSERT INTO messages(conversation_id,role,content,auth_revision,investigation_id) VALUES($1,'user',$2,$3,$4)",
-       [id,userMessage,a.auth_revision,investigationId]);
+     await c.query("INSERT INTO messages(conversation_id,role,content,auth_revision,investigation_id,idempotency_key) VALUES($1,'user',$2,$3,$4,$5)",
+       [id,userMessage,a.auth_revision,investigationId,idempotencyKey??null]);
    });
    try {
      const output=clarification ? {answer:clarification,sources:[],pendingActions:[]} :
@@ -201,19 +239,73 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
        return result.rows[0].id as string;
      });
      if(!saved)return reply.code(409).send({error:'O estado da investigação mudou ou ficou indisponível. Reenvie a pergunta para retomar o assunto.'});
+
+     // Record telemetry for successful turn
+     const latencyMs=Date.now()-(req as any).telemetryStart;
+     await recordTurnTelemetry({
+       requestId:req.id,
+       conversationId:id,
+       userId:a.id,
+       latencyMs,
+       httpStatus:200,
+       agentMetrics:output.metrics,
+       idempotentHit:false
+     });
+
      return {id:saved,answer:output.answer,sources,pendingActions:output.pendingActions};
    }catch(error){
-     if((error as {statusCode?:number})?.statusCode===403)
+     const statusCode=(error as {statusCode?:number})?.statusCode;
+     const latencyMs=Date.now()-(req as any).telemetryStart;
+     const errorType=safeErrorType(error);
+
+     if(statusCode===403){
+       await recordTurnTelemetry({
+         requestId:req.id,conversationId:id,userId:a.id,latencyMs,httpStatus:403,
+         agentMetrics:undefined,errorType,idempotentHit:false
+       });
        return reply.code(403).send({error:'Permissões alteradas durante a consulta; entre novamente para continuar'});
-     if((error as {statusCode?:number})?.statusCode===404)
+     }
+     if(statusCode===404){
+       await recordTurnTelemetry({
+         requestId:req.id,conversationId:id,userId:a.id,latencyMs,httpStatus:404,
+         agentMetrics:undefined,errorType,idempotentHit:false
+       });
        return reply.code(404).send({error:'A conversa foi excluída enquanto o agente respondia'});
-     if((error as {statusCode?:number})?.statusCode===409)
+     }
+     if(statusCode===409){
+       await recordTurnTelemetry({
+         requestId:req.id,conversationId:id,userId:a.id,latencyMs,httpStatus:409,
+         agentMetrics:undefined,errorType,idempotentHit:false
+       });
        return reply.code(409).send({error:'O procedimento consultado foi arquivado ou atualizado. Refaça a pergunta para buscar a versão atual.'});
-     req.log.error({errorType:safeErrorType(error)},'Agent execution failed');
+     }
+     req.log.error({errorType},'Agent execution failed');
+     await recordTurnTelemetry({
+       requestId:req.id,conversationId:id,userId:a.id,latencyMs,httpStatus:503,
+       agentMetrics:undefined,errorType,idempotentHit:false
+     });
      return reply.code(503).send({error:'Não foi possível consultar o agente agora. Tente novamente.'});
    }
    });
-   if(turn.busy)return reply.code(409).send({error:'Já existe uma mensagem em processamento nesta conversa. Tente novamente após a resposta.'});
+   if(turn.busy){
+     if(turn.retryAfterMs) reply.header('Retry-After', Math.ceil(turn.retryAfterMs/1000).toString());
+     return reply.code(409).send({error:'Já existe uma mensagem em processamento nesta conversa. Tente novamente após a resposta.'});
+   }
+
+   // Record telemetry for idempotent hit (returned before lock)
+   if(turn.value && typeof turn.value==='object' && 'idempotent' in turn.value && turn.value.idempotent){
+     const latencyMs=Date.now()-(req as any).telemetryStart;
+     await recordTurnTelemetry({
+       requestId:req.id,
+       conversationId:id,
+       userId:a.id,
+       latencyMs,
+       httpStatus:200,
+       agentMetrics:undefined,
+       idempotentHit:true
+     });
+   }
+
    return turn.value;
- });
+  });
 }

@@ -47,8 +47,8 @@ O CI do PR #71 foi aprovado ([execução 45605549638](https://github.com/matheus
 | 1 | Crítica | Memória persistente e continuidade | #2 e #7 | Base atual; decisão de retenção H-DEC-003 | Concluída |
 | 2 | Crítica | Planejamento investigativo e recuperação | #1, #6 e #10 | Fase 1, contratos do loop | Concluída |
 | 3 | Alta | Recuperação RAG, grounding e comparação | #4, #5 e #9 | Fase 2; corpus sintético | Concluída |
-| 4 | Média/alta | Concorrência, UX e observabilidade | #11 e #12 | Contratos das fases 1–3 | ☐ Não iniciada |
-| 5 | Crítica para liberação | Avaliação real, português informal e calibração | #3 e #8; valida todas | Fases 1–4; autorização de LLM | ☐ Não iniciada |
+| 4 | Média/alta | Concorrência, UX e observabilidade | #11 e #12 | Contratos das fases 1–3 | ✅ Concluída |
+| 5 | Crítica para liberação | Avaliação real, português informal e calibração | #3 e #8; valida todas | Fases 1–4; autorização de LLM | 🔄 Em andamento (H-T017 concluído) |
 
 A fase 5 pode **preparar os fixtures e a régua de qualidade desde a fase 1**, mas a certificação final depende das demais fases e da autorização para processamento externo.
 
@@ -155,10 +155,14 @@ Passaram 196 testes locais com PostgreSQL descartável. A integração verificou
 
 **Implementações:**
 
-- [ ] **H-T013 — Idempotência por envio.** Adotar identificador de mensagem/requisição e tratamento de retries do cliente, impedindo duplicação de histórico, propostas pendentes e custos de chamadas. Manter contrato compatível ou versionado.
-- [ ] **H-T014 — Política de mensagens concorrentes.** Avaliar manter HTTP 409 com retry controlado ou adicionar fila curta por conversa, com backpressure, cancelamento seguro e estados de processamento no frontend. Não segurar conexão de banco sem orçamento.
-- [ ] **H-T015 — Telemetria orientada a qualidade.** Medir por execução: latência p50/p95, passos, buscas úteis, taxa de esclarecimento, erros, estimativa de custo, motivo de parada, taxa de abstenção e avaliação do usuário. Usar IDs de correlação e agregações, sem armazenar prompts ou documentos em logs.
-- [ ] **H-T016 — Testes de concorrência e operação.** Simular mensagens simultâneas na mesma conversa, duplicações/retries, permissão revogada durante a resposta, desconexão do cliente, saturação do pool e múltiplas instâncias.
+- [x] **H-T013 — Idempotência por envio.** Adotar identificador de mensagem/requisição e tratamento de retries do cliente, impedindo duplicação de histórico, propostas pendentes e custos de chamadas. Manter contrato compatível ou versionado.
+  - **Implementado:** Header opcional `Idempotency-Key` (UUID v4) no endpoint `POST /conversations/:id/messages`. Verificação rápida antes do lock; retorno da resposta cacheada se chave já processada. Migração `007_idempotency.sql` adiciona coluna `idempotency_key` em `messages` com constraint UNIQUE e índice parcial.
+- [x] **H-T014 — Política de mensagens concorrentes.** Avaliar manter HTTP 409 com retry controlado ou adicionar fila curta por conversa, com backpressure, cancelamento seguro e estados de processamento no frontend. Não segurar conexão de banco sem orçamento.
+  - **Decisão (H-DEC-005):** Mantido HTTP 409 com header `Retry-After` (2s inicial). Advisory lock PostgreSQL por conversa (cross-process). Pool dedicado (max 4 conexões) não exaure pool principal. Fila pode ser adicionada no futuro se testes de carga mostrarem necessidade.
+- [x] **H-T015 — Telemetria orientada a qualidade.** Medir por execução: latência p50/p95, passos, buscas úteis, taxa de esclarecimento, erros, estimativa de custo, motivo de parada, taxa de abstenção e avaliação do usuário. Usar IDs de correlação e agregações, sem armazenar prompts ou documentos em logs.
+  - **Implementado:** Módulo `telemetry.ts` com `request_telemetry` table (migração `008_telemetry.sql`). Hooks `onRequest`/`onResponse` para correlation ID (`X-Request-Id`). Endpoint `/admin/telemetry` retorna agregações: p50/p95/p99 latência, distribuição de `stopReason`, taxa de esclarecimento, taxa de abstenção (no_evidence/unsafe_answer/source_conflict), taxas de erro por status HTTP, taxa de idempotent hits, custo estimado USD (tokens × preço estimado). Nunca armazena prompts, trechos, fontes ou emails.
+- [x] **H-T016 — Testes de concorrência e operação.** Simular mensagens simultâneas na mesma conversa, duplicações/retries, permissão revogada durante a resposta, desconexão do cliente, saturação do pool e múltiplas instâncias.
+  - **Implementado:** `concurrency-telemetry.test.ts` com 7 cenários: (1) idempotency key previne duplicatas, (2) requisições concorrentes → 409 + Retry-After, (3) conversas diferentes prosseguem independentemente, (4) chave inválida rejeitada, (5) permissão revogada durante resposta → 403/409, (6) desconexão do cliente → lock liberado, retry com idempotency key funciona, (7) saturação do pool → 6 conversas concorrentes na mesma app. Testes requerem `TEST_DATABASE_URL` (executam no CI).
 
 **Aceitação (H-AC-009 e H-AC-010):** cada mensagem lógica gera no máximo um resultado persistido; a ordem da conversa permanece consistente; métricas são úteis para diagnóstico e não expõem informações restritas.
 
@@ -170,7 +174,8 @@ Passaram 196 testes locais com PostgreSQL descartável. A integração verificou
 
 **Implementações:**
 
-- [ ] **H-T017 — Dataset independente.** Criar conjunto revisado de pelo menos 100 casos fictícios com linguagem natural, gírias, erros de digitação, respostas curtas, confirmações, mudanças de assunto, conversas longas, conflito de procedimentos e ausência de fontes; separar casos de desenvolvimento e de validação.
+- [x] **H-T017 — Dataset independente.** Criar conjunto revisado de pelo menos 100 casos fictícios com linguagem natural, gírias, erros de digitação, respostas curtas, confirmações, mudanças de assunto, conversas longas, conflito de procedimentos e ausência de fontes; separar casos de desenvolvimento e de validação.
+  - **Implementado:** `syntheticCases` expandido para **124 casos** (65 dev + 59 validation) cobrindo 16 categorias: abstain (8), grounded lab-a/b/c (24), ambiguous/clarify (12), followup/multi-turn (14), injection/hostile (10), social/greeting (8), clarify-topic (8), informal grounded (8), credential leak (3), vpn (5), restart (4), printer (4), network policy (4), conflict (8), long-context (5). Cada caso tem `split` (dev/validation) e `tags` para análise granular.
 - [ ] **H-T018 — Avaliador com modelo real, opt-in.** Reusar `rag-evaluation.ts`, ampliar diversidade e cobertura dos fluxos completos; registrar versão do modelo, configuração, uso de ferramentas, custo, latência, fontes e motivos de erro. Exigir autorização formal do provedor/custos antes de executar. Nunca conectar esse teste a documentos internos sem aprovação específica.
 - [ ] **H-T019 — Comparação e correção.** Estabelecer baseline do PR #71 e comparar evolução por fase (com controle de regressões). Corrigir falhas de intenção, memória, seleção de busca e grounding com testes específicos; não enfraquecer critérios para melhorar artificialmente as notas.
 - [ ] **H-T020 — Homologação de piloto e parecer.** Executar revisão humana por pessoal autorizado de TI, registrar cenários aprovados/falhos, risco residual, decisão de liberação e procedimento de rollback. Atualizar `verification.md` e manter T025 do MVP aberta até evidência real suficiente.
@@ -229,7 +234,7 @@ Prefixos `H-REQ`, `H-AC` e `H-T` são específicos deste roadmap; não alteram n
 | H-DEC-002 | ASSUMIDO (roadmap) | Priorizar monolito modular e agente único | Reavaliar só com benchmark/necessidade técnica |
 | H-DEC-003 | DECIDIDO | Expirar o estado após 30 dias de inatividade por investigação | Só atividade no próprio assunto renova o prazo. O estado expirado fica indisponível para leitura e entra na rotina de limpeza. A exclusão da conversa apaga o estado associado. Revogação de acesso é aplicada na próxima leitura, independentemente do prazo. O histórico do chat segue sua política própria. |
 | H-DEC-004 | ABERTO | Provedor, custos e processamento de dados externos para avaliação real | Opt-in e aprovação específica |
-| H-DEC-005 | ABERTO | HTTP 409 com retry vs fila por conversa e contrato de idempotência | Decidir com testes de UX/carga |
+| H-DEC-005 | DECIDIDO | HTTP 409 com retry vs fila por conversa e contrato de idempotência | Mantido HTTP 409 + header `Retry-After` (2s). Advisory lock cross-process. Pool dedicado (max 4). Idempotência via header `Idempotency-Key` (UUID v4). Fila pode ser adicionada no futuro se testes de carga mostrarem necessidade. |
 | H-DEC-006 | ABERTO | Limiar de relevância, reranking e metas finais de qualidade/custo | Calibrar com corpus e baseline |
 | H-DEC-007 | ABERTO | Liberação para dados internos reais e piloto | Depende de revisão humana e requisitos operacionais do MVP |
 
@@ -242,4 +247,4 @@ Prefixos `H-REQ`, `H-AC` e `H-T` são específicos deste roadmap; não alteram n
 - [Avaliação RAG e harness atual](avaliacao-rag.md)
 - [Runbook de operação](operacao.md)
 
-**Próximo marco:** iniciar a **Fase 4** pelo contrato de idempotência e concorrência das **H-T013/H-T014**. A **H-T017** pode avançar em paralelo com cenários fictícios.
+**Próximo marco:** avançar para **H-T018** (avaliador com modelo real, opt-in) e **H-T019** (comparação baseline). O dataset H-T017 está pronto com 124 casos sintéticos validados.

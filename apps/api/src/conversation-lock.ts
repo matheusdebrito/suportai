@@ -15,7 +15,7 @@ const NAMESPACE=314159;
  */
 export async function withConversationTurnLock<T>(
  conversationId:string,work:()=>Promise<T>
-):Promise<{busy:true}|{busy:false;value:T}>{
+):Promise<{busy:true;retryAfterMs:number}|{busy:false;value:T}>{
  const client=await locks.connect();
  let held=false;
  try{
@@ -24,7 +24,7 @@ export async function withConversationTurnLock<T>(
    [NAMESPACE,conversationId]
   );
   held=result.rows[0]?.locked===true;
-  if(!held)return {busy:true};
+  if(!held)return {busy:true,retryAfterMs:2000};
   return {busy:false,value:await work()};
  }finally{
   if(held){
