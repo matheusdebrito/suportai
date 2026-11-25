@@ -93,3 +93,32 @@ test('an invalid or inaccessible document id never reaches a knowledge reader',a
  assert.match(toolReply.content,/Documento inválido/i);
  assert.deepEqual(result.sources,[]);
 });
+
+test('real-model evaluation mode fails closed when the independent verifier rejects the answer',async()=>{
+ const calls:any[]=[];
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'ZD230 calibração'},'q1')]},
+  {role:'assistant',content:'Reinicie o serviço antes de qualquer verificação.'},
+  {role:'assistant',content:'{"verdict":"unsupported"}'}
+ ],calls);
+ const result=await respond(actor,randomUUID(),'Qual o procedimento da ZD230?',[],model,
+  async()=>[source],{verifyEvidence:true});
+ assert.equal(result.metrics?.steps,3);
+ assert.equal(result.metrics?.stopReason,'unsafe_answer');
+ assert.deepEqual(result.sources,[]);
+ assert.doesNotMatch(result.answer,/Reinicie o serviço antes/i);
+ assert.equal(calls[2].response_format.type,'json_object');
+});
+test('independent verifier accepts a grounded answer when supported',async()=>{
+ const calls:any[]=[];
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'ZD230 calibração'},'q1')]},
+  {role:'assistant',content:'Verifique o alinhamento antes da calibração na ZD230.'},
+  {role:'assistant',content:'{"verdict":"supported"}'}
+ ],calls);
+ const result=await respond(actor,randomUUID(),'Qual o procedimento da ZD230?',[],model,
+  async()=>[source],{verifyEvidence:true});
+ assert.equal(result.metrics?.stopReason,'answered');
+ assert.equal(result.sources[0]?.versionId,source.versionId);
+ assert.match(result.answer,/alinhamento antes/i);
+});
