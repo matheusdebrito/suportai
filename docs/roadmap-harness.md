@@ -45,7 +45,7 @@ O CI do PR #71 foi aprovado ([execução 45605549638](https://github.com/matheus
 | Fase | Prioridade | Foco | Itens do diagnóstico | Dependências | Estado |
 | --- | --- | --- | --- | --- | --- |
 | 1 | Crítica | Memória persistente e continuidade | #2 e #7 | Base atual; decisão de retenção H-DEC-003 | Concluída |
-| 2 | Crítica | Planejamento investigativo e recuperação | #1, #6 e #10 | Fase 1, contratos do loop | Em andamento |
+| 2 | Crítica | Planejamento investigativo e recuperação | #1, #6 e #10 | Fase 1, contratos do loop | Concluída |
 | 3 | Alta | Recuperação RAG, grounding e comparação | #4, #5 e #9 | Fase 2; corpus sintético | ☐ Não iniciada |
 | 4 | Média/alta | Concorrência, UX e observabilidade | #11 e #12 | Contratos das fases 1–3 | ☐ Não iniciada |
 | 5 | Crítica para liberação | Avaliação real, português informal e calibração | #3 e #8; valida todas | Fases 1–4; autorização de LLM | ☐ Não iniciada |
@@ -105,10 +105,10 @@ Passaram 11 testes no PostgreSQL local e o CI do PR. Os cenários usam dados fic
 
 **Implementações:**
 
-- [ ] **H-T005 — Plano de investigação interno.** Implementar estado por turno com objetivo, lacunas, hipóteses, evidências, próximos passos e critérios de parada; só fazer perguntas quando faltar detalhe indispensável. Não expor cadeia de raciocínio privada: registrar decisões e evidências operacionais resumidas.
-- [ ] **H-T006 — Política de uso de ferramentas.** Escolher `search_knowledge`, leitura de documento, comparação, pergunta ou conclusão conforme o progresso. Impedir buscas repetidas, ciclos improdutivos, consultas fora do orçamento e chamadas sem benefício informacional.
-- [ ] **H-T007 — Falhas recuperáveis e degradação segura.** Classificar indisponibilidade de RAG, timeout, resultados vazios, conflito de fontes e recusa de permissão. Tentar alternativas apenas em operações de leitura seguras, com limites de tentativa e sem ocultar falhas.
-- [ ] **H-T008 — Calibração do loop.** Instrumentar motivo de parada, passos, ferramentas, duplicidade, cobertura e necessidade de esclarecimento. Ajustar limites atuais (8 etapas, 5 buscas e 60 s) somente a partir dos dados de avaliação.
+- [x] **H-T005 — Plano de investigação interno.** Implementar estado por turno com objetivo, lacunas, hipóteses, evidências, próximos passos e critérios de parada; só fazer perguntas quando faltar detalhe indispensável. Não expor cadeia de raciocínio privada: registrar decisões e evidências operacionais resumidas.
+- [x] **H-T006 — Política de uso de ferramentas.** Escolher `search_knowledge`, leitura de documento, comparação, pergunta ou conclusão conforme o progresso. Impedir buscas repetidas, ciclos improdutivos, consultas fora do orçamento e chamadas sem benefício informacional.
+- [x] **H-T007 — Falhas recuperáveis e degradação segura.** Classificar indisponibilidade de RAG, timeout, resultados vazios, conflito de fontes e recusa de permissão. Tentar alternativas apenas em operações de leitura seguras, com limites de tentativa e sem ocultar falhas.
+- [x] **H-T008 — Calibração do loop.** Instrumentar motivo de parada, passos, ferramentas, duplicidade, cobertura e necessidade de esclarecimento. Ajustar limites atuais (8 etapas, 5 buscas e 60 s) somente a partir dos dados de avaliação.
 
 **Aceitação (H-AC-003 a H-AC-005):** consultas simples param cedo; problemas complexos podem mudar de estratégia sem loop infinito; fontes ausentes/falhas não se tornam instruções inventadas; operações de escrita não são repetidas automaticamente.
 
@@ -121,6 +121,8 @@ Cada turno usa um plano em memória com objetivo, hipóteses relatadas, lacunas 
 O loop distingue buscas vazias, timeout, indisponibilidade, referências inacessíveis e conflitos identificados na verificação de evidência. Uma falha pode levar a outra leitura útil dentro do orçamento. A preparação de uma prévia de artigo tem uma tentativa por turno, e a confirmação humana continua obrigatória.
 
 Os testes de contrato medem chamadas e resultados. Uma consulta simples usa duas chamadas de geração e uma busca, e um pedido ambíguo pode terminar em uma pergunta sem busca. Consultas distintas com evidência idêntica provocam síntese antecipada após duas etapas sem progresso. O avaliador registra passos, ferramentas, duplicidades, esclarecimentos, motivos de parada, latência e proporção de leituras que acrescentam evidência. Mantivemos os tetos de 8 etapas, 5 buscas e 60 segundos. Os casos simulados verificam o comportamento do loop, e a calibração com modelo real segue na Fase 5.
+
+Passaram 186 testes locais com PostgreSQL descartável. A integração verificou a comparação de versões publicadas e históricas e confirmou que repetir a preparação de um artigo gera uma única prévia. O CI passou com migrações, integração, build, Playwright e ensaio de restauração. [PR #75](https://github.com/matheusdebrito/suportai/pull/75) · [Commit de implementação `18e4e5c`](https://github.com/matheusdebrito/suportai/commit/18e4e5c3b551bc9e57db0898f1ffc9f4cbc2343f) · [CI #45646612590](https://github.com/matheusdebrito/suportai/actions/runs/45646612590)
 
 ## Fase 3 — RAG avançado, evidências e comparação
 
@@ -230,4 +232,4 @@ Prefixos `H-REQ`, `H-AC` e `H-T` são específicos deste roadmap; não alteram n
 - [Avaliação RAG e harness atual](avaliacao-rag.md)
 - [Runbook de operação](operacao.md)
 
-**Próximo marco:** iniciar a **Fase 2** pela **H-T005**, com o plano de investigação por turno. A **H-T017** pode avançar em paralelo com cenários fictícios.
+**Próximo marco:** iniciar a **Fase 3** pela **H-T009**, com medição de relevância e avaliação de reranking sobre um corpus fictício. A **H-T017** pode avançar em paralelo com cenários fictícios.
