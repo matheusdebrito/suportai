@@ -251,6 +251,16 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
            documentCache.set(key,versions);
          }
          const found=versions as Awaited<ReturnType<typeof getVisibleDocumentVersions>>;
+         if(found.length){
+           const current=await boundedRead(getPublishedDocument(actor,args.documentId),
+             Math.min(15_000,Math.max(1,budget.remainingMs()-500)));
+           if(current){
+             const currentSource=documentToSource(current);
+             if(sources.length<budget.limits.maxSources&&
+                !sources.some(s=>s.versionId===currentSource.versionId&&s.ordinal===currentSource.ordinal))
+               sources.push(currentSource);
+           }
+         }
          output={versions:found,note:'Versões antigas são históricas, não necessariamente procedimentos atuais.'};
        } else if(call.function.name==='prepare_article'){
          const writableSpaces=await readWritableSpaces();
