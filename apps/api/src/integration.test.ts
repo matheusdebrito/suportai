@@ -354,7 +354,7 @@ if(!process.env.TEST_DATABASE_URL){
    const protectedAnswer=await respond(naturalActor!,conversationId,
      'Como verificar o DNS do servidor?',[],hostileModel);
    assert.equal(protectedAnswer.pendingActions.length,0);
-   assert.deepEqual((observedRequests[0].tools as any[]).map(x=>x.function.name),['search_knowledge','ask_clarification']);
+   assert.deepEqual((observedRequests[0].tools as any[]).map(x=>x.function.name),['search_knowledge','ask_clarification','respond_social','get_knowledge_document','list_document_versions','list_writable_spaces','prepare_article']);
    assert.match(JSON.stringify(observedRequests[1].messages),/INSTRUCAO_MALICIOSA_TESTE/);
    assert.match(JSON.stringify(observedRequests[2].messages),/não solicitou a criação/i);
    const pendingAfter=await query('SELECT count(*)::int AS n FROM pending_actions WHERE conversation_id=$1',[conversationId]);
