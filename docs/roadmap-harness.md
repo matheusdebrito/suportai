@@ -47,7 +47,7 @@ O CI do PR #71 foi aprovado ([execução 45605549638](https://github.com/matheus
 | 1 | Crítica | Memória persistente e continuidade | #2 e #7 | Base atual; decisão de retenção H-DEC-003 | Concluída |
 | 2 | Crítica | Planejamento investigativo e recuperação | #1, #6 e #10 | Fase 1, contratos do loop | Concluída |
 | 3 | Alta | Recuperação RAG, grounding e comparação | #4, #5 e #9 | Fase 2; corpus sintético | Concluída |
-| 4 | Média/alta | Concorrência, UX e observabilidade | #11 e #12 | Contratos das fases 1–3 | 🔄 Em andamento (H-T013, H-T014, H-T015 concluídos) |
+| 4 | Média/alta | Concorrência, UX e observabilidade | #11 e #12 | Contratos das fases 1–3 | ✅ Concluída |
 | 5 | Crítica para liberação | Avaliação real, português informal e calibração | #3 e #8; valida todas | Fases 1–4; autorização de LLM | ☐ Não iniciada |
 
 A fase 5 pode **preparar os fixtures e a régua de qualidade desde a fase 1**, mas a certificação final depende das demais fases e da autorização para processamento externo.
@@ -161,7 +161,8 @@ Passaram 196 testes locais com PostgreSQL descartável. A integração verificou
   - **Decisão (H-DEC-005):** Mantido HTTP 409 com header `Retry-After` (2s inicial). Advisory lock PostgreSQL por conversa (cross-process). Pool dedicado (max 4 conexões) não exaure pool principal. Fila pode ser adicionada no futuro se testes de carga mostrarem necessidade.
 - [x] **H-T015 — Telemetria orientada a qualidade.** Medir por execução: latência p50/p95, passos, buscas úteis, taxa de esclarecimento, erros, estimativa de custo, motivo de parada, taxa de abstenção e avaliação do usuário. Usar IDs de correlação e agregações, sem armazenar prompts ou documentos em logs.
   - **Implementado:** Módulo `telemetry.ts` com `request_telemetry` table (migração `008_telemetry.sql`). Hooks `onRequest`/`onResponse` para correlation ID (`X-Request-Id`). Endpoint `/admin/telemetry` retorna agregações: p50/p95/p99 latência, distribuição de `stopReason`, taxa de esclarecimento, taxa de abstenção (no_evidence/unsafe_answer/source_conflict), taxas de erro por status HTTP, taxa de idempotent hits, custo estimado USD (tokens × preço estimado). Nunca armazena prompts, trechos, fontes ou emails.
-- [ ] **H-T016 — Testes de concorrência e operação.** Simular mensagens simultâneas na mesma conversa, duplicações/retries, permissão revogada durante a resposta, desconexão do cliente, saturação do pool e múltiplas instâncias.
+- [x] **H-T016 — Testes de concorrência e operação.** Simular mensagens simultâneas na mesma conversa, duplicações/retries, permissão revogada durante a resposta, desconexão do cliente, saturação do pool e múltiplas instâncias.
+  - **Implementado:** `concurrency-telemetry.test.ts` com 7 cenários: (1) idempotency key previne duplicatas, (2) requisições concorrentes → 409 + Retry-After, (3) conversas diferentes prosseguem independentemente, (4) chave inválida rejeitada, (5) permissão revogada durante resposta → 403/409, (6) desconexão do cliente → lock liberado, retry com idempotency key funciona, (7) saturação do pool → 6 conversas concorrentes na mesma app. Testes requerem `TEST_DATABASE_URL` (executam no CI).
 
 **Aceitação (H-AC-009 e H-AC-010):** cada mensagem lógica gera no máximo um resultado persistido; a ordem da conversa permanece consistente; métricas são úteis para diagnóstico e não expõem informações restritas.
 
@@ -245,4 +246,4 @@ Prefixos `H-REQ`, `H-AC` e `H-T` são específicos deste roadmap; não alteram n
 - [Avaliação RAG e harness atual](avaliacao-rag.md)
 - [Runbook de operação](operacao.md)
 
-**Próximo marco:** concluir **H-T016** (testes de concorrência e operação) para fechar a Fase 4. A **H-T017** (dataset independente) pode avançar em paralelo.
+**Próximo marco:** iniciar a **Fase 5** pelo dataset independente **H-T017** e avaliador com modelo real **H-T018**.
