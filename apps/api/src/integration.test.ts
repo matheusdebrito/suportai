@@ -10,6 +10,7 @@ import {findSimilarPublished} from './similar.js';
 import {claimJob,renewLease,storeClaimedResult,failClaimedJob,expireStaleJobs} from './worker-jobs.js';
 import {actorForSession,hashToken} from './security.js';
 import {respond} from './agent.js';
+import {getPublishedDocument,getVisibleDocumentVersions} from './agent-knowledge-tools.js';
 import type OpenAI from 'openai';
 import {PDFDocument,StandardFonts} from 'pdf-lib';
 
@@ -330,6 +331,11 @@ if(!process.env.TEST_DATABASE_URL){
    // natural question, including "como" and "empresa", and returned zero.
    const naturalActor=await actorForSession(reader.cookie.split('=')[1]);
    assert.ok(naturalActor);
+   const fullDocument=await getPublishedDocument(naturalActor!,sharedDoc.documentId);
+   assert.equal(fullDocument?.versionId,sharedDoc.versionId);
+   assert.match(fullDocument?.content??'',/resolução de nomes/i);
+   const versions=await getVisibleDocumentVersions(naturalActor!,sharedDoc.documentId);
+   assert.ok(versions.some(v=>v.id===sharedDoc.versionId&&v.isCurrent));
    const naturalResults=await searchKnowledge(naturalActor!,
      'Como posso verificar o DNS da empresa usando o Linux?');
    assert.ok(naturalResults.some(x=>x.documentId===sharedDoc.documentId),
@@ -935,10 +941,13 @@ if(!process.env.TEST_DATABASE_URL){
    const readerActor=await actorForSession(reader.cookie.split('=')[1]);
    assert.ok(readerActor);
    assert.equal((await searchKnowledge(readerActor!,'laboratório isolado')).some(x=>x.documentId===privateDoc.documentId),false);
+   assert.equal(await getPublishedDocument(readerActor!,privateDoc.documentId),null);
+   assert.deepEqual(await getVisibleDocumentVersions(readerActor!,privateDoc.documentId),[]);
    await app.inject({method:'POST',url:`/admin/spaces/${restricted}/grants`,headers:auth(admin.cookie),payload:{userId:reader.id,read:true,edit:false,approve:false}});
    const grantedActor=await actorForSession(reader.cookie.split('=')[1]);
    assert.ok(grantedActor);
    assert.equal((await searchKnowledge(grantedActor!,'laboratório isolado')).some(x=>x.documentId===privateDoc.documentId),true);
+   assert.equal((await getPublishedDocument(grantedActor!,privateDoc.documentId))?.versionId,privateDoc.versionId);
    await app.inject({method:'POST',url:`/admin/spaces/${restricted}/grants`,headers:auth(admin.cookie),payload:{userId:reader.id,read:false,edit:false,approve:false}});
    assert.equal((await searchKnowledge(grantedActor!,'laboratório isolado')).some(x=>x.documentId===privateDoc.documentId),false);
 
