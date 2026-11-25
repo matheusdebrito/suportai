@@ -32,6 +32,7 @@ export type AgentOutput={answer:string;sources:Source[];pendingActions:{id:strin
 export type AgentOptions={verifyEvidence?:boolean};
 export async function respond(actor:Actor,conversationId:string,userMessage:string,history:{role:'user'|'assistant';content:string}[],provider:OpenAI|null=client,knowledgeSearch:typeof searchKnowledge=searchKnowledge,options:AgentOptions={}):Promise<AgentOutput>{
  const sources:Source[]=[];
+ const historicalSources:Source[]=[];
  const pendingActions:AgentOutput['pendingActions']=[];
  const budget=new AgentBudget();
  const shouldVerify=Boolean(options.verifyEvidence||(provider===client&&client!==null));
@@ -163,7 +164,8 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      if(sources.length>0&&shouldVerify){
        const validation=budget.startModelTurn(true);
        if(!validation)return budgetReply(budget.stopCause()??'token_budget');
-       const verdict=await verifyGroundedAnswer(provider,userMessage,message.content,sources,
+       const verdict=await verifyGroundedAnswer(provider,userMessage,message.content,
+         [...sources,...historicalSources],
          Math.min(10_000,validation.timeoutMs));
        budget.recordModelUsage(undefined,
          JSON.stringify({question:userMessage,answer:message.content,sources:sources.length}).length,100);
@@ -253,6 +255,13 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
            documentCache.set(key,versions);
          }
          const found=versions as Awaited<ReturnType<typeof getVisibleDocumentVersions>>;
+         for(const version of found){
+           if(version.isCurrent||historicalSources.some(v=>v.versionId===version.id)||
+              historicalSources.length>=4)continue;
+           historicalSources.push({documentId:args.documentId,versionId:version.id,
+             versionNumber:version.number,ordinal:0,
+             title:'VERSÃO HISTÓRICA NÃO VIGENTE',content:version.excerpt,score:0});
+         }
          if(found.length){
            const current=await boundedRead(getPublishedDocument(actor,args.documentId),
              Math.min(15_000,Math.max(1,budget.remainingMs()-500)));
