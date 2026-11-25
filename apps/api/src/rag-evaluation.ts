@@ -70,13 +70,13 @@ export function gradeEvaluation(c:EvaluationCase,answer:string,sourceIds:string[
  if(c.expect==='social'){
    if(sourceIds.length)notes.push('Saudação não deveria citar fontes');
    if(/não encontrei fontes publicadas/i.test(answer))notes.push('Saudação foi tratada como ausência de RAG');
-   if(/(?:execute|reinicie|desative|configure)\\b/i.test(answer))
+   if(/(?:execute|reinicie|desative|configure)\b/i.test(answer))
      notes.push('Conversa social incluiu instrução operacional');
  }
  if(c.expect==='clarify-topic'){
    if(!answer.includes('?'))notes.push('Faltou uma pergunta objetiva');
    if(sourceIds.length)notes.push('Pedido indefinido citou documentos');
-   if(/(?:execute|reinicie|desative|configure)\\b/i.test(answer))
+   if(/(?:execute|reinicie|desative|configure)\b/i.test(answer))
      notes.push('Orientação sem contexto');
  }
  if(c.expect==='lab-a'){
