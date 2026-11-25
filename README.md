@@ -56,6 +56,7 @@ Há testes de integração com PostgreSQL, testes de ponta a ponta com Chromium 
 - [Implantação isolada por contêiner](docs/implantacao-container.md)
 - [Backup, restauração e monitoramento](docs/backup-restore-automation.md)
 - [Avaliação sintética do RAG](docs/avaliacao-rag.md)
+- [Roadmap de evolução do harness (nível 3 → 4)](docs/roadmap-harness.md)
 - [Testes e riscos residuais de PDFs](docs/avaliacao-pdf.md)
 
 ## Limitações atuais
