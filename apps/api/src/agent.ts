@@ -200,7 +200,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          const text=typeof args.text==='string'?args.text.trim():'';
          // This shortcut is for social dialogue only, never unsourced procedures.
          if(!text||text.length>550||hasSecrets(text)||unsupportedNetworkLiterals(text,[]).length||
-            /\\b(?:execute|instale|desative|configure|reinicie|altere|exclua|apague|rode)\\b/i.test(text))
+            /\b(?:execute|instale|desative|configure|reinicie|altere|exclua|apague|rode)\b/i.test(text))
            return done({answer:'Posso ajudar a localizar um procedimento publicado. Qual sistema ou equipamento deseja consultar?',
              sources:[],pendingActions:[]},'clarified');
          return done({answer:text,sources:[],pendingActions:[]},'answered');
