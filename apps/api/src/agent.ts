@@ -12,7 +12,8 @@ import {shouldForceKnowledgeLookup,groundedReply} from './llm-policy.js';
 import {unsupportedNetworkLiterals} from './answer-evidence.js';
 import {explicitlyTargetedSpace} from './space-targeting.js';
 import {AgentBudget,type AgentMetrics,type AgentStopReason} from './agent-budget.js';
-import {boundedRead} from './agent-deadline.js';
+import {boundedRead,isDeadlineError,ReadDeadlineError} from './agent-deadline.js';
+import {InvestigationPlan,type InvestigationMetrics} from './agent-investigation-plan.js';
 import {investigationContextMessage} from './investigation-dialogue.js';
 import type {InvestigationDraft} from './investigation-state.js';
 const SYSTEM=`Você é o SuportAI, assistente interno de conhecimento. Converse naturalmente em português do Brasil, inclusive com gírias, abreviações e mensagens curtas. Use o histórico recente para compreender referências como "isso", "aquele problema" e "é a impressora".
@@ -30,46 +31,84 @@ const tools:OpenAI.Chat.Completions.ChatCompletionTool[]=[
  {type:'function',function:{name:'list_writable_spaces',description:'Lista espaços autorizados para preparar propostas de conhecimento; não altera nada.',parameters:{type:'object',properties:{},additionalProperties:false}}},
  {type:'function',function:{name:'prepare_article',description:'Prepara prévia de artigo solicitado explicitamente pelo usuário; requer confirmação humana posterior antes de criar rascunho.',parameters:{type:'object',properties:{spaceId:{type:'string'},title:{type:'string'},content:{type:'string'},documentId:{type:'string',description:'Documento a atualizar se aplicável'}},required:['spaceId','title','content'],additionalProperties:false}}}
 ];
-export type AgentOutput={answer:string;sources:Source[];pendingActions:{id:string;title:string;content:string;spaceName:string;documentId?:string;beforeContent?:string}[];metrics?:AgentMetrics};
+export type AgentOutput={answer:string;sources:Source[];pendingActions:{id:string;title:string;content:string;spaceName:string;documentId?:string;beforeContent?:string}[];metrics?:AgentMetrics&InvestigationMetrics};
 export type AgentOptions={verifyEvidence?:boolean;investigation?:InvestigationDraft};
 export async function respond(actor:Actor,conversationId:string,userMessage:string,history:{role:'user'|'assistant';content:string}[],provider:OpenAI|null=client,knowledgeSearch:typeof searchKnowledge=searchKnowledge,options:AgentOptions={}):Promise<AgentOutput>{
  const sources:Source[]=[];
  const historicalSources:Source[]=[];
  const pendingActions:AgentOutput['pendingActions']=[];
  const budget=new AgentBudget();
+ const plan=new InvestigationPlan(userMessage,shouldForceKnowledgeLookup(userMessage),options.investigation?.hypotheses);
  const shouldVerify=Boolean(options.verifyEvidence||(provider===client&&client!==null));
  const done=(result:AgentOutput,reason:AgentStopReason):AgentOutput=>({
-   ...result,metrics:budget.metrics(reason)
+   ...result,metrics:{...budget.metrics(reason),...plan.metrics()}
  });
  const budgetReply=(reason:AgentStopReason):AgentOutput=>done({
    answer:'O limite seguro da investigação foi atingido. Posso continuar com uma pergunta mais específica, mas não vou apresentar um procedimento incompleto como confirmado.',
    sources:[],pendingActions
  },reason);
- const forceLookup=shouldForceKnowledgeLookup(userMessage);
+ const forceLookup=plan.needsEvidence;
  const olderMemory=buildConversationMemory(history);
- const documentCache=new Map<string,unknown>();
- let writableSpaces:{id:string;name:string}[]|null=null;
- const readWritableSpaces=async()=>{
-   if(writableSpaces!==null)return writableSpaces;
-   const found=await boundedRead(query(`SELECT s.id,s.name FROM spaces s
+ const runRead=async <T>(read:()=>Promise<T>):Promise<T>=>{
+   const remaining=budget.remainingMs();
+   if(remaining<1_000)throw new ReadDeadlineError();
+   return boundedRead(read(),Math.min(15_000,remaining-500));
+ };
+ const documentCache=new Map<string,ReturnType<typeof getPublishedDocument>>();
+ const readDocument=(id:string)=>{
+   const cached=documentCache.get(id);
+   if(cached)return cached;
+   const read=runRead(()=>getPublishedDocument(actor,id));
+   documentCache.set(id,read);
+   return read;
+ };
+ const readFailure=(error:unknown,allowAlternative=false)=>{
+   const outcome=isDeadlineError(error) ? 'timeout' : 'unavailable';
+   plan.recordRead(outcome,0,allowAlternative);
+   return outcome;
+ };
+ const collect=(target:Source[],candidates:Source[],limit:number):number=>{
+   const count=target.length;
+   for(const item of candidates){
+     if(target.length>=limit)break;
+     if(!target.some(found=>found.versionId===item.versionId&&found.ordinal===item.ordinal))target.push(item);
+   }
+   return target.length-count;
+ };
+ let writableSpaces:Promise<{id:string;name:string}[]>|undefined;
+ const readWritableSpaces=()=>writableSpaces??=runRead(()=>query(`SELECT s.id,s.name FROM spaces s
      LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$1
      WHERE COALESCE(g.can_edit,false) AND (s.visibility='SHARED' OR COALESCE(g.can_read,false))
-     ORDER BY s.name LIMIT 30`,[actor.id]),Math.min(15_000,Math.max(1,budget.remainingMs()-500)));
-   writableSpaces=found.rows;
-   return writableSpaces;
- };
- let lookupUnavailable=false;
+     ORDER BY s.name LIMIT 30`,[actor.id])).then(found=>found.rows);
  let finalAnswerNext=false;
- const unavailableReply=()=>done({
-   answer:'Não foi possível consultar a base de conhecimento neste momento. '+
+ const unresolvedReply=():AgentOutput|null=>{
+   if(sources.length||!forceLookup||pendingActions.length)return null;
+   const failure=plan.readIssue();
+   if(failure==='inaccessible')return done({
+     answer:'Não encontrei fontes publicadas e autorizadas para confirmar esse procedimento. '+
+       'A referência solicitada está indisponível ou fora do seu acesso. Informe outra referência ou mais detalhes.',
+     sources:[],pendingActions
+   },'source_inaccessible');
+   if(failure===null)return null;
+   return done({answer:(failure==='timeout'?'A consulta à base de conhecimento excedeu o prazo. ':
+     'Não foi possível consultar a base de conhecimento neste momento. ')+
      'Não posso confirmar um procedimento interno sem verificar as fontes. Tente novamente.',
-   sources:[] as Source[],pendingActions
- },'search_unavailable');
+   sources:[],pendingActions},failure==='timeout'?'read_timeout':'search_unavailable');
+ };
  if(!provider){
-   const searchText=options.investigation ? `${options.investigation.topic} ${userMessage}` : userMessage;
-   const found=await boundedRead(knowledgeSearch(actor,searchText,5),
-     Math.min(15_000,Math.max(1,budget.remainingMs()-500)));
-   return done({answer:found.length?'Não há modelo de IA configurado. Encontrei estes trechos relevantes no cérebro:\n\n'+found.map((s,i)=>`${i+1}. ${s.title} — ${s.content.slice(0,500)}`).join('\n\n'):'Não encontrei um procedimento confirmado no cérebro. O uso do modelo externo não está habilitado nesta instalação.',sources:found,pendingActions},found.length?'answered':'no_evidence');
+   const searchText=options.investigation ? `${options.investigation.topic} ${plan.objective}` : plan.objective;
+   budget.lookup(searchText);
+   try{
+     const found=await runRead(()=>knowledgeSearch(actor,searchText,5));
+     budget.recordSearch(searchText,found);
+     plan.recordRead(found.length?'evidence':'empty',found.length);
+     return done({answer:found.length?'Não há modelo de IA configurado. Encontrei estes trechos relevantes no cérebro:\n\n'+found.map((s,i)=>`${i+1}. ${s.title} — ${s.content.slice(0,500)}`).join('\n\n'):'Não encontrei um procedimento confirmado no cérebro. O uso do modelo externo não está habilitado nesta instalação.',sources:found,pendingActions},found.length?'answered':'no_evidence');
+   }catch(error){
+     budget.recordSearch(searchText,null);
+     const outcome=readFailure(error);
+     return unresolvedReply()??done({answer:'A busca local está indisponível no momento. Tente novamente.',sources:[],pendingActions},
+       outcome==='timeout'?'read_timeout':'search_unavailable');
+   }
  }
  // Tool selection no longer depends on a regex-based intention classifier.
  const availableTools=tools;
@@ -78,11 +117,11 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
   ...(options.investigation?[{role:'user' as const,content:investigationContextMessage(options.investigation)}]:[]),
   ...(olderMemory?[{role:'user' as const,content:memoryMessage(olderMemory)}]:[]),
   ...history.slice(-8).map(m=>({role:m.role,content:m.content} as OpenAI.Chat.Completions.ChatCompletionMessageParam)),
-  {role:'user',content:userMessage}
+  {role:'user',content:plan.objective}
  ];
  for(let turn=0;turn<budget.limits.maxSteps;turn++){
    const turnBudget=budget.startModelTurn(finalAnswerNext);
-   if(!turnBudget)return budgetReply(budget.stopCause()??'token_budget');
+   if(!turnBudget)return unresolvedReply()??budgetReply(budget.stopCause()??'token_budget');
    // Reserve the last turn for synthesis; never leave tool output unanswered.
    const toolChoice=turnBudget.finalTurn ? ('none' as const)
      : turn===0 && forceLookup ? ('required' as const) : ('auto' as const);
@@ -94,9 +133,11 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
        tools:availableTools,tool_choice:toolChoice,temperature:0.2,
        max_tokens:turnBudget.maxTokens
      },{timeout:turnBudget.timeoutMs,maxRetries:0,signal:AbortSignal.timeout(turnBudget.timeoutMs)});
-   }catch{
-     return done({answer:'Não foi possível concluir a consulta à IA neste momento. Tente novamente.',
-       sources:[],pendingActions},'provider_failure');
+   }catch(error){
+     const timeout=isDeadlineError(error);
+     return unresolvedReply()??done({answer:timeout?'A consulta à IA excedeu o prazo. Tente novamente.':
+       'Não foi possível concluir a consulta à IA neste momento. Tente novamente.',
+       sources:[],pendingActions},timeout?'model_timeout':'provider_failure');
    }
    const firstChoice=completion.choices[0];
    budget.recordModelUsage(completion.usage,
@@ -110,7 +151,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
    const choice=completion.choices[0];
    const message=choice?.message;
    if(!message)return done({answer:'O modelo não retornou uma resposta. Tente novamente.',sources:[],pendingActions},'provider_failure');
-   if(turnBudget.finalTurn&&message.tool_calls?.length)return budgetReply('step_budget');
+   if(turnBudget.finalTurn&&message.tool_calls?.length)return unresolvedReply()??budgetReply('step_budget');
    // Do not present incomplete procedural instructions as a finished answer.
    // A truncated tool call must never be executed, and a partial answer must
    // not inherit citations as evidence of a complete response.
@@ -123,6 +164,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
    }
    messages.push(message);
    if(message.tool_calls?.some(call=>call.type==='function' && call.function.name==='ask_clarification')){
+     plan.requestClarification();
      // Never combine a clarification with a write or another tool call.
      // A clarification ends this turn without attaching previous excerpts.
      if(message.tool_calls.length!==1)
@@ -144,7 +186,11 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
         /[\r\n]/.test(question)||hasSecrets(question)||asksForSecret||proposesAction||
         unsupportedNetworkLiterals(question,[]).length>0)
        return done({answer:'Pode explicar um pouco melhor o que precisa consultar?',sources:[],pendingActions:[]},'clarified');
-     if(lookupUnavailable&&sources.length===0)return unavailableReply();
+     const issue=plan.readIssue();
+     if(issue==='timeout'||issue==='unavailable'){
+       const unresolved=unresolvedReply();
+       if(unresolved)return unresolved;
+     }
      return done({answer:question.trim(),sources:[],pendingActions:[]},'clarified');
    }
    if(!message.tool_calls?.length){
@@ -153,7 +199,8 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      if(!message.content?.trim())
        return done({answer:'O modelo não conseguiu produzir uma resposta. Reformule a pergunta ou tente novamente.',
          sources:[],pendingActions},'provider_failure');
-     if(lookupUnavailable&&forceLookup&&sources.length===0)return unavailableReply();
+     const unresolved=unresolvedReply();
+     if(unresolved)return unresolved;
      // A citation list alone does not establish that arbitrary IPs or URLs
      // fabricated in the answer came from the retrieved excerpts.
      if(hasSecrets(message.content)||
@@ -173,15 +220,24 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          Math.min(10_000,validation.timeoutMs));
        budget.recordModelUsage(undefined,
          JSON.stringify({question:userMessage,answer:message.content,sources:sources.length}).length,100);
+       if(verdict==='conflict'){
+         plan.recordConflict();
+         return done({answer:'Encontrei orientações divergentes nas fontes publicadas. '+
+           'Qual é o ambiente ou a versão em uso para eu identificar a orientação aplicável?',sources,pendingActions},'source_conflict');
+       }
        if(verdict!=='supported')return done({
          answer:'Encontrei documentos, mas não consegui confirmar com segurança que a resposta corresponde às fontes. Informe o sistema ou ambiente para refinar a consulta.',
          sources:[],pendingActions
        },'unsafe_answer');
      }
-     return done({answer:groundedReply(message.content,forceLookup,sources.length),sources,pendingActions},
+     const partial=plan.readIssue();
+     const answer=groundedReply(message.content,forceLookup,sources.length);
+     return done({answer:sources.length&&partial ? answer+'\n\nParte da consulta ficou indisponível. A resposta se limita às fontes verificadas.' : answer,sources,pendingActions},
        forceLookup&&sources.length===0?'no_evidence':'answered');
    }
+   plan.beginTools();
    for(const [index,call] of message.tool_calls.entries()){
+     if(budget.remainingMs()<1_000)return unresolvedReply()??budgetReply('time_budget');
      if(index>=budget.limits.maxToolsPerStep){
        messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify({error:'Limite de ferramentas da etapa atingido'})});
        continue;
@@ -196,88 +252,75 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          if(hasSecrets(args.query))throw new Error('Consulta contém possível credencial; remova dados sensíveis');
          const state=budget.lookup(args.query);
          if(state.kind==='exhausted')throw new Error('Orçamento de buscas atingido. Conclua usando as fontes existentes.');
+         if(state.kind!=='new')plan.recordRead('duplicate');
          if(state.kind==='repeated_limit')throw new Error('Consulta repetida. Conclua com as fontes disponíveis.');
          if(state.kind==='error')throw new Error('Esta consulta já falhou; não repita a mesma busca.');
+         if(state.kind==='cached'){
+           messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify({cached:true,note:'Busca já realizada. Use os resultados anteriores ou conclua.'})});
+           continue;
+         }
          let results:Source[];
-         if(state.kind==='cached')results=state.items;
-         else{
-           try{results=await boundedRead(knowledgeSearch(actor,args.query,5),
-             Math.min(15_000,Math.max(1,budget.remainingMs()-500)));}
-           catch{
-             budget.recordSearch(args.query,null);
-             lookupUnavailable=true;
-             // Connection strings and SQL details must not enter model context.
-             throw new Error('Falha temporária na consulta ao cérebro');
-           }
-           budget.recordSearch(args.query,results);
+         const searchText=args.query;
+         try{results=await runRead(()=>knowledgeSearch(actor,searchText,5));}
+         catch(error){
+           budget.recordSearch(args.query,null);
+           throw new Error(readFailure(error,true)==='timeout'?'A consulta ao cérebro excedeu o prazo':'Falha temporária na consulta ao cérebro');
          }
-         for(const result of results){
-           if(sources.length>=budget.limits.maxSources) break;
-           if(!sources.some(s=>s.versionId===result.versionId&&s.ordinal===result.ordinal)) sources.push(result);
-         }
-         output=state.kind==='cached'
-           ?{cached:true,note:'Busca já realizada. Use os resultados ou conclua.',results:results.map(x=>({title:x.title,versionId:x.versionId,documentId:x.documentId,content:x.content,ordinal:x.ordinal}))}
-           :results.map(x=>({title:x.title,versionId:x.versionId,documentId:x.documentId,content:x.content,ordinal:x.ordinal}));
+         budget.recordSearch(args.query,results);
+         const added=collect(sources,results,budget.limits.maxSources);
+         plan.recordRead(added?'evidence':results.length?'unchanged':'empty',added,true);
+         output=results.map(x=>({title:x.title,versionId:x.versionId,documentId:x.documentId,content:x.content,ordinal:x.ordinal}));
        } else if(call.function.name==='respond_social'){
          if(message.tool_calls.length!==1)throw new Error('Não misture conversa social com outras ferramentas');
          const text=typeof args.text==='string'?args.text.trim():'';
          // This shortcut is for social dialogue only, never unsourced procedures.
          if(!text||text.length>550||hasSecrets(text)||unsupportedNetworkLiterals(text,[]).length||
-            /\b(?:execute|instale|desative|configure|reinicie|altere|exclua|apague|rode)\b/i.test(text))
+            /\b(?:execute|instale|desative|configure|reinicie|altere|exclua|apague|rode)\b/i.test(text)){
+           plan.requestClarification();
            return done({answer:'Posso ajudar a localizar um procedimento publicado. Qual sistema ou equipamento deseja consultar?',
              sources:[],pendingActions:[]},'clarified');
+         }
          return done({answer:text,sources:[],pendingActions:[]},'answered');
        } else if(call.function.name==='list_writable_spaces'){
-         const spaces=await readWritableSpaces();
+         if(!plan.beginRead('spaces','editable'))throw new Error('Leitura já realizada. Use o resultado anterior ou escolha outra fonte.');
+         const spaces=await readWritableSpaces().catch(error=>{
+           readFailure(error);
+           throw new Error('Não foi possível consultar os espaços editáveis');
+         });
+         plan.recordRead(spaces.length?'unchanged':'empty');
+         plan.recordProgress();
          output={spaces,message:spaces.length?'Selecione um espaço autorizado pelo nome informado pelo usuário.':'Usuário sem espaços de edição autorizados.'};
        } else if(call.function.name==='get_knowledge_document'){
          if(!validDocumentId(args.documentId))throw new Error('Documento inválido');
-         const key='document:'+args.documentId;
-         let document=documentCache.get(key);
-         if(document===undefined){
-           try{document=await boundedRead(getPublishedDocument(actor,args.documentId),
-              Math.min(15_000,Math.max(1,budget.remainingMs()-500)));}
-           catch{throw new Error('Não foi possível abrir o documento');}
-           documentCache.set(key,document);
-         }
-         if(!document){output={error:'Documento não encontrado ou sem autorização'};}
-         else{
-           const detail=document as NonNullable<Awaited<ReturnType<typeof getPublishedDocument>>>;
-           const evidence=documentToSource(detail);
-           if(!sources.some(s=>s.versionId===evidence.versionId&&s.ordinal===evidence.ordinal)&&
-              sources.length<budget.limits.maxSources)sources.push(evidence);
-           output=detail;
-         }
+         const id=args.documentId.toLowerCase();
+         if(!plan.beginRead('document',id))throw new Error('Leitura já realizada. Use o resultado anterior ou escolha outra fonte.');
+         const document=await readDocument(id).catch(error=>{
+           throw new Error(readFailure(error)==='timeout'?'A leitura do documento excedeu o prazo':'Não foi possível abrir o documento');
+         });
+         if(!document){plan.recordRead('inaccessible');throw new Error('Documento não encontrado ou sem autorização');}
+         const added=collect(sources,[documentToSource(document)],budget.limits.maxSources);
+         plan.recordRead(added?'evidence':'unchanged',added);
+         output=document;
        } else if(call.function.name==='list_document_versions'){
          if(!validDocumentId(args.documentId))throw new Error('Documento inválido');
-         const key='versions:'+args.documentId;
-         let versions=documentCache.get(key);
-         if(versions===undefined){
-           try{versions=await boundedRead(getVisibleDocumentVersions(actor,args.documentId),
-              Math.min(15_000,Math.max(1,budget.remainingMs()-500)));}
-           catch{throw new Error('Não foi possível consultar versões');}
-           documentCache.set(key,versions);
-         }
-         const found=versions as Awaited<ReturnType<typeof getVisibleDocumentVersions>>;
-         for(const version of found){
-           if(version.isCurrent||historicalSources.some(v=>v.versionId===version.id)||
-              historicalSources.length>=4)continue;
-           historicalSources.push({documentId:args.documentId,versionId:version.id,
-             versionNumber:version.number,ordinal:0,
-             title:'VERSÃO HISTÓRICA NÃO VIGENTE',content:version.excerpt,score:0});
-         }
-         if(found.length){
-           const current=await boundedRead(getPublishedDocument(actor,args.documentId),
-             Math.min(15_000,Math.max(1,budget.remainingMs()-500)));
-           if(current){
-             const currentSource=documentToSource(current);
-             if(sources.length<budget.limits.maxSources&&
-                !sources.some(s=>s.versionId===currentSource.versionId&&s.ordinal===currentSource.ordinal))
-               sources.push(currentSource);
-           }
-         }
-         output={versions:found,note:'Versões antigas são históricas, não necessariamente procedimentos atuais.'};
+         const id=args.documentId.toLowerCase();
+         if(!plan.beginRead('versions',id))throw new Error('Leitura já realizada. Use o resultado anterior ou escolha outra fonte.');
+         const versions=await runRead(()=>getVisibleDocumentVersions(actor,id)).catch(error=>{
+           throw new Error(readFailure(error)==='timeout'?'A leitura das versões excedeu o prazo':'Não foi possível consultar versões');
+         });
+         if(!versions.length){plan.recordRead('inaccessible');throw new Error('Documento não encontrado ou sem autorização');}
+         const current=await readDocument(id).catch(error=>{
+           throw new Error(readFailure(error)==='timeout'?'A leitura do documento excedeu o prazo':'Não foi possível abrir o documento');
+         });
+         // Historical notes can qualify current evidence but cannot support a current procedure on their own.
+         if(!current){plan.recordRead('inaccessible');throw new Error('Não foi possível confirmar a versão vigente do documento');}
+         const added=collect(sources,[documentToSource(current)],budget.limits.maxSources)+
+           collect(historicalSources,versions.filter(version=>!version.isCurrent).map(version=>({documentId:id,versionId:version.id,
+             versionNumber:version.number,ordinal:0,title:'VERSÃO HISTÓRICA NÃO VIGENTE',content:version.excerpt,score:0})),4);
+         plan.recordRead(added?'evidence':'unchanged',added);
+         output={versions,note:'Versões antigas são históricas, não necessariamente procedimentos atuais.'};
        } else if(call.function.name==='prepare_article'){
+         if(!plan.beginWrite())throw new Error('A preparação já foi tentada neste turno. Uma nova tentativa exige outra mensagem do usuário.');
          const writableSpaces=await readWritableSpaces();
          if(!writableSpaces.length)throw new Error('O usuário não tem autorização para preparar artigos');
          const intentTurn=budget.startModelTurn(true);
@@ -315,6 +358,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
            proposalTitle=d.rows[0].title;
          }
          const dup=await query('SELECT id,title FROM documents WHERE space_id=$1 AND lower(title)=lower($2) AND archived_at IS NULL LIMIT 3',[args.spaceId,args.title]);
+         if(budget.remainingMs()<1_000)return budgetReply('time_budget');
          const r=await transaction(async c=>{
            await requireCurrentActor(c,actor);
            const perm=await c.query(`SELECT s.visibility,g.can_read,g.can_edit FROM spaces s
@@ -328,6 +372,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
              [actor.id,conversationId,args.spaceId,proposalTitle,args.content,docId,baseVersionId]);
          });
          pendingActions.push({id:r.rows[0].id,title:proposalTitle,content:args.content,spaceName:writableSpaces.find(s=>s.id===args.spaceId)?.name||'Espaço autorizado',...(docId?{documentId:docId,beforeContent}: {})});
+         plan.recordProgress();
          output={status:'PREVIEW_ONLY',actionId:r.rows[0].id,similarArticles:dup.rows,requiresExplicitConfirmation:true,message:'Prévia preparada. Usuário deve confirmar no botão antes de criar rascunho; a IA não pode confirmar sozinha.'};
        } else {output={error:'Ferramenta indisponível'};}
      } catch(error){
@@ -337,9 +382,13 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          'Orçamento de buscas atingido. Conclua usando as fontes existentes.',
          'Consulta repetida. Conclua com as fontes disponíveis.',
          'Esta consulta já falhou; não repita a mesma busca.',
-         'Falha temporária na consulta ao cérebro','Documento inválido',
+         'Falha temporária na consulta ao cérebro','A consulta ao cérebro excedeu o prazo','Documento inválido',
          'Documento não encontrado ou sem autorização','Não foi possível abrir o documento',
-         'Não foi possível consultar versões','Não misture conversa social com outras ferramentas',
+         'Não foi possível consultar versões','A leitura do documento excedeu o prazo','A leitura das versões excedeu o prazo',
+         'Não foi possível confirmar a versão vigente do documento','Não foi possível consultar os espaços editáveis',
+         'Leitura já realizada. Use o resultado anterior ou escolha outra fonte.',
+         'A preparação já foi tentada neste turno. Uma nova tentativa exige outra mensagem do usuário.',
+         'Não misture conversa social com outras ferramentas',
          'O usuário não tem autorização para preparar artigos',
          'O usuário não solicitou a criação ou atualização de conhecimento nesta mensagem',
          'Apenas uma prévia por mensagem; confirme a proposta existente','Artigo inválido',
@@ -354,9 +403,9 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      }
      messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify(output)});
    }
-   if(budget.shouldFinishAfterTools()||
-      (sources.length>0&&shouldVerify&&budget.steps>=budget.limits.maxSteps-2))finalAnswerNext=true;
+   finalAnswerNext=plan.finishTools(budget.shouldFinishAfterTools()||
+      (sources.length>0&&shouldVerify&&budget.steps>=budget.limits.maxSteps-2));
+   messages[0]={role:'system',content:`${SYSTEM}\n${plan.instruction()}`};
  }
- if(lookupUnavailable&&forceLookup&&sources.length===0)return unavailableReply();
- return budgetReply(budget.stopCause()??'step_budget');
+ return unresolvedReply()??budgetReply(budget.stopCause()??'step_budget');
 }

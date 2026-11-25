@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import {randomUUID} from 'node:crypto';
-import {respond} from './agent.js';
+import {respond,type AgentOutput} from './agent.js';
 import type {Source} from './retrieval.js';
 import {unsupportedNetworkLiterals} from './answer-evidence.js';
 import type {Actor} from './security.js';
@@ -103,6 +103,28 @@ export function gradeEvaluation(c:EvaluationCase,answer:string,sourceIds:string[
  }
  return {pass:notes.length===0,notes};
 }
+
+type TurnMetrics=NonNullable<AgentOutput['metrics']>;
+export function summarizeInvestigationMetrics(turns:TurnMetrics[]){
+ const durations=turns.map(turn=>turn.durationMs).sort((a,b)=>a-b);
+ const percentile=(rank:number)=>durations[Math.ceil(durations.length*rank)-1]??null;
+ const stopReasons:Partial<Record<TurnMetrics['stopReason'],number>>={};
+ for(const turn of turns)stopReasons[turn.stopReason]=(stopReasons[turn.stopReason]??0)+1;
+ const total=(read:(turn:TurnMetrics)=>number)=>turns.reduce((sum,turn)=>sum+read(turn),0);
+ const readAttempts=total(turn=>turn.readAttempts);
+ const readsWithNewEvidence=total(turn=>turn.readsWithNewEvidence);
+ return {
+  turns:turns.length,durationP50Ms:percentile(0.5),durationP95Ms:percentile(0.95),stopReasons,
+  steps:total(turn=>turn.steps),tools:total(turn=>turn.toolCalls),searches:total(turn=>turn.searches),
+  duplicateReads:total(turn=>turn.duplicateReads),readAttempts,readsWithNewEvidence,
+  evidenceYield:readAttempts ? readsWithNewEvidence/readAttempts : null,
+  clarificationRequests:total(turn=>turn.clarificationRequests),conflicts:total(turn=>turn.conflicts),
+  stalledSteps:total(turn=>turn.stalledSteps),readTimeouts:total(turn=>turn.readTimeouts),
+  unavailableReads:total(turn=>turn.unavailableReads),inaccessibleReads:total(turn=>turn.inaccessibleReads),
+  blockedWriteRetries:total(turn=>turn.blockedWriteRetries)
+ };
+}
+
 export async function executeSyntheticEvaluation(provider:OpenAI){
  const records=[];
  for(const item of syntheticCases){
@@ -112,7 +134,7 @@ export async function executeSyntheticEvaluation(provider:OpenAI){
    const evaluation=gradeEvaluation(item,result.answer,result.sources.map(x=>x.versionId),result.pendingActions.length);
    records.push({caseId:item.id,pass:evaluation.pass,notes:evaluation.notes,
      answer:result.answer,sources:result.sources.map(x=>({documentId:x.documentId,versionId:x.versionId})),
-     pendingCount:result.pendingActions.length});
+     pendingCount:result.pendingActions.length,metrics:result.metrics});
  }
  return records;
 }
@@ -131,7 +153,8 @@ if(invoked){
      throw new Error('Avaliação externa não autorizada. Exige EVAL_SYNTHETIC_LLM_APPROVED=true e OPENAI_API_KEY.');
    const provider=new OpenAI({apiKey:process.env.OPENAI_API_KEY,timeout:20_000,maxRetries:0});
    executeSyntheticEvaluation(provider).then(rows=>{
-     process.stdout.write(JSON.stringify({mode:'synthetic-real-model',model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',rows},null,2)+'\n');
+     const investigation=summarizeInvestigationMetrics(rows.flatMap(row=>row.metrics?[row.metrics]:[]));
+     process.stdout.write(JSON.stringify({mode:'synthetic-real-model',model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',investigation,rows},null,2)+'\n');
      if(rows.some(x=>!x.pass))process.exitCode=1;
    }).catch(error=>{
      process.stderr.write('Falha na avaliação sintética. Verifique a autorização, o provedor e a conexão.\n');
