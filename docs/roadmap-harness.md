@@ -44,7 +44,7 @@ O CI do PR #71 foi aprovado ([execução 45605549638](https://github.com/matheus
 
 | Fase | Prioridade | Foco | Itens do diagnóstico | Dependências | Estado |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Crítica | Memória persistente e continuidade | #2 e #7 | Base atual; decisão de retenção H-DEC-003 | Em andamento |
+| 1 | Crítica | Memória persistente e continuidade | #2 e #7 | Base atual; decisão de retenção H-DEC-003 | Concluída |
 | 2 | Crítica | Planejamento investigativo e recuperação | #1, #6 e #10 | Fase 1, contratos do loop | ☐ Não iniciada |
 | 3 | Alta | Recuperação RAG, grounding e comparação | #4, #5 e #9 | Fase 2; corpus sintético | ☐ Não iniciada |
 | 4 | Média/alta | Concorrência, UX e observabilidade | #11 e #12 | Contratos das fases 1–3 | ☐ Não iniciada |
@@ -63,7 +63,7 @@ A fase 5 pode **preparar os fixtures e a régua de qualidade desde a fase 1**, m
 - [x] **H-T001 — Estado persistente da investigação.** Definir contrato de dados com: `conversation_id`, `user_id`, tópico/assunto, equipamento/sistema, ambiente, fatos informados, hipóteses, perguntas pendentes, testes executados, resultados e referências de fonte/versionamento. Campos opcionais, limites de tamanho e atualização por revisão otimista; não persistir credenciais ou texto integral de PDF.
 - [x] **H-T002 — Atualização e recuperação do contexto.** Derivar alterações do diálogo e carregar o assunto ativo, distinguindo referência ao problema anterior de troca de assunto. Anotações geradas pelo modelo são hipóteses até confirmação do usuário ou documento.
 - [x] **H-T003 — Revogação, retenção e isolamento.** Vincular contexto à conta e à revisão de autorização; revalidar referências a espaços/documentos a cada leitura, invalidar conteúdo revogado e estabelecer política de expiração/limpeza antes de persistir novos dados.
-- [ ] **H-T004 — Testes da memória.** Exercitar conversas acima de 60 mensagens, retomada do assunto, dois problemas intercalados, duas contas, revogação de acesso, conteúdo malicioso e atualização simultânea.
+- [x] **H-T004 — Testes da memória.** Exercitar conversas acima de 60 mensagens, retomada do assunto, dois problemas intercalados, duas contas, revogação de acesso, conteúdo malicioso e atualização simultânea.
 
 ### Contrato inicial da H-T001
 
@@ -88,6 +88,12 @@ O worker verifica estados expirados ao iniciar e depois a cada hora. A rotina ex
 - **H-T003.** Os testes verificaram revogação de acesso, arquivamento e exclusão de fontes e o limite exato de 30 dias. O worker foi testado no PostgreSQL local com dados fictícios e preservou as mensagens da investigação expirada.
 
 O CI aprovado incluiu migrações, testes de integração PostgreSQL, build, Playwright e ensaio de restauração com dados fictícios. A avaliação com modelo real e a homologação do piloto seguem na Fase 5. [PR #73](https://github.com/matheusdebrito/suportai/pull/73) · [Commit de implementação `bb988ca`](https://github.com/matheusdebrito/suportai/commit/bb988ca4cabe173d15666f146fa6f5e76bb9056e) · [CI #45639697456](https://github.com/matheusdebrito/suportai/actions/runs/45639697456)
+
+### Evidências da H-T004
+
+Os testes de integração retomam um assunto após 65 mensagens, alternam entre dois assuntos com versões distintas e isolam investigações de mesmo nome em duas contas. Também verificam a revogação durante uma resposta, o tratamento de instruções na memória como dados não verificados, a recusa de acesso a uma fonte restrita e o bloqueio de um turno simultâneo sem duplicar mensagens ou avançar a revisão.
+
+Passaram 11 testes no PostgreSQL local e o CI do PR. Os cenários usam dados fictícios e um modelo simulado. [PR #74](https://github.com/matheusdebrito/suportai/pull/74) · [Commit de testes `02421ba`](https://github.com/matheusdebrito/suportai/commit/02421bacac620888ac62e302f0731316cf065c03) · [CI #45642172138](https://github.com/matheusdebrito/suportai/actions/runs/45642172138)
 
 **Aceitação (H-AC-001 e H-AC-002):** o agente consegue retomar um problema citado há mais de 60 mensagens sem recuperar dados não autorizados; uma troca explícita de assunto não mistura equipamentos ou versões. Histórico antigo não vira fonte oficial. Sem persistência de segredos.
 
@@ -216,4 +222,4 @@ Prefixos `H-REQ`, `H-AC` e `H-T` são específicos deste roadmap; não alteram n
 - [Avaliação RAG e harness atual](avaliacao-rag.md)
 - [Runbook de operação](operacao.md)
 
-**Próximo marco:** concluir os cenários de memória da **H-T004**. A **H-T017** pode avançar em paralelo com cenários fictícios.
+**Próximo marco:** iniciar a **Fase 2** pela **H-T005**, com o plano de investigação por turno. A **H-T017** pode avançar em paralelo com cenários fictícios.
