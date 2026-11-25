@@ -16,7 +16,8 @@ test('concurrent turns in the same conversation fail fast instead of reading sta
   await started;
   try{
    const second=await withConversationTurnLock(id,async()=>{throw new Error('Nunca pode iniciar');});
-   assert.deepEqual(second,{busy:true});
+   assert.equal(second.busy,true);
+   assert.ok(typeof second.retryAfterMs==='number' && second.retryAfterMs>0);
    const independent=await withConversationTurnLock(randomUUID(),async()=> 'outra conversa');
    assert.deepEqual(independent,{busy:false,value:'outra conversa'});
   }finally{release();}
