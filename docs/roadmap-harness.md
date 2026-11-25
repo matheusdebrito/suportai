@@ -46,7 +46,7 @@ O CI do PR #71 foi aprovado ([execução 45605549638](https://github.com/matheus
 | --- | --- | --- | --- | --- | --- |
 | 1 | Crítica | Memória persistente e continuidade | #2 e #7 | Base atual; decisão de retenção H-DEC-003 | Concluída |
 | 2 | Crítica | Planejamento investigativo e recuperação | #1, #6 e #10 | Fase 1, contratos do loop | Concluída |
-| 3 | Alta | Recuperação RAG, grounding e comparação | #4, #5 e #9 | Fase 2; corpus sintético | ☐ Não iniciada |
+| 3 | Alta | Recuperação RAG, grounding e comparação | #4, #5 e #9 | Fase 2; corpus sintético | Em andamento |
 | 4 | Média/alta | Concorrência, UX e observabilidade | #11 e #12 | Contratos das fases 1–3 | ☐ Não iniciada |
 | 5 | Crítica para liberação | Avaliação real, português informal e calibração | #3 e #8; valida todas | Fases 1–4; autorização de LLM | ☐ Não iniciada |
 
@@ -138,6 +138,14 @@ Passaram 186 testes locais com PostgreSQL descartável. A integração verificou
 **Aceitação (H-AC-006 a H-AC-008):** toda orientação operacional importante é rastreável a fonte publicada e autorizada; conflito ou lacuna relevante produz esclarecimento/abstenção; conteúdo não autorizado nunca entra no reranker ou na resposta.
 
 **Riscos:** custos de inferência, falso positivo de verificação, documentos desatualizados e vazamento entre espaços.
+
+### Implementação e avaliação da Fase 3
+
+O PostgreSQL autoriza e limita os candidatos da recuperação híbrida antes da reordenação local. O reranker privilegia a cobertura dos termos específicos, descarta duplicatas do mesmo documento e exige sobreposição lexical útil ou similaridade vetorial de pelo menos 0,56 para manter um candidato. A avaliação compara o ranking original com o novo no mesmo conjunto de candidatos. Nas três consultas lexicais fictícias, o documento esperado passou de fora do top 3 para a primeira posição. Recall@3 e MRR@3 passaram de 0 para 1 nesse conjunto controlado. Vetores sintéticos verificam o limite mínimo e a revogação impede acesso antes do ranking.
+
+O backend numera as citações após a revisão de cada unidade de resposta. Toda afirmação precisa de trechos exatos da versão citada, e números e endereços precisam aparecer nos trechos da própria unidade. A comparação distingue versões vigentes e históricas, e o chat revalida a autorização antes de persistir a resposta e ao recarregar o histórico. Divergências entre fontes vigentes podem interromper a orientação e gerar uma pergunta sobre o ambiente ou a versão aplicável.
+
+O benchmark fictício tem 13 casos rotulados, com 3 aceitações esperadas e 10 rejeições esperadas. Ele mede separadamente falso aceite e falso bloqueio. Os ensaios locais e de CI usam um verificador simulado e conferem também a recusa de citações falsas, trechos ausentes e dados fora da autorização. As taxas com modelo real dependem da avaliação autorizada da Fase 5.
 
 ## Fase 4 — Concorrência, experiência e observabilidade
 

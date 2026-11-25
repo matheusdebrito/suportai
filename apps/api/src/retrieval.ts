@@ -2,7 +2,8 @@ import { query } from './db.js';
 import { embedText } from './llm.js';
 import {hasSecrets} from './knowledge.js';
 import type { Actor } from './security.js';
-export type Source={documentId:string;versionId:string;versionNumber:number;title:string;ordinal:number;content:string;score:number};
+export type Source={documentId:string;versionId:string;versionNumber:number;title:string;ordinal:number;content:string;score:number;historical?:true;excerpts?:string[]};
+type Candidate=Source&{semantic:number};
 
 // PostgreSQL's plainto_tsquery requires every query word to be present. This
 // smaller, sanitized OR query is a lexical fallback for natural questions when
@@ -26,24 +27,56 @@ export function relaxedLexicalQuery(text:string):string{
  return [...unique].join(' | ');
 }
 // Defense in depth for articles published before secret scanning was tightened.
-export function safeRetrievedSources(sources:Source[],limit:number):Source[]{
+export function safeRetrievedSources<T extends Source>(sources:T[],limit:number):T[]{
  return sources.filter(x=>!hasSecrets(x.title)&&!hasSecrets(x.content)).slice(0,Math.max(0,limit));
 }
-export async function searchKnowledge(actor:Actor, text:string, limit=5):Promise<Source[]> {
+const genericTerms=new Set('procedimento procedimentos diagnostico diagnosticar problema problemas erro erros falha falhas ajuda corrigir verificar preciso saber empresa sistema sintoma informacao informacoes orientacao sobre consultar'.split(' '));
+function words(value:string):string[]{
+ return value.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().match(/[\p{L}\p{N}]{2,}/gu)??[];
+}
+
+/** Rerank only the authorized, bounded candidate pool. Retain strong semantic-only hits. */
+export function rerankKnowledgeCandidates(text:string,candidates:Candidate[],limit:number):Source[]{
+ const terms=[...new Set(words(text).filter(word=>!STOP_WORDS.has(word)&&!genericTerms.has(word)))].slice(0,12);
+ const selected:Source[]=[];
+ const counts=new Map<string,number>();
+ const ranked=safeRetrievedSources(candidates,candidates.length).flatMap(source=>{
+   const {semantic}=source;
+   const title=new Set(words(source.title));
+   const body=new Set(words(source.content));
+   const titleHits=terms.filter(term=>title.has(term)).length;
+   const bodyHits=terms.filter(term=>body.has(term)).length;
+   if(!titleHits&&!bodyHits&&semantic<0.56)return [];
+   const coverage=(titleHits*0.75+bodyHits)/Math.max(1,terms.length);
+   const score=coverage+Math.log1p(Math.max(0,source.score))*0.12+Math.max(0,semantic)*0.35;
+   return [{source,score}];
+ });
+ while(ranked.length&&selected.length<limit){
+   ranked.sort((a,b)=>(b.score-(counts.get(b.source.documentId)??0)*0.18)-
+     (a.score-(counts.get(a.source.documentId)??0)*0.18));
+   const {source}=ranked.shift()!;
+   if(selected.some(picked=>picked.versionId===source.versionId&&picked.content===source.content))continue;
+   const {semantic:_,...publicSource}=source;
+   selected.push(publicSource);
+   counts.set(source.documentId,(counts.get(source.documentId)??0)+1);
+ }
+ return selected;
+}
+
+export async function retrieveKnowledgeCandidates(actor:Actor,text:string,limit:number,vector:string|null):Promise<Candidate[]>{
   // Check the complete input before truncation. Model-generated search
   // queries are untrusted and must never forward credentials to embeddings.
   if(hasSecrets(text))return [];
   const safe=text.trim().slice(0,500);
   if(!safe) return [];
   const relaxed=relaxedLexicalQuery(safe);
-  let vector:string|null=null;
-  try { const arr=await embedText(safe);vector=arr?JSON.stringify(arr):null; } catch { /* textual fallback */ }
   const r=await query(`WITH allowed AS (
    SELECT c.version_id,c.ordinal,c.content,c.embedding,c.search_vector,
      to_tsvector('simple',d.title) AS title_vector,d.id AS document_id,d.title,v.version_number
    FROM knowledge_chunks c JOIN document_versions v ON v.id=c.version_id
    JOIN documents d ON d.id=v.document_id AND d.current_version_id=v.id
    JOIN spaces s ON s.id=d.space_id
+   JOIN users u ON u.id=$1 AND u.active AND NOT u.must_change_password AND u.auth_revision=$6 AND u.role=$7
    LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$1
    WHERE v.status='PUBLISHED' AND v.index_status='READY' AND d.archived_at IS NULL
    AND (s.visibility='SHARED' OR COALESCE(g.can_read,false))
@@ -61,9 +94,18 @@ export async function searchKnowledge(actor:Actor, text:string, limit=5):Promise
    SELECT *, (lexical*4+relaxed+title_lexical*6+title_relaxed*2+
      GREATEST(semantic,0)) AS score FROM ranked
    WHERE lexical>0 OR relaxed>0 OR title_lexical>0 OR title_relaxed>0 OR semantic>0.45
-   ORDER BY score DESC LIMIT $4`,[actor.id,safe,vector,Math.min(Math.max(1,limit*3),16),relaxed]);
-  return safeRetrievedSources(r.rows.map(x=>({
+   ORDER BY score DESC, document_id, ordinal LIMIT $4`,[actor.id,safe,vector,Math.min(Math.max(1,limit*3),16),relaxed,actor.auth_revision,actor.role]);
+  return r.rows.map(x=>({
    documentId:x.document_id,versionId:x.version_id,versionNumber:Number(x.version_number),
-   title:x.title,ordinal:x.ordinal,content:x.content,score:Number(x.score)
-  })),Math.min(Math.max(1,limit),8));
+   title:x.title,ordinal:x.ordinal,content:x.content,score:Number(x.score),semantic:Number(x.semantic)
+  }));
+}
+
+export async function searchKnowledge(actor:Actor,text:string,limit=5):Promise<Source[]>{
+ if(hasSecrets(text)||!text.trim())return [];
+ let vector:string|null=null;
+ try{const embedding=await embedText(text.trim().slice(0,500));vector=embedding?JSON.stringify(embedding):null;}
+ catch{ /* Textual fallback. */ }
+ const candidates=await retrieveKnowledgeCandidates(actor,text,limit,vector);
+ return rerankKnowledgeCandidates(text.trim().slice(0,500),candidates,Math.min(Math.max(1,limit),8));
 }
