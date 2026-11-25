@@ -113,7 +113,8 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
    const turn=await withConversationTurnLock(id,async()=>{
    const conv=await query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2',[id,a.id]);
    if(!conv.rowCount) return reply.code(404).send({error:'Conversa não encontrada'});
-   // Never pass inaccessible cited content back into the model's memory.
+   // Retain a bounded older window for derived memory. Never reuse inaccessible
+   // cited content or messages from an earlier authorization revision.
    // This is a read-time projection; the original message is retained for audit.
    const previous=await query(`SELECT m.role,
       CASE WHEN EXISTS (
@@ -131,7 +132,7 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
         ELSE m.content END AS content
     FROM messages m
     WHERE m.conversation_id=$1 AND m.auth_revision=$2
-    ORDER BY m.created_at DESC,m.id DESC LIMIT 8`,[id,a.auth_revision,a.id]);
+    ORDER BY m.created_at DESC,m.id DESC LIMIT 60`,[id,a.auth_revision,a.id]);
    const history=previous.rows.reverse();
    await transaction(async c=>{
      await requireCurrentActor(c,a);
