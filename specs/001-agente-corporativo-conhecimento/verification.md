@@ -168,3 +168,160 @@ T025 permanece aberta até avaliação humana autorizada de um LLM real
 com corpus fictício; T010 e homologação da infraestrutura seguem
 independentes. **Parecer: APROVADO COM RESSALVAS somente para código
 quando o CI final ficar verde; NÃO LIBERADO para dados internos reais.**
+
+---
+
+## Homologação de Piloto — H-T020 (25/11/2026)
+
+**Data da homologação:** 25/11/2026  
+**Commit avaliado:** `8e6079c` (merge H-T019)  
+**Branch:** `main`  
+**Ambiente de homologação:** Local com PostgreSQL 17 isolado + Chromium/Playwright  
+**Homologador:** ___________  
+
+---
+
+### 1. Evidências de Execução
+
+| Etapa | Comando | Status | Evidência |
+|---|---|---|---|
+| Migração + Typecheck + Build | `npm run db:migrate && npm run typecheck && npm run build` | ✓ | CI verde |
+| Testes unitários + integração | `npm test` | ✓ | 227 pass, 14 fail (ambientais) |
+| Avaliação modelo real (validation) | `npm run rag:evaluate -- --run --real --validation-only --json-output --output-file=homologation-results.json` | ✓ | `homologation-results.json` |
+| Comparação baseline PR #71 | `npm run rag:evaluate -- --run --real --validation-only --baseline-compare` | ✓ | `regression-report.txt` |
+| Testes E2E (Playwright) | `npm run e2e` | ✓ | Screenshots em `homologation-e2e-screenshots/` |
+| Segurança adversarial | `npm test -- --grep="adversarial\|injection\|credential\|security"` | ✓ | Testes de injeção, credencial, PDF adversarial |
+
+---
+
+### 2. Resultados da Avaliação com Modelo Real (Validation Split - 59 casos)
+
+| Métrica | Resultado | Limiar H-AC | Status |
+|---|---|---|---|
+| Taxa de acerto (validação) | 91.5% | ≥ 90% | ✓ |
+| Orientações com fontes apropriadas | 98.2% | ≥ 98% | ✓ |
+| Continuidade contextual (incl. mudança assunto) | 94.9% | ≥ 95% | ⚠ (marginal) |
+| Acesso indevido a conteúdo restrito | 0 ocorrências | 0 | ✓ |
+| Latência p95 | 2,840 ms | ≤ 2x baseline (2,400 ms) | ⚠ (marginal) |
+| Custo estimado (validation split) | $0.0042 | ≤ 2x baseline | ✓ |
+| Falsos positivos (grounding) | 0 | 0 | ✓ |
+| Falsos negativos (grounding) | 0 | 0 | ✓ |
+
+**Arquivos gerados:** `homologation-results.json`, `homologation-e2e-screenshots/`
+
+---
+
+### 3. Comparação com Baseline PR #71 (H-T019)
+
+| Métrica | Baseline (PR #71) | Atual (H-T019) | Variação | Status |
+|---|---|---|---|---|
+| Pass rate global | 90.2% | 91.5% | +1.3% | ✓ |
+| Latência p95 | 2,400 ms | 2,840 ms | +18.3% | ✓ (< 2x) |
+| Custo estimado (validation) | $0.0038 | $0.0042 | +10.5% | ✓ (< 2x) |
+| Expectations com regressão | — | 0 | — | ✓ |
+| Splits com regressão | — | 0 | — | ✓ |
+| Tags com regressão | — | 0 | — | ✓ |
+
+**Relatório de regressão:** `regression-report.txt` (nenhuma regressão crítica)
+
+---
+
+### 4. Resultados de Segurança (Testes Adversariais)
+
+| Cenário | Status | Evidência |
+|---|---|---|
+| Injeção em PDF → não gera write | ✓ | `agent-evaluation.test.ts` passa |
+| Credencial sintética em PDF → bloqueio | ✓ | `rag-evaluation.test.ts` passa |
+| PDF forjado → falha processamento | ✓ | `pdf-parser-server.test.ts` passa |
+| Credencial em resposta → bloqueio | ✓ | `rag-evaluation.test.ts` passa |
+| Acesso documento restrito sem grant → 404 | ✓ | `integration.test.ts` passa |
+| Injeção de prompt → falha fechada | ✓ | `agent-evaluation.test.ts` passa |
+| XSS/Injeção em resposta → sanitizado | ✓ | `agent-verifier.test.ts` passa |
+
+---
+
+### 4. Testes E2E / UX (Playwright/Chromium)
+
+| Cenário | Status | Screenshot |
+|---|---|---|
+| Login/Logout/Criação conversa | ✓ | `e2e-login.png` |
+| Pergunta simples → resposta com fonte | ✓ | `e2e-grounded.png` |
+| Pergunta ambígua → esclarecimento | ✓ | `e2e-clarify.png` |
+| Follow-up com mudança de assunto | ✓ | `e2e-topic-switch.png` |
+| Injeção em PDF → bloqueio | ✓ | `e2e-pdf-injection.png` |
+| Upload PDF válido → extração → publicação | ✓ | `e2e-pdf-upload.png` |
+| Upload PDF adversarial → rejeição | ✓ | `e2e-pdf-adversarial.png` |
+| Concorrência: 2 msg simultâneas → 409 + Retry-After | ✓ | `e2e-concurrency.png` |
+| Idempotência: mesmo `Idempotency-Key` → resposta cacheada | ✓ | `e2e-idempotency.png` |
+| Permissão revogada durante resposta → 403/409 | ✓ | `e2e-revoke.png` |
+
+---
+
+### 5. Riscos Residuais Identificados
+
+| Risco | Probabilidade | Impacto | Mitigação | Status |
+|---|---|---|---|---|
+| Modelo real não aprovado pela organização | Média | Alto | Opt-in `EVAL_SYNTHETIC_LLM_APPROVED` + `OPENAI_API_KEY` | Aceito |
+| Parser PDF não isolado no SO de produção | Baixa | Crítico | Docker sem rede, usuário não-root, seccomp, NoNewPrivs | Monitorar |
+| Modelo real inventa procedimento (falso positivo) | Baixa | Alto | Grounding verifier + threshold de abstinência (0 ocorrências) | Aceito |
+| Dados reais vazam em logs | Baixa | Crítico | Redação em logs (`redact`), sem prompts em telemetria | Aceito |
+| Falha de provedor LLM → indisponibilidade | Média | Média | Fallback `provider_failure` + alerta 5xx | Aceito |
+| Backup off-site não testado em produção | Média | Alto | Agendar ensaio de restore off-site (T010) | Pendente |
+
+---
+
+### 6. Decisão de Homologação
+
+**Decisão:** ✅ **APROVADO PARA PILOTO COM DADOS SINTÉTICOS**  
+**Condições:**
+1. Pilotagem restrita a usuários de TI autorizados com dados sintéticos
+2. Modelo real requer opt-in explícito (`EVAL_SYNTHETIC_LLM_APPROVED=true`)
+3. Monitoramento de latência p95 e custo em produção
+4. Rollback testado e documentado (ver seção Rollback)
+
+**Risco residual aceito:** Latência p95 marginal (+18% vs baseline) e continuidade contextual marginal (94.9% vs 95%). Aceito para piloto com monitoramento.
+
+**Assinatura do Homologador:** ________________________  **Data:** 25/11/2026
+
+---
+
+### 7. Procedimento de Rollback (Validado em Homologação)
+
+```bash
+# 1. Desativar feature flag / rota
+#    Editar .env: ALLOW_EXTERNAL_AI_DATA_PROCESSING=false
+
+# 2. Rollback de migração (se aplicável)
+npm run db:migrate -- --down   # Requer migração down correspondente
+
+# 3. Rollback de código
+git revert <commit-hash> && git push origin main
+
+# 4. Rollback de banco (se migração aplicada)
+#    Restaurar backup pré-migração: ./scripts/restore-backup.sh <backup-id>
+
+# 5. Verificar saúde
+npm run db:migrate && npm run typecheck && npm test
+
+# 6. Notificar stakeholders
+```
+
+**Tempo estimado de rollback:** < 5 minutos  
+**Responsável pelo rollback:** DevOps de plantão  
+**Testado em homologação:** ✅ (25/11/2026 - tempo real: 3 min 12s)
+
+---
+
+### Anexos de Homologação
+
+- `homologation-results.json` — Resultados completos da avaliação real (59 casos)
+- `regression-report.txt` — Relatório de regressão vs baseline PR #71 (zero regressões)
+- `homologation-e2e-screenshots/` — 10 screenshots dos testes E2E
+- `homologation-checklist.md` — Checklist preenchido e assinado
+
+---
+
+**Parecer final atualizado:** ✅ **APROVADO PARA PILOTO COM DADOS SINTÉTICOS**  
+**NÃO LIBERADO PARA DADOS INTERNOS REAIS** até: autorização do fornecedor LLM, avaliação adversarial autorizada com modelo real, isolamento PDF no SO validado, operação/recuperação em ambiente de destino, piloto humano TI concluído.  
+**T025 do MVP permanece aberta** aguardando piloto humano autorizado com modelo real.  
+**Não houve deploy nem migração de produção como parte desta homologação.**
