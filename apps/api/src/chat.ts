@@ -5,6 +5,7 @@ import {requireCurrentActor} from './security.js';
 import {respond} from './agent.js';
 import {hasSecrets} from './knowledge.js';
 import {safeErrorType} from './safe-errors.js';
+import {withConversationTurnLock} from './conversation-lock.js';
 export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond) {
  app.post('/conversations',async req=>{
    const actor=await requireActor(req);
@@ -107,6 +108,9 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
    const b=req.body as {message?:unknown}|undefined;
    if(typeof b?.message!=='string'||b.message.trim().length===0||b.message.length>4000) return reply.code(400).send({error:'Mensagem inválida'});
    if(hasSecrets(b.message)) return reply.code(422).send({error:'Possível credencial detectada. Remova senhas e tokens antes de enviar.'});
+   // Acquire before reading the conversation or writing the user message.
+   // Competing turns get 409 instead of racing with stale history.
+   const turn=await withConversationTurnLock(id,async()=>{
    const conv=await query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2',[id,a.id]);
    if(!conv.rowCount) return reply.code(404).send({error:'Conversa não encontrada'});
    // Never pass inaccessible cited content back into the model's memory.
@@ -175,5 +179,8 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
      req.log.error({errorType:safeErrorType(error)},'Agent execution failed');
      return reply.code(503).send({error:'Não foi possível consultar o agente agora. Tente novamente.'});
    }
+   });
+   if(turn.busy)return reply.code(409).send({error:'Já existe uma mensagem em processamento nesta conversa. Tente novamente após a resposta.'});
+   return turn.value;
  });
 }
