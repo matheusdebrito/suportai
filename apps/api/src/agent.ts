@@ -265,8 +265,11 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
        } else if(call.function.name==='prepare_article'){
          const writableSpaces=await readWritableSpaces();
          if(!writableSpaces.length)throw new Error('O usuário não tem autorização para preparar artigos');
+         const intentTurn=budget.startModelTurn(true);
+         if(!intentTurn)throw new Error('Orçamento do agente atingido');
          const intent=await reviewDraftIntent(provider,userMessage,history,
-           Math.min(10_000,Math.max(1,budget.remainingMs()-1000)));
+           Math.min(10_000,intentTurn.timeoutMs));
+         budget.recordModelUsage(undefined,userMessage.length+300,60);
          if(!intent.allowed)
            throw new Error('O usuário não solicitou a criação ou atualização de conhecimento nesta mensagem');
          if(pendingActions.length>0) throw new Error('Apenas uma prévia por mensagem; confirme a proposta existente');
@@ -329,14 +332,16 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          'Informe em qual espaço de conhecimento deseja criar o artigo',
          'O espaço escolhido não corresponde ao pedido do usuário',
          'Espaço não autorizado','Artigo não autorizado ou não publicado',
-         'Permissão de escrita revogada'
+         'Permissão de escrita revogada','Orçamento do agente atingido'
        ]);
        const raw=error instanceof Error?error.message:'';
        output={error:safeErrors.has(raw)?raw:'Falha temporária da ferramenta'};
      }
      messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify(output)});
    }
-   if(budget.shouldFinishAfterTools())finalAnswerNext=true;
+   if(budget.shouldFinishAfterTools()||
+      (sources.length>0&&provider===client&&client!==null&&
+       budget.steps>=budget.limits.maxSteps-2))finalAnswerNext=true;
  }
  if(lookupUnavailable&&forceLookup&&sources.length===0)return unavailableReply();
  return budgetReply(budget.stopCause()??'step_budget');
