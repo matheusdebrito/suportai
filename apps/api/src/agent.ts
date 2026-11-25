@@ -29,10 +29,12 @@ const tools:OpenAI.Chat.Completions.ChatCompletionTool[]=[
  {type:'function',function:{name:'prepare_article',description:'Prepara prévia de artigo solicitado explicitamente pelo usuário; requer confirmação humana posterior antes de criar rascunho.',parameters:{type:'object',properties:{spaceId:{type:'string'},title:{type:'string'},content:{type:'string'},documentId:{type:'string',description:'Documento a atualizar se aplicável'}},required:['spaceId','title','content'],additionalProperties:false}}}
 ];
 export type AgentOutput={answer:string;sources:Source[];pendingActions:{id:string;title:string;content:string;spaceName:string;documentId?:string;beforeContent?:string}[];metrics?:AgentMetrics};
-export async function respond(actor:Actor,conversationId:string,userMessage:string,history:{role:'user'|'assistant';content:string}[],provider:OpenAI|null=client,knowledgeSearch:typeof searchKnowledge=searchKnowledge):Promise<AgentOutput>{
+export type AgentOptions={verifyEvidence?:boolean};
+export async function respond(actor:Actor,conversationId:string,userMessage:string,history:{role:'user'|'assistant';content:string}[],provider:OpenAI|null=client,knowledgeSearch:typeof searchKnowledge=searchKnowledge,options:AgentOptions={}):Promise<AgentOutput>{
  const sources:Source[]=[];
  const pendingActions:AgentOutput['pendingActions']=[];
  const budget=new AgentBudget();
+ const shouldVerify=Boolean(options.verifyEvidence||(provider===client&&client!==null));
  const done=(result:AgentOutput,reason:AgentStopReason):AgentOutput=>({
    ...result,metrics:budget.metrics(reason)
  });
@@ -158,7 +160,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      // When the configured real provider is used, independently check that
      // the generated recommendations follow the retrieved evidence.
      // Test doubles are verified by dedicated verifier tests, not billed.
-     if(sources.length>0&&provider===client&&client!==null){
+     if(sources.length>0&&shouldVerify){
        const validation=budget.startModelTurn(true);
        if(!validation)return budgetReply(budget.stopCause()??'token_budget');
        const verdict=await verifyGroundedAnswer(provider,userMessage,message.content,sources,
@@ -340,8 +342,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify(output)});
    }
    if(budget.shouldFinishAfterTools()||
-      (sources.length>0&&provider===client&&client!==null&&
-       budget.steps>=budget.limits.maxSteps-2))finalAnswerNext=true;
+      (sources.length>0&&shouldVerify&&budget.steps>=budget.limits.maxSteps-2))finalAnswerNext=true;
  }
  if(lookupUnavailable&&forceLookup&&sources.length===0)return unavailableReply();
  return budgetReply(budget.stopCause()??'step_budget');
