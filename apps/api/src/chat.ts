@@ -5,6 +5,7 @@ import {requireCurrentActor} from './security.js';
 import {respond} from './agent.js';
 import {hasSecrets} from './knowledge.js';
 import {safeErrorType} from './safe-errors.js';
+import {withConversationTurnLock} from './conversation-lock.js';
 export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond) {
  app.post('/conversations',async req=>{
    const actor=await requireActor(req);
@@ -106,10 +107,15 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
    const a=await requireActor(req);const id=(req.params as {id:string}).id;
    const b=req.body as {message?:unknown}|undefined;
    if(typeof b?.message!=='string'||b.message.trim().length===0||b.message.length>4000) return reply.code(400).send({error:'Mensagem inválida'});
-   if(hasSecrets(b.message)) return reply.code(422).send({error:'Possível credencial detectada. Remova senhas e tokens antes de enviar.'});
+   const userMessage=b.message;
+   if(hasSecrets(userMessage)) return reply.code(422).send({error:'Possível credencial detectada. Remova senhas e tokens antes de enviar.'});
+   // Acquire before reading the conversation or writing the user message.
+   // Competing turns get 409 instead of racing with stale history.
+   const turn=await withConversationTurnLock(id,async()=>{
    const conv=await query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2',[id,a.id]);
    if(!conv.rowCount) return reply.code(404).send({error:'Conversa não encontrada'});
-   // Never pass inaccessible cited content back into the model's memory.
+   // Retain a bounded older window for derived memory. Never reuse inaccessible
+   // cited content or messages from an earlier authorization revision.
    // This is a read-time projection; the original message is retained for audit.
    const previous=await query(`SELECT m.role,
       CASE WHEN EXISTS (
@@ -127,16 +133,16 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
         ELSE m.content END AS content
     FROM messages m
     WHERE m.conversation_id=$1 AND m.auth_revision=$2
-    ORDER BY m.created_at DESC,m.id DESC LIMIT 8`,[id,a.auth_revision,a.id]);
+    ORDER BY m.created_at DESC,m.id DESC LIMIT 60`,[id,a.auth_revision,a.id]);
    const history=previous.rows.reverse();
    await transaction(async c=>{
      await requireCurrentActor(c,a);
      const owned=await c.query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2 FOR SHARE',[id,a.id]);
      if(!owned.rowCount)throw Object.assign(new Error('Conversa removida'),{statusCode:404});
-     await c.query("INSERT INTO messages(conversation_id,role,content,auth_revision) VALUES($1,'user',$2,$3)",[id,b.message,a.auth_revision]);
+     await c.query("INSERT INTO messages(conversation_id,role,content,auth_revision) VALUES($1,'user',$2,$3)",[id,userMessage,a.auth_revision]);
    });
    try {
-     const output=await runAgent(a,id,b.message,history);
+     const output=await runAgent(a,id,userMessage,history);
      // Numeric-only diagnostic signal. Never log prompts, document excerpts or secrets.
      if(output.metrics)req.log.info({agent:output.metrics},'Agent turn finished');
      // Hold a shared account lock while saving the reply. Permission changes
@@ -175,5 +181,8 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
      req.log.error({errorType:safeErrorType(error)},'Agent execution failed');
      return reply.code(503).send({error:'Não foi possível consultar o agente agora. Tente novamente.'});
    }
+   });
+   if(turn.busy)return reply.code(409).send({error:'Já existe uma mensagem em processamento nesta conversa. Tente novamente após a resposta.'});
+   return turn.value;
  });
 }

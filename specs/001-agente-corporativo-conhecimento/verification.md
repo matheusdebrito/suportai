@@ -130,3 +130,41 @@ Os seguintes PRs são evidência de **implementação e CI** (não de homologaç
 **Parecer nesta atualização: APROVADO COM RESSALVAS para estas integrações de código; NÃO VERIFICADO/SEM APROVAÇÃO PARA DADOS INTERNOS REAIS OU PRODUÇÃO.** O CI não substitui validação no host de destino, avaliação semântica com modelo real autorizado, backup off-host, RPO/RTO, política de retenção, testes humanos e aprovação do fornecedor.
 
 **T009:** OCR de PDFs escaneados não foi incluído, por ser opcional e não aprovado no escopo do MVP. Nunca tratar ausência de OCR como processamento válido de imagem sem texto.
+
+
+## Verificação do harness conversacional ampliado — PR #71 (25/11/2026)
+
+**Base:** commit `34a2ebb` de `main`; alterações isoladas no PR
+[#71](https://github.com/matheusdebrito/suportai/pull/71).
+Nenhum deploy de produção, migração destrutiva ou transmissão externa de
+documentos foi realizada nesta verificação.
+
+| Critério da auditoria | Implementação e evidência prevista | Estado |
+| --- | --- | --- |
+| Intenção informal sem regex de escrita | `agent.ts`, `agent-intent.ts`: escolha pelo modelo; revisão independente baseada no pedido do usuário; autorização/confirmacão continuam no backend | Implementado, testes simulados |
+| Memória maior que 8 mensagens | `chat.ts` consulta até 60 mensagens autorizadas; `conversation-memory.ts` deriva contexto estruturado limitado e não verificado | Implementado, testes unitários |
+| Mais ferramentas de investigação | `agent-knowledge-tools.ts`: documento corrente e versões publicadas/históricas com filtros SQL; busca e espaços editáveis autorizados | Implementado, teste de integração |
+| Conversa comum sem busca obrigatória | `respond_social` e `ask_clarification`; decisão com modelo, sem permissão para instruções operacionais diretas | Implementado, contratos simulados |
+| Aderência semântica da resposta | `agent-verifier.ts`: segunda chamada para verificar sustentação e conflito com fontes; em dúvida ou erro, falha fechada | Implementado, eficácia real NÃO VERIFICADA |
+| Recuperação e reformulação | Orçamento adaptativo já existente, cache por turno e reformulação com ferramentas; erros internos projetados sem segredos | Implementado, contratos simulados |
+| Concorrência na mesma conversa | `conversation-lock.ts` usa PostgreSQL advisory lock por sessão até persistir a resposta; pedido simultâneo recebe HTTP 409 | Implementado, teste PostgreSQL |
+| Avaliação conversacional ampla | 100 cenários determinísticos e avaliador opcional ampliado para 16 entradas fictícias com social/informal/follow-ups | Testes simulados, LLM real NÃO VERIFICADO |
+
+**Comandos previstos pelo CI:** `npm run db:migrate` duas vezes,
+`npm run typecheck`, `npm test`, `npm run rag:evaluate -w
+@suportai/api` em dry-run, `npm run build`, build e preflight
+Docker, isolamento do parser PDF, `npm run e2e` com Chromium e
+restauração PostgreSQL fictícia. O CI anterior
+[#45604810549](https://github.com/matheusdebrito/suportai/actions/runs/45604810549)
+passou numa revisão intermediária. A revisão final deve ser confirmada
+na branch após todos os commits.
+
+**Riscos/limitações:** a memória é uma janela estruturada derivada,
+não um resumo permanente de conversas ilimitadas; um segundo modelo
+é uma verificação probabilística, não prova formal de correção; respostas
+sem RAG dependem de disciplina do modelo e guardas conservadores;
+o lock ocupa até quatro conexões PostgreSQL dedicadas em turnos ativos.
+T025 permanece aberta até avaliação humana autorizada de um LLM real
+com corpus fictício; T010 e homologação da infraestrutura seguem
+independentes. **Parecer: APROVADO COM RESSALVAS somente para código
+quando o CI final ficar verde; NÃO LIBERADO para dados internos reais.**

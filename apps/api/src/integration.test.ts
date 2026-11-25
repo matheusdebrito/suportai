@@ -10,6 +10,7 @@ import {findSimilarPublished} from './similar.js';
 import {claimJob,renewLease,storeClaimedResult,failClaimedJob,expireStaleJobs} from './worker-jobs.js';
 import {actorForSession,hashToken} from './security.js';
 import {respond} from './agent.js';
+import {getPublishedDocument,getVisibleDocumentVersions} from './agent-knowledge-tools.js';
 import type OpenAI from 'openai';
 import {PDFDocument,StandardFonts} from 'pdf-lib';
 
@@ -166,6 +167,8 @@ if(!process.env.TEST_DATABASE_URL){
    const requests:any[]=[];
    const agentMock={chat:{completions:{create:async(request:any)=>{
      requests.push(request);
+     if(request.response_format?.type==='json_object')
+       return {choices:[{message:{role:'assistant',content:'{"requested":true}'}}]};
      draftCalls++;
      return {choices:[{message:draftCalls===1
       ? {role:'assistant',content:null,tool_calls:[{id:'prepare-1',type:'function',function:{name:'prepare_article',arguments:JSON.stringify({
@@ -178,7 +181,8 @@ if(!process.env.TEST_DATABASE_URL){
    const generated=await respond(editorActor!,conversationId,'Adicione este procedimento de NTP ao cérebro',[],agentMock);
    assert.equal(generated.pendingActions.length,1);
    assert.equal(generated.pendingActions[0].spaceName,'Conhecimento geral');
-   assert.match(JSON.stringify(requests[0].messages),new RegExp(shared),'O modelo recebe apenas espaços autorizados para escrever');
+   assert.ok(requests[0].tools.some((t:any)=>t.function.name==='list_writable_spaces'),
+      'Modelo deve consultar espaços editáveis por ferramenta autorizada');
    const pendingId=generated.pendingActions[0].id;
    const beforeConfirmation=await query('SELECT result_version_id FROM pending_actions WHERE id=$1',[pendingId]);
    assert.equal(beforeConfirmation.rows[0].result_version_id,null);
@@ -327,6 +331,11 @@ if(!process.env.TEST_DATABASE_URL){
    // natural question, including "como" and "empresa", and returned zero.
    const naturalActor=await actorForSession(reader.cookie.split('=')[1]);
    assert.ok(naturalActor);
+   const fullDocument=await getPublishedDocument(naturalActor!,sharedDoc.documentId);
+   assert.equal(fullDocument?.versionId,sharedDoc.versionId);
+   assert.match(fullDocument?.content??'',/resolução de nomes/i);
+   const versions=await getVisibleDocumentVersions(naturalActor!,sharedDoc.documentId);
+   assert.ok(versions.some(v=>v.id===sharedDoc.versionId&&v.isCurrent));
    const naturalResults=await searchKnowledge(naturalActor!,
      'Como posso verificar o DNS da empresa usando o Linux?');
    assert.ok(naturalResults.some(x=>x.documentId===sharedDoc.documentId),
@@ -354,9 +363,10 @@ if(!process.env.TEST_DATABASE_URL){
    const protectedAnswer=await respond(naturalActor!,conversationId,
      'Como verificar o DNS do servidor?',[],hostileModel);
    assert.equal(protectedAnswer.pendingActions.length,0);
-   assert.deepEqual((observedRequests[0].tools as any[]).map(x=>x.function.name),['search_knowledge','ask_clarification']);
+   assert.deepEqual((observedRequests[0].tools as any[]).map(x=>x.function.name),['search_knowledge','ask_clarification','respond_social','get_knowledge_document','list_document_versions','list_writable_spaces','prepare_article']);
    assert.match(JSON.stringify(observedRequests[1].messages),/INSTRUCAO_MALICIOSA_TESTE/);
-   assert.match(JSON.stringify(observedRequests[2].messages),/não solicitou a criação/i);
+   assert.ok(observedRequests.some((req:any)=>
+     JSON.stringify(req.messages??[]).includes('não solicitou a criação')));
    const pendingAfter=await query('SELECT count(*)::int AS n FROM pending_actions WHERE conversation_id=$1',[conversationId]);
    assert.equal(pendingAfter.rows[0].n,pendingBefore.rows[0].n,'Untrusted article content must not cause writes');
 
@@ -410,7 +420,9 @@ if(!process.env.TEST_DATABASE_URL){
    // present before/after content and never replace the current document before approval.
    let revisionModelCalls=0;
    const proposedUpdateContent='Procedimento DNS atualizado: consulte os registros, confira os TTLs e registre os resultados de resolução em homologação.';
-   const chatRevisionModel={chat:{completions:{create:async()=>{
+   const chatRevisionModel={chat:{completions:{create:async(request:any)=>{
+     if(request.response_format?.type==='json_object')
+       return {choices:[{message:{role:'assistant',content:'{"requested":true}'}}]};
      revisionModelCalls++;
      return {choices:[{message:revisionModelCalls===1
        ? {role:'assistant',content:null,tool_calls:[{
@@ -833,7 +845,8 @@ if(!process.env.TEST_DATABASE_URL){
    assert.equal(injectedAnswer.pendingActions.length,0);
    assert.ok(injectedAnswer.sources.some(s=>s.documentId===injectedUpload.json().documentId));
    assert.match(JSON.stringify(observedPdfCalls[1].messages),/INJECAO_PDF_TESTE/);
-   assert.match(JSON.stringify(observedPdfCalls[2].messages),/não solicitou a criação/i);
+   assert.ok(observedPdfCalls.some((req:any)=>
+     JSON.stringify(req.messages??[]).includes('não solicitou a criação')));
    const injectedWrites=await query('SELECT count(*)::int AS total FROM pending_actions WHERE conversation_id=$1',[pdfConversation]);
    assert.equal(injectedWrites.rows[0].total,0,'PDF instruction must not create pending writes');
 
@@ -928,10 +941,13 @@ if(!process.env.TEST_DATABASE_URL){
    const readerActor=await actorForSession(reader.cookie.split('=')[1]);
    assert.ok(readerActor);
    assert.equal((await searchKnowledge(readerActor!,'laboratório isolado')).some(x=>x.documentId===privateDoc.documentId),false);
+   assert.equal(await getPublishedDocument(readerActor!,privateDoc.documentId),null);
+   assert.deepEqual(await getVisibleDocumentVersions(readerActor!,privateDoc.documentId),[]);
    await app.inject({method:'POST',url:`/admin/spaces/${restricted}/grants`,headers:auth(admin.cookie),payload:{userId:reader.id,read:true,edit:false,approve:false}});
    const grantedActor=await actorForSession(reader.cookie.split('=')[1]);
    assert.ok(grantedActor);
    assert.equal((await searchKnowledge(grantedActor!,'laboratório isolado')).some(x=>x.documentId===privateDoc.documentId),true);
+   assert.equal((await getPublishedDocument(grantedActor!,privateDoc.documentId))?.versionId,privateDoc.versionId);
    await app.inject({method:'POST',url:`/admin/spaces/${restricted}/grants`,headers:auth(admin.cookie),payload:{userId:reader.id,read:false,edit:false,approve:false}});
    assert.equal((await searchKnowledge(grantedActor!,'laboratório isolado')).some(x=>x.documentId===privateDoc.documentId),false);
 

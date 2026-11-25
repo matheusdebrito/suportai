@@ -103,7 +103,7 @@ for(const scenario of scenarios){
    model,async(_actor,text)=>{queries.push(text);return [source];});
   assert.equal(requests[0].tool_choice,'required',scenario.id);
   assert.deepEqual(requests[0].tools.map((t:any)=>t.function.name),
-   ['search_knowledge','ask_clarification'],scenario.id);
+   ['search_knowledge','ask_clarification','respond_social','get_knowledge_document','list_document_versions','list_writable_spaces','prepare_article'],scenario.id);
   for(const turn of scenario.history)
    assert.ok(requests[0].messages.some((msg:any)=>msg.content===turn.content),scenario.id);
   if(scenario.expected==='clarify'){

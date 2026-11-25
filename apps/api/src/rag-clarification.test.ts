@@ -35,7 +35,7 @@ test('ambiguous informal request produces exactly one clarifying question withou
  assert.equal(searches,0);
  assert.equal(requests.length,1);
  assert.equal(requests[0].tool_choice,'required');
- assert.deepEqual(requests[0].tools.map((t:any)=>t.function.name),['search_knowledge','ask_clarification']);
+ assert.deepEqual(requests[0].tools.map((t:any)=>t.function.name),['search_knowledge','ask_clarification','respond_social','get_knowledge_document','list_document_versions','list_writable_spaces','prepare_article']);
 });
 test('informal but understandable request uses authorized RAG search before answering',async()=>{
  const requests:any[]=[];

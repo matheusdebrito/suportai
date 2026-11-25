@@ -1,11 +1,10 @@
-import {allowsKnowledgeMutation} from './agent-policy.js';
-
 export function externalAIApproved(apiKey:string|undefined,approval:string|undefined):boolean {
  return Boolean(apiKey?.trim()) && approval==='true';
 }
+// Legacy name: this flag now requests a model decision, not a forced RAG lookup.
+// Search, clarification, social reply and knowledge proposals remain model choices.
 export function shouldForceKnowledgeLookup(message:string):boolean {
  const normalized=message.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
- if(allowsKnowledgeMutation(message))return false;
  // Only pure greetings skip retrieval. A technical request prefixed by "oi"
  // must not silently bypass the evidence lookup or its unsourced warning.
  const greetingText=normalized.replace(/[!,.?]/g,' ').replace(/\s+/g,' ').trim();

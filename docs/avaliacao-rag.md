@@ -40,7 +40,7 @@ Uma chave de API não constitui aprovação. O mecanismo `ALLOW_EXTERNAL_AI_DATA
 ## Executável opcional para modelo real — somente fixtures sintéticas
 
 - `npm run rag:evaluate -w @suportai/api`: imprime **somente** a lista de cenários; nenhum dado é enviado nem há conexão de rede.
-- `EVAL_SYNTHETIC_LLM_APPROVED=true OPENAI_API_KEY=... npm run rag:evaluate -w @suportai/api -- --run`: executa os cinco cenários fictícios com modelo real, **somente após autorização específica do provedor/custos**.
+- `EVAL_SYNTHETIC_LLM_APPROVED=true OPENAI_API_KEY=... npm run rag:evaluate -w @suportai/api -- --run`: executa dezesseis cenários fictícios com modelo real, **somente após autorização específica do provedor/custos**.
 - Não usa banco, projetos, documentos reais, sessões ou conteúdo do usuário. A busca é injetada e fornece apenas os trechos fictícios codificados no arquivo.
 - Registre modelo, data, resultados, saída completa e avaliação humana. Os critérios automáticos são sinais iniciais e podem classificar incorretamente respostas válidas.
 - Não configure o modo de execução externa em pipelines ou tarefas automáticas. Mantenha a configuração de produção de envio externo inalterada.
@@ -56,7 +56,7 @@ O relatório de cenários fictícios verifica também que versões citadas perte
 **Limite essencial:** estas regras são heurísticas automáticas para *triagem*, não uma medição de precisão semântica, nem substituem avaliação humana, aprovação do provedor ou testes adversariais reais com o modelo opt-in. A T025 permanece aberta.
 
 
-## Harness adaptativo — limites e regressões sintéticas (PR em desenvolvimento)
+## Harness adaptativo — limites e regressões sintéticas
 
 O loop deixa de encerrar rigidamente após quatro iterações. Os tetos iniciais são
 **8 etapas**, **5 buscas RAG distintas**, **4 tool calls por etapa**, **12
@@ -90,3 +90,58 @@ Esses casos simulam decisões da IA para exercitar orquestração, fontes,
 limites e comportamento de segurança. **Não** medem a capacidade de
 compreensão de um modelo real, a precisão do RAG, latência de produção
 nem custos do provedor. A avaliação real T025 permanece em aberto.
+
+
+## Evolução conversacional: autonomia, autorização e concorrência
+
+O agente recebe mensagens em português informal e decide entre
+`respond_social` (somente conversa não operacional),
+`ask_clarification`, `search_knowledge`,
+`get_knowledge_document`, `list_document_versions`,
+`list_writable_spaces` e `prepare_article`.
+Não existe mais classificador de intenção de escrita por regex no
+caminho ativo. A ferramenta `prepare_article` passa por uma segunda
+revisão semântica independente, baseada apenas na instrução do usuário e
+no histórico recente, seguida de validação de autorização no banco e
+confirmação humana obrigatória. O modelo nunca publica conhecimento.
+
+O contexto é obtido de até 60 mensagens do **mesmo usuário, conversa e
+revisão de autorização**. As 8 mais recentes são enviadas diretamente ao
+modelo; mensagens anteriores contribuem para um contexto estruturado
+e limitado contendo fatos informados e falas históricas explicitamente
+marcados como *não verificados*. Não é um cache permanente de permissões
+nem uma fonte oficial. Mensagens com fontes revogadas são redigidas na
+consulta SQL antes da derivação dessa memória. Em conversas com mais de
+60 mensagens, as mais antigas ficam fora da janela e não há garantia de
+recordação perfeita.
+
+As consultas de documentos completos e versões históricas executam
+verificação de leitura e publicação **no SQL**. Versões históricas
+são marcadas como antigas; rascunhos e documentos de outros espaços
+não entram na ferramenta. O modelo pode reformular buscas e reutilizar
+resultados anteriores, sem ampliar o limite de consultas.
+
+Quando a IA gera uma resposta sustentada por fontes e a instalação
+usa o provedor real autorizado, uma segunda chamada verifica se as
+afirmações e a ordem dos procedimentos estão apoiadas nos trechos
+publicados. Respostas reprovadas ou sem parecer conclusivo são
+substituídas por uma solicitação de verificação, sem instruções
+potencialmente incorretas. **Esse julgamento semântico também pode errar:
+não é prova formal de verdade**. A avaliação sintética com modelo real
+pode ativar a mesma checagem usando `verifyEvidence:true`.
+
+O processamento de um turno agora usa trava de sessão do PostgreSQL
+por ID de conversa, antes de recuperar o histórico ou registrar o
+pedido. Mensagens concorrentes para a mesma conversa recebem **HTTP
+409**, sem gravação parcial; outras conversas podem continuar.
+A trava é liberada mesmo em caso de erro. Isso vale para múltiplas
+instâncias do backend conectadas ao mesmo PostgreSQL. O pool exclusivo
+é limitado a quatro conexões para não bloquear a consulta normal,
+e a aplicação continua sujeita à capacidade real desse pool.
+
+Os testes automatizados incluem a janela de memória, acessos negados,
+lock concorrente, recuperação da busca, roteamento informal, rejeição
+de criação não solicitada e contratos de verificação semântica.
+O avaliador opt-in foi ampliado de 7 para **16** cenários sintéticos,
+inclusive linguagem informal, referência ao laboratório e ambiguidade.
+Ele continua desabilitado por padrão e sem avaliação com dados reais.

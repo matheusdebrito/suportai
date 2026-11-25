@@ -34,11 +34,11 @@ test('a hostile completion cannot create drafts when the user asked only for gui
  assert.equal(result.pendingActions.length,0);
  assert.match(result.answer,/não um procedimento interno validado/i);
  const selectedTools=(observed[0].tools as any[]).map(x=>x.function?.name);
- assert.deepEqual(selectedTools,['search_knowledge','ask_clarification']);
+ assert.deepEqual(selectedTools,['search_knowledge','ask_clarification','respond_social','get_knowledge_document','list_document_versions','list_writable_spaces','prepare_article']);
  assert.equal(observed[0].tool_choice,'required');
  const second=(observed[1].messages as any[]).filter(x=>x.role==='tool');
  assert.equal(second.length,1);
- assert.match(String(second[0].content),/não solicitou/i);
+ assert.match(String(second[0].content),/não solicitou|não tem autorização/i);
 });
 test('a greeting is answered without forced lookup',async()=>{
  const observed:any[]=[];

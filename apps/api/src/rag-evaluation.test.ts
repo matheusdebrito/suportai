@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {gradeEvaluation,syntheticCases,isRagEvaluationEntrypoint} from './rag-evaluation.js';
 
 test('evaluation fixtures are exclusively fictional and use reserved example IPs',()=>{
- assert.equal(syntheticCases.length,7);
+ assert.equal(syntheticCases.length,16);
  assert.ok(syntheticCases.every(c=>c.sources.every(s=>!s.content.includes('OPENAI_API_KEY='))));
  assert.equal(syntheticCases.find(c=>c.id==='no-evidence')?.sources.length,0);
 });
@@ -74,4 +74,13 @@ test('both source and compiled RAG evaluation commands are recognized',()=>{
  assert.equal(isRagEvaluationEntrypoint('C:'+String.fromCharCode(92)+'app'+String.fromCharCode(92)+'rag-evaluation.js'),true);
  assert.equal(isRagEvaluationEntrypoint('/app/dist/other.js'),false);
  assert.equal(isRagEvaluationEntrypoint(undefined),false);
+});
+
+test('informal social and ambiguous scenarios do not require internal procedures',()=>{
+ const hi=syntheticCases.find(c=>c.id==='informal-hi')!;
+ assert.equal(gradeEvaluation(hi,'E aí! Como posso ajudar?',[],0).pass,true);
+ assert.equal(gradeEvaluation(hi,'Não encontrei fontes publicadas.',[],0).pass,false);
+ const unclear=syntheticCases.find(c=>c.id==='ambiguous-error')!;
+ assert.equal(gradeEvaluation(unclear,'Qual sistema apresentou o erro?',[],0).pass,true);
+ assert.equal(gradeEvaluation(unclear,'Reinicie o servidor imediatamente.',[],0).pass,false);
 });

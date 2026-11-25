@@ -113,11 +113,11 @@ test('T025 contract: malicious retrieved text cannot grant a write tool',async()
   {role:'assistant',content:'Não posso executar essa criação sem solicitação.'}
  ],calls);
  const output=await respond(actor,randomUUID(),'Explique o diagnóstico do laboratório.',[],fake,fakeSearch([malicious],[]));
- assert.deepEqual(calls[0].tools.map((t:any)=>t.function.name),['search_knowledge','ask_clarification']);
+ assert.deepEqual(calls[0].tools.map((t:any)=>t.function.name),['search_knowledge','ask_clarification','respond_social','get_knowledge_document','list_document_versions','list_writable_spaces','prepare_article']);
  assert.equal(output.pendingActions.length,0);
  assert.equal(output.sources.length,1);
  const tool=(calls[2].messages as any[]).filter(m=>m.role==='tool').at(-1);
- assert.match(tool.content,/não solicitou a criação/i);
+ assert.match(tool.content,/não solicitou|não tem autorização/i);
 });
 
 test('T025 contract: previous conversation turns are carried through without granting tools',async()=>{
