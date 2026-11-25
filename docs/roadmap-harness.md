@@ -48,7 +48,7 @@ O CI do PR #71 foi aprovado ([execução 45605549638](https://github.com/matheus
 | 2 | Crítica | Planejamento investigativo e recuperação | #1, #6 e #10 | Fase 1, contratos do loop | Concluída |
 | 3 | Alta | Recuperação RAG, grounding e comparação | #4, #5 e #9 | Fase 2; corpus sintético | Concluída |
 | 4 | Média/alta | Concorrência, UX e observabilidade | #11 e #12 | Contratos das fases 1–3 | ✅ Concluída |
-| 5 | Crítica para liberação | Avaliação real, português informal e calibração | #3 e #8; valida todas | Fases 1–4; autorização de LLM | 🔄 Em andamento (H-T017 concluído) |
+| 5 | Crítica para liberação | Avaliação real, português informal e calibração | #3 e #8; valida todas | Fases 1–4; autorização de LLM | 🔄 Em andamento (H-T017, H-T018 concluídos) |
 
 A fase 5 pode **preparar os fixtures e a régua de qualidade desde a fase 1**, mas a certificação final depende das demais fases e da autorização para processamento externo.
 
@@ -176,7 +176,17 @@ Passaram 196 testes locais com PostgreSQL descartável. A integração verificou
 
 - [x] **H-T017 — Dataset independente.** Criar conjunto revisado de pelo menos 100 casos fictícios com linguagem natural, gírias, erros de digitação, respostas curtas, confirmações, mudanças de assunto, conversas longas, conflito de procedimentos e ausência de fontes; separar casos de desenvolvimento e de validação.
   - **Implementado:** `syntheticCases` expandido para **124 casos** (65 dev + 59 validation) cobrindo 16 categorias: abstain (8), grounded lab-a/b/c (24), ambiguous/clarify (12), followup/multi-turn (14), injection/hostile (10), social/greeting (8), clarify-topic (8), informal grounded (8), credential leak (3), vpn (5), restart (4), printer (4), network policy (4), conflict (8), long-context (5). Cada caso tem `split` (dev/validation) e `tags` para análise granular.
-- [ ] **H-T018 — Avaliador com modelo real, opt-in.** Reusar `rag-evaluation.ts`, ampliar diversidade e cobertura dos fluxos completos; registrar versão do modelo, configuração, uso de ferramentas, custo, latência, fontes e motivos de erro. Exigir autorização formal do provedor/custos antes de executar. Nunca conectar esse teste a documentos internos sem aprovação específica.
+- [x] **H-T018 — Avaliador com modelo real, opt-in.** Reusar `rag-evaluation.ts`, ampliar diversidade e cobertura dos fluxos completos; registrar versão do modelo, configuração, uso de ferramentas, custo, latência, fontes e motivos de erro. Exigir autorização formal do provedor/custos antes de executar. Nunca conectar esse teste a documentos internos sem aprovação específica.
+  - **Implementado:** Flag `--real` em `rag-evaluation.ts` com opções:
+    - `--json-output` — saída JSONL estruturada por caso
+    - `--output-file=<path>` — salva resultados completos em arquivo JSON
+    - `--include-details` — inclui detalhes completos no arquivo de saída
+    - `--all-cases` — roda todos os 124 casos (padrão: apenas validation split)
+    - `--validation-only` — apenas casos de validation (padrão)
+    - Log estruturado por caso: timestamp, model, modelVersion, config, latencyMs, prompt/completion tokens, estimatedCostUsd, toolsUsed, sourcesReturned, stopReason, error, verdict, gradingNotes
+    - Resumo agregado: passRate, avgLatencyMs, totalCostUsd, breakdown por expect/split/tag
+    - Opt-in obrigatório: `EVAL_SYNTHETIC_LLM_APPROVED=true` + `OPENAI_API_KEY`
+    - Zero dados internos: usa apenas fixtures sintéticos
 - [ ] **H-T019 — Comparação e correção.** Estabelecer baseline do PR #71 e comparar evolução por fase (com controle de regressões). Corrigir falhas de intenção, memória, seleção de busca e grounding com testes específicos; não enfraquecer critérios para melhorar artificialmente as notas.
 - [ ] **H-T020 — Homologação de piloto e parecer.** Executar revisão humana por pessoal autorizado de TI, registrar cenários aprovados/falhos, risco residual, decisão de liberação e procedimento de rollback. Atualizar `verification.md` e manter T025 do MVP aberta até evidência real suficiente.
 
@@ -247,4 +257,4 @@ Prefixos `H-REQ`, `H-AC` e `H-T` são específicos deste roadmap; não alteram n
 - [Avaliação RAG e harness atual](avaliacao-rag.md)
 - [Runbook de operação](operacao.md)
 
-**Próximo marco:** avançar para **H-T018** (avaliador com modelo real, opt-in) e **H-T019** (comparação baseline). O dataset H-T017 está pronto com 124 casos sintéticos validados.
+**Próximo marco:** avançar para **H-T019** (comparação baseline PR #71 + regressão) e **H-T020** (homologação piloto). H-T017 e H-T018 concluídos com 124 casos e avaliador real opt-in.

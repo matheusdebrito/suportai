@@ -459,6 +459,15 @@ export interface RealEvaluationRecord{
   error?:string;
   verdict:'pass'|'fail';
   gradingNotes:string[];
+  timestamp:string;
+}
+
+export interface RealEvaluationOptions{
+  cases?:EvaluationCase[];
+  modelVersion?:string;
+  outputFile?:string;
+  jsonOutput?:boolean;
+  includeDetails?:boolean;
 }
 
 export async function executeSyntheticEvaluation(provider:OpenAI){
@@ -474,7 +483,7 @@ export async function executeSyntheticEvaluation(provider:OpenAI){
   return records;
 }
 
-export async function executeRealEvaluation(provider:OpenAI,options:{cases?:EvaluationCase[];modelVersion?:string}={}){
+export async function executeRealEvaluation(provider:OpenAI,options:RealEvaluationOptions={}){
   const cases=options.cases??(syntheticCases.filter(c=>c.split==='validation'));
   const modelVersion=options.modelVersion??(process.env.OPENAI_CHAT_MODEL||'unknown');
   const config={temperature:0.1,maxTokens:2000,topP:0.95};
@@ -505,7 +514,7 @@ export async function executeRealEvaluation(provider:OpenAI,options:{cases?:Eval
     if(result.metrics && result.metrics.searches>0)toolsUsed.add('search_knowledge');
     if(result.metrics && (result.metrics as any).readAttempts>0)toolsUsed.add('get_knowledge_document');
 
-    records.push({
+    const record:RealEvaluationRecord={
       caseId:item.id,
       model:process.env.OPENAI_CHAT_MODEL||'unknown',
       modelVersion,
@@ -519,8 +528,25 @@ export async function executeRealEvaluation(provider:OpenAI,options:{cases?:Eval
       stopReason:result.metrics?.stopReason??'unknown',
       error,
       verdict:evaluation.pass?'pass':'fail',
-      gradingNotes:evaluation.notes
-    });
+      gradingNotes:evaluation.notes,
+      timestamp:new Date().toISOString()
+    };
+    records.push(record);
+
+    // Log structured output per case
+    if(options.jsonOutput){
+      const logEntry=options.includeDetails?record:{
+        caseId:record.caseId,
+        verdict:record.verdict,
+        latencyMs:record.latencyMs,
+        stopReason:record.stopReason,
+        toolsUsed:record.toolsUsed,
+        sourcesCount:record.sourcesReturned.length,
+        estimatedCostUsd:record.estimatedCostUsd,
+        error:record.error
+      };
+      console.log(JSON.stringify(logEntry));
+    }
   }
 
   const summary={
@@ -536,6 +562,10 @@ export async function executeRealEvaluation(provider:OpenAI,options:{cases?:Eval
     byExpectation:{} as Record<string,{total:number;passed:number}>,
     bySplit:{} as Record<string,{total:number;passed:number}>,
     byTag:{} as Record<string,{total:number;passed:number}>,
+    model:process.env.OPENAI_CHAT_MODEL||'unknown',
+    modelVersion,
+    config,
+    timestamp:new Date().toISOString()
   };
 
   for(const [i,r] of records.entries()){
@@ -547,6 +577,17 @@ export async function executeRealEvaluation(provider:OpenAI,options:{cases?:Eval
     for(const tag of item.tags){
       summary.byTag[tag]={total:(summary.byTag[tag]?.total??0)+1,passed:(summary.byTag[tag]?.passed??0)+(r.verdict==='pass'?1:0)};
     }
+  }
+
+  // Write to file if requested
+  if(options.outputFile){
+    const fs=await import('fs');
+    const output=options.includeDetails?{summary,records}:{summary,records:records.map(r=>({
+      caseId:r.caseId,verdict:r.verdict,latencyMs:r.latencyMs,stopReason:r.stopReason,
+      toolsUsed:r.toolsUsed,sourcesCount:r.sourcesReturned.length,estimatedCostUsd:r.estimatedCostUsd,error:r.error
+    }))};
+    await fs.promises.writeFile(options.outputFile,JSON.stringify(output,null,2));
+    console.log(`Results written to ${options.outputFile}`);
   }
 
   return {summary,records};
@@ -562,6 +603,11 @@ if(invoked){
   const grounding=process.argv.includes('--grounding');
   const real=process.argv.includes('--real');
   const validationOnly=process.argv.includes('--validation-only');
+  const jsonOutput=process.argv.includes('--json-output');
+  const outputFile=process.argv.find(arg=>arg.startsWith('--output-file='))?.split('=')[1];
+  const includeDetails=process.argv.includes('--include-details');
+  const allCases=process.argv.includes('--all-cases');
+
   if(!run){
     process.stdout.write(JSON.stringify({mode:'dry-run',externalCalls:0,
       cases:grounding?groundingCases.map(c=>({id:c.id,shouldAccept:c.shouldAccept})):
@@ -579,8 +625,17 @@ if(invoked){
         process.exitCode=1;
       });
     }else if(real){
-      executeRealEvaluation(provider,{cases:validationOnly?syntheticCases.filter(c=>c.split==='validation'):undefined}).then(report=>{
-        process.stdout.write(JSON.stringify({mode:'synthetic-real-model-detailed',model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',...report},null,2)+'\n');
+      const cases=allCases?syntheticCases:(validationOnly?syntheticCases.filter(c=>c.split==='validation'):syntheticCases.filter(c=>c.split==='validation'));
+      executeRealEvaluation(provider,{
+        cases,
+        modelVersion:process.env.OPENAI_CHAT_MODEL||'unknown',
+        outputFile:process.argv.find(arg=>arg.startsWith('--output-file='))?.split('=')[1],
+        jsonOutput:process.argv.includes('--json-output'),
+        includeDetails:process.argv.includes('--include-details')
+      }).then(report=>{
+        if(!process.argv.includes('--json-output')){
+          process.stdout.write(JSON.stringify({mode:'synthetic-real-model-detailed',model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',...report},null,2)+'\n');
+        }
         if(report.summary.failed>0||report.summary.errors>0)process.exitCode=1;
       }).catch(error=>{
         process.stderr.write('Falha na avaliacao real: '+error.message+'\n');
