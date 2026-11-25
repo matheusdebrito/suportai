@@ -195,8 +195,55 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          output=state.kind==='cached'
            ?{cached:true,note:'Busca já realizada. Use os resultados ou conclua.',results:results.map(x=>({title:x.title,versionId:x.versionId,documentId:x.documentId,content:x.content,ordinal:x.ordinal}))}
            :results.map(x=>({title:x.title,versionId:x.versionId,documentId:x.documentId,content:x.content,ordinal:x.ordinal}));
+       } else if(call.function.name==='respond_social'){
+         if(message.tool_calls.length!==1)throw new Error('Não misture conversa social com outras ferramentas');
+         const text=typeof args.text==='string'?args.text.trim():'';
+         // This shortcut is for social dialogue only, never unsourced procedures.
+         if(!text||text.length>550||hasSecrets(text)||unsupportedNetworkLiterals(text,[]).length||
+            /\\b(?:execute|instale|desative|configure|reinicie|altere|exclua|apague|rode)\\b/i.test(text))
+           return done({answer:'Posso ajudar a localizar um procedimento publicado. Qual sistema ou equipamento deseja consultar?',
+             sources:[],pendingActions:[]},'clarified');
+         return done({answer:text,sources:[],pendingActions:[]},'answered');
+       } else if(call.function.name==='list_writable_spaces'){
+         const spaces=await readWritableSpaces();
+         output={spaces,message:spaces.length?'Selecione um espaço autorizado pelo nome informado pelo usuário.':'Usuário sem espaços de edição autorizados.'};
+       } else if(call.function.name==='get_knowledge_document'){
+         if(!validDocumentId(args.documentId))throw new Error('Documento inválido');
+         const key='document:'+args.documentId;
+         let document=documentCache.get(key);
+         if(document===undefined){
+           try{document=await boundedRead(getPublishedDocument(actor,args.documentId),
+              Math.min(15_000,Math.max(1,budget.remainingMs()-500)));}
+           catch{throw new Error('Não foi possível abrir o documento');}
+           documentCache.set(key,document);
+         }
+         if(!document){output={error:'Documento não encontrado ou sem autorização'};}
+         else{
+           const detail=document as NonNullable<Awaited<ReturnType<typeof getPublishedDocument>>>;
+           const evidence=documentToSource(detail);
+           if(!sources.some(s=>s.versionId===evidence.versionId&&s.ordinal===evidence.ordinal)&&
+              sources.length<budget.limits.maxSources)sources.push(evidence);
+           output=detail;
+         }
+       } else if(call.function.name==='list_document_versions'){
+         if(!validDocumentId(args.documentId))throw new Error('Documento inválido');
+         const key='versions:'+args.documentId;
+         let versions=documentCache.get(key);
+         if(versions===undefined){
+           try{versions=await boundedRead(getVisibleDocumentVersions(actor,args.documentId),
+              Math.min(15_000,Math.max(1,budget.remainingMs()-500)));}
+           catch{throw new Error('Não foi possível consultar versões');}
+           documentCache.set(key,versions);
+         }
+         const found=versions as Awaited<ReturnType<typeof getVisibleDocumentVersions>>;
+         output={versions:found,note:'Versões antigas são históricas, não necessariamente procedimentos atuais.'};
        } else if(call.function.name==='prepare_article'){
-         if(!allowMutation) throw new Error('O usuário não solicitou a criação ou atualização de conhecimento nesta mensagem');
+         const writableSpaces=await readWritableSpaces();
+         if(!writableSpaces.length)throw new Error('O usuário não tem autorização para preparar artigos');
+         const intent=await reviewDraftIntent(provider,userMessage,history,
+           Math.min(10_000,Math.max(1,budget.remainingMs()-1000)));
+         if(!intent.allowed)
+           throw new Error('O usuário não solicitou a criação ou atualização de conhecimento nesta mensagem');
          if(pendingActions.length>0) throw new Error('Apenas uma prévia por mensagem; confirme a proposta existente');
          if(typeof args.spaceId!=='string'||typeof args.title!=='string'||typeof args.content!=='string'||args.title.length<3||args.title.length>200||args.content.length<20||args.content.length>10000) throw new Error('Artigo inválido');
          if(hasSecrets(args.title)||hasSecrets(args.content)) throw new Error('Possíveis credenciais no título ou conteúdo do artigo');
