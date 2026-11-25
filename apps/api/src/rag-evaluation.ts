@@ -5,6 +5,7 @@ import type {Source} from './retrieval.js';
 import {unsupportedNetworkLiterals} from './answer-evidence.js';
 import type {Actor} from './security.js';
 import {benchmarkGrounding,groundingCases} from './grounding-benchmark.js';
+import {loadBaseline,saveBaseline,generateBaselineFromRecords,compareWithBaseline,DEFAULT_REGRESSION_THRESHOLDS,formatRegressionReport,type BaselineMetrics,type RegressionThresholds,type CurrentSummary} from './evaluation-baseline.js';
 
 // These are the ONLY excerpts and questions sent by this tool. Never read
 // production databases, personal documents, user files or environment content.
@@ -112,8 +113,8 @@ export const syntheticCases:EvaluationCase[]=[
   {id:'ambiguous-env-2',question:'Me passa o DNS do laboratorio.',sources:docs.slice(0,3),expect:'clarify',split:'validation',tags:['ambiguous','clarify']},
   {id:'ambiguous-which-lab',question:'Qual o DNS?',sources:docs.slice(0,3),expect:'clarify',split:'dev',tags:['ambiguous','short']},
   {id:'ambiguous-equipment',question:'Como configurar o equipamento?',sources:docs.slice(0,3),expect:'clarify',split:'validation',tags:['ambiguous','equipment']},
-  {id:'ambiguous-version',question:'Qual versao do procedimento devo seguir?',sources:[docs[11],docs[12]],expect:'clarify',split:'dev',tags:['ambiguous','version']},
-  {id:'ambiguous-procedure',question:'Como fazer backup do laboratorio?',sources:[docs[11],docs[12]],expect:'clarify',split:'validation',tags:['ambiguous','conflict']},
+  {id:'ambiguous-version',question:'Qual versao do procedimento devo seguir?',sources:[docs[10],docs[11]],expect:'clarify',split:'dev',tags:['ambiguous','version']},
+  {id:'ambiguous-procedure',question:'Como fazer backup do laboratorio?',sources:[docs[10],docs[11]],expect:'clarify',split:'validation',tags:['ambiguous','conflict']},
   {id:'ambiguous-dns-general',question:'Qual DNS interno devo usar?',sources:docs.slice(0,3),expect:'clarify',split:'dev',tags:['ambiguous','dns']},
   {id:'ambiguous-lab-ab',question:'To no A ou no B? Qual DNS?',sources:docs.slice(0,2),expect:'clarify',split:'validation',tags:['ambiguous','informal']},
   {id:'ambiguous-typo',question:'Qual DNS uso no lab?',sources:docs.slice(0,3),expect:'clarify',split:'dev',tags:['ambiguous','typo']},
@@ -127,19 +128,19 @@ export const syntheticCases:EvaluationCase[]=[
    sources:[docs[0],docs[2]],expect:'lab-b',split:'dev',tags:['followup','context']},
   {id:'follow-up-a',question:'Na verdade, e o laboratorio A. Qual DNS devo usar?',
    context:[{role:'user',content:'Qual DNS uso no laboratorio?'},{role:'assistant',content:'Qual laboratorio, A ou B?'}],
-   sources:docs.slice(0,2),expect:'lab-a',split:'validation',tags:['followup','context']},
+   sources:[docs[0],docs[2]],expect:'lab-a',split:'validation',tags:['followup','context']},
   {id:'follow-up-c',question:'Mudei de ideia, e o laboratorio C.',
    context:[{role:'user',content:'Qual DNS uso?'},{role:'assistant',content:'Qual laboratorio?'}],
    sources:docs.slice(0,3),expect:'lab-c',split:'dev',tags:['followup','context','lab-c']},
   {id:'context-short-b',question:'E o B, foi mal. Qual DNS?',
    context:[{role:'user',content:'Qual DNS uso no laboratorio?'},{role:'assistant',content:'Voce esta no laboratorio A ou B?'}],
-   sources:docs.slice(0,2),expect:'lab-b',split:'validation',tags:['followup','short','informal']},
+   sources:[docs[0],docs[2]],expect:'lab-b',split:'validation',tags:['followup','short','informal']},
   {id:'context-short-a',question:'Nao, e no A, desculpa.',
    context:[{role:'user',content:'Qual DNS devo usar?'},{role:'assistant',content:'Qual laboratorio, A ou B?'}],
-   sources:docs.slice(0,2),expect:'lab-a',split:'dev',tags:['followup','short','informal']},
+   sources:[docs[0],docs[2]],expect:'lab-a',split:'dev',tags:['followup','short','informal']},
   {id:'context-correction',question:'Corrigindo: e o laboratorio B, nao A.',
    context:[{role:'user',content:'Qual DNS do laboratorio A?'},{role:'assistant',content:'O laboratorio A usa 192.0.2.53'}],
-   sources:docs.slice(0,2),expect:'lab-b',split:'validation',tags:['followup','correction']},
+   sources:[docs[0],docs[2]],expect:'lab-b',split:'validation',tags:['followup','correction']},
   {id:'context-resume-a',question:'Voltando pro laboratorio A, qual era o DNS mesmo?',
    context:[{role:'user',content:'Qual DNS do A?'},{role:'assistant',content:'192.0.2.53'},{role:'user',content:'E do B?'},{role:'assistant',content:'198.51.100.53'}],
    sources:[docs[0]],expect:'lab-a',split:'dev',tags:['followup','resume','long-context']},
@@ -157,7 +158,7 @@ export const syntheticCases:EvaluationCase[]=[
    sources:docs.slice(0,2),expect:'lab-a',split:'dev',tags:['followup','denial']},
   {id:'context-two-topics',question:'Qual DNS do A? E como faco backup?',
    context:[],
-   sources:[docs[0],docs[12]],expect:'lab-a',split:'validation',tags:['followup','multi-topic']},
+   sources:[docs[0],docs[11]],expect:'lab-a',split:'validation',tags:['followup','multi-topic']},
   {id:'context-long-1',question:'Qual o DNS?',
    context:[
      {role:'user',content:'Oi'},{role:'assistant',content:'Ola! Como posso ajudar?'},
@@ -259,8 +260,8 @@ export const syntheticCases:EvaluationCase[]=[
   {id:'conflict-dns-a-version',question:'Qual a versao atual do DNS do lab A?',sources:[docs[0],docs[1]],expect:'lab-a',split:'validation',tags:['conflict','version','lab-a']},
   {id:'conflict-dns-b-version',question:'O DNS 198.51.100.54 ainda e valido no lab B?',sources:[docs[2],docs[3]],expect:'lab-b',split:'dev',tags:['conflict','version','lab-b']},
   {id:'conflict-c-version',question:'O lab C ainda usa DNS sem mTLS?',sources:[docs[4],docs[5]],expect:'lab-c',split:'validation',tags:['conflict','version','lab-c']},
-  {id:'conflict-historical-vs-current',question:'Qual a diferenca entre a versao antiga e a nova do backup?',sources:[docs[11],docs[12]],expect:'conflict',split:'dev',tags:['conflict','diff']},
-  {id:'conflict-never-old-as-current',question:'Posso usar o procedimento de backup v1?',sources:[docs[11],docs[12]],expect:'conflict',split:'validation',tags:['conflict','legacy-avoid']},
+  {id:'conflict-historical-vs-current',question:'Qual a diferenca entre a versao antiga e a nova do backup?',sources:[docs[10],docs[11]],expect:'conflict',split:'dev',tags:['conflict','diff']},
+  {id:'conflict-never-old-as-current',question:'Posso usar o procedimento de backup v1?',sources:[docs[10],docs[11]],expect:'conflict',split:'validation',tags:['conflict','legacy-avoid']},
 
   // ==================== LONG CONVERSATION / MULTI-TURN COMPLEX ====================
   {id:'long-context-1',question:'Qual era o DNS do A?',
@@ -278,7 +279,7 @@ export const syntheticCases:EvaluationCase[]=[
      {role:'user',content:'Como faco backup?'},{role:'assistant',content:'Use pg_backup as 03:00'},
      {role:'user',content:'O rsync nao serve mais?'},{role:'assistant',content:'Foi descontinuado na v2'}
    ],
-   sources:[docs[11]],expect:'conflict',split:'validation',tags:['long-context','conflict']},
+   sources:[docs[10]],expect:'conflict',split:'validation',tags:['long-context','conflict']},
   {id:'long-context-3',question:'Qual o DNS do A mesmo?',
    context:[
      {role:'user',content:'DNS do A'},{role:'assistant',content:'192.0.2.53'},
@@ -318,14 +319,13 @@ const RE_VPN_ENDPOINT = /vpn\.empresa\.test|endpoint/i;
 const RE_LOG_CHECK = /log|verif|chec|confer/i;
 const RE_PRINTER_ACTION = /alinh|calibr|limpe|cabecote/i;
 const RE_PUBLIC_DNS = /8\.8\.8\.8|1\.1\.1\.1/i;
-const RE_PUBLIC_DNS_DENY = /proibid|n[ãa]o permita|n[ãa]o use/i;
+const RE_PUBLIC_DNS_DENY = /proibid|nao permita|nao use/i;
 const RE_LEGACY_BACKUP = /rsync|metodo antigo/i;
 const RE_LEGACY_DENY = /descontinuad|legado|versao 1|antig/i;
 const RE_CURRENT_BACKUP = /pg_backup|vers[ãa]o 2|vigente|atual/i;
 const RE_HISTORICAL_DNS_A = /192\.0\.2\.54/i;
 const RE_HISTORICAL_DNS_B = /198\.51\.100\.54/i;
 const RE_HISTORICAL_DENY = /antig|legad|historico|versao 1/i;
-// Robust pattern for abstention phrase (handles accented and non-accented 'nao/nao')
 const RE_ABSTENTION_PHRASE = /n[ãa]o encontrei fontes publicadas/i;
 
 export function gradeEvaluation(c:EvaluationCase,answer:string,sourceIds:string[],pendingCount:number):{pass:boolean;notes:string[]}{
@@ -533,7 +533,6 @@ export async function executeRealEvaluation(provider:OpenAI,options:RealEvaluati
     };
     records.push(record);
 
-    // Log structured output per case
     if(options.jsonOutput){
       const logEntry=options.includeDetails?record:{
         caseId:record.caseId,
@@ -549,12 +548,14 @@ export async function executeRealEvaluation(provider:OpenAI,options:RealEvaluati
     }
   }
 
+  const passRate=records.filter(r=>r.verdict==='pass').length/cases.length;
   const summary={
     total:cases.length,
     passed:records.filter(r=>r.verdict==='pass').length,
     failed:records.filter(r=>r.verdict==='fail').length,
     errors:records.filter(r=>r.error).length,
-    passRate:records.filter(r=>r.verdict==='pass').length/cases.length,
+    passRate,
+    overallPassRate:passRate,
     avgLatencyMs:records.reduce((s,r)=>s+r.latencyMs,0)/cases.length,
     totalPromptTokens,
     totalCompletionTokens,
@@ -579,7 +580,6 @@ export async function executeRealEvaluation(provider:OpenAI,options:RealEvaluati
     }
   }
 
-  // Write to file if requested
   if(options.outputFile){
     const fs=await import('fs');
     const output=options.includeDetails?{summary,records}:{summary,records:records.map(r=>({
@@ -607,6 +607,10 @@ if(invoked){
   const outputFile=process.argv.find(arg=>arg.startsWith('--output-file='))?.split('=')[1];
   const includeDetails=process.argv.includes('--include-details');
   const allCases=process.argv.includes('--all-cases');
+  const baselineSave=process.argv.includes('--baseline-save');
+  const baselineCompare=process.argv.includes('--baseline-compare');
+  const baselineVersion=process.argv.find(arg=>arg.startsWith('--baseline-version='))?.split('=')[1]??'pr-71-dfbf776';
+  const baselineThresholds=JSON.parse(process.argv.find(arg=>arg.startsWith('--baseline-thresholds='))?.split('=')[1]??'{}');
 
   if(!run){
     process.stdout.write(JSON.stringify({mode:'dry-run',externalCalls:0,
@@ -626,21 +630,36 @@ if(invoked){
       });
     }else if(real){
       const cases=allCases?syntheticCases:(validationOnly?syntheticCases.filter(c=>c.split==='validation'):syntheticCases.filter(c=>c.split==='validation'));
-      executeRealEvaluation(provider,{
+      const evalReport=await executeRealEvaluation(provider,{
         cases,
         modelVersion:process.env.OPENAI_CHAT_MODEL||'unknown',
         outputFile:process.argv.find(arg=>arg.startsWith('--output-file='))?.split('=')[1],
         jsonOutput:process.argv.includes('--json-output'),
         includeDetails:process.argv.includes('--include-details')
-      }).then(report=>{
-        if(!process.argv.includes('--json-output')){
-          process.stdout.write(JSON.stringify({mode:'synthetic-real-model-detailed',model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',...report},null,2)+'\n');
-        }
-        if(report.summary.failed>0||report.summary.errors>0)process.exitCode=1;
-      }).catch(error=>{
-        process.stderr.write('Falha na avaliacao real: '+error.message+'\n');
-        process.exitCode=1;
       });
+
+      // Baseline comparison
+      if(baselineCompare){
+        const baseline=loadBaseline();
+        if(baseline){
+          const thresholds:Partial<RegressionThresholds>=baselineThresholds;
+          const regressionReport=compareWithBaseline(evalReport.records,evalReport.summary,baseline,{...DEFAULT_REGRESSION_THRESHOLDS,...thresholds});
+          process.stdout.write(formatRegressionReport(regressionReport)+'\n');
+          if(!regressionReport.passed)process.exitCode=1;
+        }else{
+          process.stderr.write('Nenhum baseline encontrado. Rode com --baseline-save primeiro.\n');
+          process.exitCode=1;
+        }
+      }else if(baselineSave){
+        const baseline=generateBaselineFromRecords(evalReport.records,evalReport.summary,process.env.OPENAI_CHAT_MODEL||'unknown',baselineVersion);
+        saveBaseline(baseline);
+        process.stdout.write(`Baseline salvo como ${baselineVersion} (${evalReport.records.length} casos, passRate=${(evalReport.summary.overallPassRate*100).toFixed(2)}%)\n`);
+      }else{
+        if(!process.argv.includes('--json-output')){
+          process.stdout.write(JSON.stringify({mode:'synthetic-real-model-detailed',model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',...evalReport},null,2)+'\n');
+        }
+        if(evalReport.summary.failed>0||evalReport.summary.errors>0)process.exitCode=1;
+      }
     }else{
       executeSyntheticEvaluation(provider).then(rows=>{
         const investigation=summarizeInvestigationMetrics(rows.flatMap(row=>row.metrics?[row.metrics]:[]));
