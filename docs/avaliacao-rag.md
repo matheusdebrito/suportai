@@ -67,13 +67,15 @@ metas de execução: uma pergunta simples deve terminar imediatamente após
 a primeira busca e a resposta final, e um pedido ambíguo termina com uma
 pergunta objetiva, sem acesso desnecessário ao RAG.
 
-O backend deduplica buscas idênticas dentro de uma mensagem e reutiliza
-seus resultados, interrompe novas buscas após duas falhas distintas e
-reserva uma última rodada sem ferramentas para sintetizar a resposta.
+O backend deduplica buscas idênticas dentro de uma mensagem e indica ao agente
+que use o resultado anterior. Duas falhas de busca distintas encerram as buscas,
+e duas etapas seguidas sem progresso levam a uma última rodada sem ferramentas.
 Ao esgotar orçamento, não apresenta instruções parciais como procedimento
 validado. As métricas por execução contêm apenas contagens, consumo
 reportado/estimado de tokens, duração e motivo de parada; nunca texto
-de mensagens ou documentos.
+de mensagens ou documentos. O relatório de avaliação opt-in agrega duração
+p50/p95, resultados de leitura, conflitos, esclarecimentos e motivos de parada.
+A proporção de leituras com evidência nova mede o rendimento das ferramentas.
 
 Os limites podem ser ajustados com `AGENT_MAX_STEPS` (2–12),
 `AGENT_MAX_RAG_SEARCHES` (1–8), `AGENT_TIMEOUT_MS` (15.000–90.000),

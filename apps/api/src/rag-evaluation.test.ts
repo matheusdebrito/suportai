@@ -1,6 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {gradeEvaluation,syntheticCases,isRagEvaluationEntrypoint} from './rag-evaluation.js';
+import {gradeEvaluation,syntheticCases,isRagEvaluationEntrypoint,summarizeInvestigationMetrics} from './rag-evaluation.js';
+import {AgentBudget} from './agent-budget.js';
+import {InvestigationPlan} from './agent-investigation-plan.js';
 
 test('evaluation fixtures are exclusively fictional and use reserved example IPs',()=>{
  assert.equal(syntheticCases.length,16);
@@ -83,4 +85,27 @@ test('informal social and ambiguous scenarios do not require internal procedures
  const unclear=syntheticCases.find(c=>c.id==='ambiguous-error')!;
  assert.equal(gradeEvaluation(unclear,'Qual sistema apresentou o erro?',[],0).pass,true);
  assert.equal(gradeEvaluation(unclear,'Reinicie o servidor imediatamente.',[],0).pass,false);
+});
+
+test('investigation calibration reports tool efficiency and clarification without prompt data',()=>{
+ const budget=new AgentBudget();
+ const plan=new InvestigationPlan('Pedido sintético identificável',true,['Hipótese fictícia identificável']);
+ budget.recordTool();
+ plan.recordRead('empty',0,true);
+ plan.recordRead('evidence',2);
+ plan.recordRead('duplicate');
+ const grounded={...budget.metrics('answered'),...plan.metrics(),durationMs:200};
+ const clarification=new InvestigationPlan('Outro pedido',true);
+ clarification.requestClarification();
+ const asked={...new AgentBudget().metrics('clarified'),...clarification.metrics(),durationMs:50};
+ const metrics=summarizeInvestigationMetrics([grounded,asked]);
+ assert.equal(metrics.durationP50Ms,50);
+ assert.equal(metrics.durationP95Ms,200);
+ assert.equal(metrics.tools,1);
+ assert.equal(metrics.evidenceYield,0.5);
+ assert.equal(metrics.duplicateReads,1);
+ assert.equal(metrics.clarificationRequests,1);
+ assert.deepEqual(metrics.stopReasons,{answered:1,clarified:1});
+ assert.doesNotMatch(JSON.stringify(metrics),/identificável|Outro pedido/i);
+ assert.equal(summarizeInvestigationMetrics([]).evidenceYield,null);
 });

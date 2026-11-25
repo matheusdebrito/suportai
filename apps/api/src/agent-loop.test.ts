@@ -5,6 +5,7 @@ import type OpenAI from 'openai';
 import type {Actor} from './security.js';
 import type {Source} from './retrieval.js';
 import {respond} from './agent.js';
+import {ReadDeadlineError} from './agent-deadline.js';
 
 const actor:Actor={id:randomUUID(),role:'USER',auth_revision:1,must_change_password:false};
 const source:Source={documentId:randomUUID(),versionId:randomUUID(),
@@ -34,6 +35,9 @@ test('simple question finishes after one RAG lookup and one synthesis (not eight
  assert.equal(calls.length,2);
  assert.equal(output.metrics?.steps,2);
  assert.equal(output.metrics?.searches,1);
+ assert.equal(output.metrics?.readsWithNewEvidence,1);
+ assert.equal(output.metrics?.evidenceCount,1);
+ assert.equal(output.metrics?.clarificationRequests,0);
  assert.equal(output.metrics?.stopReason,'answered');
  assert.equal(output.sources[0].versionId,source.versionId);
  assert.equal(calls[0].request.tool_choice,'required');
@@ -68,7 +72,71 @@ test('duplicate searches are served from cache and the model must eventually syn
  assert.equal(calls[3].request.tool_choice,'none');
  assert.equal(output.metrics?.searches,1);
  assert.equal(output.metrics?.repeatedSearches,2);
+ assert.equal(output.metrics?.duplicateReads,2);
  assert.equal(output.metrics?.steps,4);
+});
+
+test('different queries returning the same evidence stop a stalled investigation early',async()=>{
+ const calls:any[]=[];let reads=0;
+ const queue=['diagnóstico DNS','falha de nomes','resolução interna'].map((query,index)=>({
+  role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query},'q'+index)]
+ }));
+ const model=fakeModel([...queue,{role:'assistant',content:'A fonte descreve o diagnóstico DNS.'}],calls);
+ const output=await respond(actor,randomUUID(),'Qual diagnóstico DNS devo consultar?',[],model,
+  async()=>{reads++;return [source];});
+ assert.equal(reads,3);
+ assert.equal(calls.length,4);
+ assert.equal(calls[3].request.tool_choice,'none');
+ assert.equal(output.metrics?.stalledSteps,2);
+ assert.equal(output.metrics?.readsWithNewEvidence,1);
+ assert.equal(output.sources.length,1);
+});
+
+test('a timed-out search can switch to a distinct read and disclose partial recovery',async()=>{
+ const calls:any[]=[];const queries:string[]=[];
+ const model=fakeModel([
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'DNS'},'q1')]},
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'  dns '},'q2')]},
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'resolução de nomes'},'q3')]},
+  {role:'assistant',content:'Consulte o diagnóstico DNS.'}
+ ],calls);
+ const output=await respond(actor,randomUUID(),'Como investigar o DNS?',[],model,async(_actor,query)=>{
+  queries.push(query);
+  if(queries.length===1)throw new ReadDeadlineError();
+  return [source];
+ });
+ assert.deepEqual(queries,['DNS','resolução de nomes']);
+ assert.equal(output.metrics?.stopReason,'answered');
+ assert.equal(output.metrics?.readTimeouts,1);
+ assert.equal(output.metrics?.duplicateReads,1);
+ assert.equal(output.metrics?.readsWithNewEvidence,1);
+ assert.match(output.answer,/Parte da consulta ficou indisponível/i);
+ assert.deepEqual(output.sources,[source]);
+});
+
+test('text-only fallback distinguishes an expired deadline from an empty result',async()=>{
+ const result=await respond(actor,randomUUID(),'Qual é o procedimento de DNS?',[],null,async()=>{throw new ReadDeadlineError();});
+ assert.equal(result.metrics?.stopReason,'read_timeout');
+ assert.equal(result.metrics?.readTimeouts,1);
+ assert.equal(result.metrics?.searches,1);
+ assert.equal(result.metrics?.emptyReads,0);
+ assert.match(result.answer,/excedeu o prazo/i);
+ assert.deepEqual(result.sources,[]);
+});
+
+test('unresolved source conflicts stop before relaying an operational choice',async()=>{
+ const conflicting={...source,documentId:randomUUID(),versionId:randomUUID(),content:'Procedimento alternativo inconciliável para o mesmo ambiente.'};
+ const model=fakeModel([
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'orientação DNS'},'q1')]},
+  {role:'assistant',content:'Use o primeiro procedimento imediatamente.'},
+  {role:'assistant',content:'{"verdict":"conflict"}'}
+ ],[]);
+ const output=await respond(actor,randomUUID(),'Qual procedimento de DNS aplico?',[],model,async()=>[source,conflicting],{verifyEvidence:true});
+ assert.equal(output.metrics?.stopReason,'source_conflict');
+ assert.equal(output.metrics?.conflicts,1);
+ assert.deepEqual(output.sources,[source,conflicting]);
+ assert.match(output.answer,/orientações divergentes.*ambiente ou a versão/i);
+ assert.doesNotMatch(output.answer,/imediatamente/i);
 });
 test('the eighth iteration forbids tool execution even if the model attempts it',async()=>{
  const calls:any[]=[];let reads=0;
@@ -130,6 +198,7 @@ test('clarification ends immediately and reports only numeric execution metadata
  assert.equal(output.metrics?.steps,1);
  assert.equal(output.metrics?.stopReason,'clarified');
  assert.equal(output.metrics?.searches,0);
+ assert.equal(output.metrics?.clarificationRequests,1);
  assert.equal(output.answer,'Qual é o equipamento afetado?');
  assert.equal(typeof output.metrics?.durationMs,'number');
 });

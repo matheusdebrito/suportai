@@ -45,7 +45,7 @@ O CI do PR #71 foi aprovado ([execução 45605549638](https://github.com/matheus
 | Fase | Prioridade | Foco | Itens do diagnóstico | Dependências | Estado |
 | --- | --- | --- | --- | --- | --- |
 | 1 | Crítica | Memória persistente e continuidade | #2 e #7 | Base atual; decisão de retenção H-DEC-003 | Concluída |
-| 2 | Crítica | Planejamento investigativo e recuperação | #1, #6 e #10 | Fase 1, contratos do loop | ☐ Não iniciada |
+| 2 | Crítica | Planejamento investigativo e recuperação | #1, #6 e #10 | Fase 1, contratos do loop | Em andamento |
 | 3 | Alta | Recuperação RAG, grounding e comparação | #4, #5 e #9 | Fase 2; corpus sintético | ☐ Não iniciada |
 | 4 | Média/alta | Concorrência, UX e observabilidade | #11 e #12 | Contratos das fases 1–3 | ☐ Não iniciada |
 | 5 | Crítica para liberação | Avaliação real, português informal e calibração | #3 e #8; valida todas | Fases 1–4; autorização de LLM | ☐ Não iniciada |
@@ -113,6 +113,14 @@ Passaram 11 testes no PostgreSQL local e o CI do PR. Os cenários usam dados fic
 **Aceitação (H-AC-003 a H-AC-005):** consultas simples param cedo; problemas complexos podem mudar de estratégia sem loop infinito; fontes ausentes/falhas não se tornam instruções inventadas; operações de escrita não são repetidas automaticamente.
 
 **Riscos:** latência/custo e tentativas redundantes. Preservar os orçamentos e limites de autorização existentes até haver evidência para alterá-los.
+
+### Implementação e calibração da Fase 2
+
+Cada turno usa um plano em memória com objetivo, hipóteses relatadas, lacunas e evidências. O resultado das ferramentas orienta a próxima decisão entre explorar, reformular, inspecionar, recuperar uma leitura ou concluir. O plano encerra a busca de ferramentas após duas etapas consecutivas sem progresso e mantém a possibilidade de pedir um detalhe indispensável antes de orientar o usuário.
+
+O loop distingue buscas vazias, timeout, indisponibilidade, referências inacessíveis e conflitos identificados na verificação de evidência. Uma falha pode levar a outra leitura útil dentro do orçamento. A preparação de uma prévia de artigo tem uma tentativa por turno, e a confirmação humana continua obrigatória.
+
+Os testes de contrato medem chamadas e resultados. Uma consulta simples usa duas chamadas de geração e uma busca, e um pedido ambíguo pode terminar em uma pergunta sem busca. Consultas distintas com evidência idêntica provocam síntese antecipada após duas etapas sem progresso. O avaliador registra passos, ferramentas, duplicidades, esclarecimentos, motivos de parada, latência e proporção de leituras que acrescentam evidência. Mantivemos os tetos de 8 etapas, 5 buscas e 60 segundos. Os casos simulados verificam o comportamento do loop, e a calibração com modelo real segue na Fase 5.
 
 ## Fase 3 — RAG avançado, evidências e comparação
 

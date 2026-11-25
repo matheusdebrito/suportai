@@ -15,7 +15,7 @@ export type AgentLimits={
 export type AgentStopReason=
  'answered'|'clarified'|'no_evidence'|'model_interrupted'|'unsafe_answer'|
  'provider_failure'|'search_unavailable'|'step_budget'|'time_budget'|
- 'token_budget'|'repeated_search'|'tool_budget'|'other';
+ 'token_budget'|'repeated_search'|'tool_budget'|'read_timeout'|'model_timeout'|'source_inaccessible'|'source_conflict'|'other';
 export type AgentMetrics={
  steps:number;searches:number;repeatedSearches:number;searchFailures:number;
  toolCalls:number;promptTokens:number;completionTokens:number;

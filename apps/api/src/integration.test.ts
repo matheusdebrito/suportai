@@ -170,8 +170,8 @@ if(!process.env.TEST_DATABASE_URL){
      if(request.response_format?.type==='json_object')
        return {choices:[{message:{role:'assistant',content:'{"requested":true}'}}]};
      draftCalls++;
-     return {choices:[{message:draftCalls===1
-      ? {role:'assistant',content:null,tool_calls:[{id:'prepare-1',type:'function',function:{name:'prepare_article',arguments:JSON.stringify({
+     return {choices:[{message:draftCalls<=2
+      ? {role:'assistant',content:null,tool_calls:[{id:'prepare-'+draftCalls,type:'function',function:{name:'prepare_article',arguments:JSON.stringify({
          spaceId:shared,title:'Procedimento NTP '+id,
          content:'Para verificar sincronização de relógio, consulte chronyc tracking e registre o servidor utilizado.'
        })}}]}
@@ -180,6 +180,10 @@ if(!process.env.TEST_DATABASE_URL){
    }}}} as unknown as OpenAI;
    const generated=await respond(editorActor!,conversationId,'Adicione este procedimento de NTP ao cérebro',[],agentMock);
    assert.equal(generated.pendingActions.length,1);
+   assert.equal(generated.metrics?.blockedWriteRetries,1);
+   assert.equal(requests.filter(request=>request.response_format?.type==='json_object').length,1);
+   assert.match(String(requests.at(-1).messages.find((message:any)=>message.role==='tool'&&message.tool_call_id==='prepare-2')?.content),
+     /nova tentativa exige outra mensagem do usuário/i);
    assert.equal(generated.pendingActions[0].spaceName,'Conhecimento geral');
    assert.ok(requests[0].tools.some((t:any)=>t.function.name==='list_writable_spaces'),
       'Modelo deve consultar espaços editáveis por ferramenta autorizada');
@@ -784,6 +788,23 @@ if(!process.env.TEST_DATABASE_URL){
      '/versions/'+newPdfVersion.versionId,headers:auth(reader.cookie)});
    assert.equal(historicalPdf.statusCode,200);
    assert.equal(historicalPdf.json().version.status,'ARCHIVED');
+
+   const comparisonRequests:OpenAI.Chat.Completions.ChatCompletionMessageParam[][]=[];
+   const comparisonModel={chat:{completions:{create:async(request:OpenAI.Chat.Completions.ChatCompletionCreateParams)=>{
+     comparisonRequests.push([...request.messages]);
+     const next=['get_knowledge_document','list_document_versions','list_document_versions'][comparisonRequests.length-1];
+     const message=next ? {role:'assistant',content:null,tool_calls:[{id:`comparison-${comparisonRequests.length}`,type:'function',
+       function:{name:next,arguments:JSON.stringify({documentId:pdfDocumentId})}}]} :
+       {role:'assistant',content:'Use a versão vigente. As demais são históricas.'};
+     return {choices:[{message}]};
+   }}}} as unknown as OpenAI;
+   const compared=await respond(naturalActor!,conversationId,'Compare as versões do PDF e indique a vigente.',[],comparisonModel);
+   const timeline=comparisonRequests.at(-1)?.filter(message=>message.role==='tool');
+   assert.match(String(timeline?.find(message=>message.tool_call_id==='comparison-2')?.content),/Versões antigas são históricas/);
+   assert.match(String(timeline?.find(message=>message.tool_call_id==='comparison-3')?.content),/Leitura já realizada/);
+   assert.equal(compared.metrics?.duplicateReads,1);
+   assert.ok((compared.metrics?.evidenceCount??0)>1);
+   assert.deepEqual(compared.sources.map(source=>source.versionId),[newestDraft.versionId]);
 
 
    // Negative PDF fixtures: failures must be explicit and must never publish partial content.
