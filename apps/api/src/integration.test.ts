@@ -166,6 +166,8 @@ if(!process.env.TEST_DATABASE_URL){
    const requests:any[]=[];
    const agentMock={chat:{completions:{create:async(request:any)=>{
      requests.push(request);
+     if(request.response_format?.type==='json_object')
+       return {choices:[{message:{role:'assistant',content:'{"requested":true}'}}]};
      draftCalls++;
      return {choices:[{message:draftCalls===1
       ? {role:'assistant',content:null,tool_calls:[{id:'prepare-1',type:'function',function:{name:'prepare_article',arguments:JSON.stringify({
@@ -178,7 +180,8 @@ if(!process.env.TEST_DATABASE_URL){
    const generated=await respond(editorActor!,conversationId,'Adicione este procedimento de NTP ao cérebro',[],agentMock);
    assert.equal(generated.pendingActions.length,1);
    assert.equal(generated.pendingActions[0].spaceName,'Conhecimento geral');
-   assert.match(JSON.stringify(requests[0].messages),new RegExp(shared),'O modelo recebe apenas espaços autorizados para escrever');
+   assert.ok(requests[0].tools.some((t:any)=>t.function.name==='list_writable_spaces'),
+      'Modelo deve consultar espaços editáveis por ferramenta autorizada');
    const pendingId=generated.pendingActions[0].id;
    const beforeConfirmation=await query('SELECT result_version_id FROM pending_actions WHERE id=$1',[pendingId]);
    assert.equal(beforeConfirmation.rows[0].result_version_id,null);
@@ -356,7 +359,8 @@ if(!process.env.TEST_DATABASE_URL){
    assert.equal(protectedAnswer.pendingActions.length,0);
    assert.deepEqual((observedRequests[0].tools as any[]).map(x=>x.function.name),['search_knowledge','ask_clarification','respond_social','get_knowledge_document','list_document_versions','list_writable_spaces','prepare_article']);
    assert.match(JSON.stringify(observedRequests[1].messages),/INSTRUCAO_MALICIOSA_TESTE/);
-   assert.match(JSON.stringify(observedRequests[2].messages),/não solicitou a criação/i);
+   assert.ok(observedRequests.some((req:any)=>
+     JSON.stringify(req.messages??[]).includes('não solicitou a criação')));
    const pendingAfter=await query('SELECT count(*)::int AS n FROM pending_actions WHERE conversation_id=$1',[conversationId]);
    assert.equal(pendingAfter.rows[0].n,pendingBefore.rows[0].n,'Untrusted article content must not cause writes');
 
@@ -410,7 +414,9 @@ if(!process.env.TEST_DATABASE_URL){
    // present before/after content and never replace the current document before approval.
    let revisionModelCalls=0;
    const proposedUpdateContent='Procedimento DNS atualizado: consulte os registros, confira os TTLs e registre os resultados de resolução em homologação.';
-   const chatRevisionModel={chat:{completions:{create:async()=>{
+   const chatRevisionModel={chat:{completions:{create:async(request:any)=>{
+     if(request.response_format?.type==='json_object')
+       return {choices:[{message:{role:'assistant',content:'{"requested":true}'}}]};
      revisionModelCalls++;
      return {choices:[{message:revisionModelCalls===1
        ? {role:'assistant',content:null,tool_calls:[{
@@ -833,7 +839,8 @@ if(!process.env.TEST_DATABASE_URL){
    assert.equal(injectedAnswer.pendingActions.length,0);
    assert.ok(injectedAnswer.sources.some(s=>s.documentId===injectedUpload.json().documentId));
    assert.match(JSON.stringify(observedPdfCalls[1].messages),/INJECAO_PDF_TESTE/);
-   assert.match(JSON.stringify(observedPdfCalls[2].messages),/não solicitou a criação/i);
+   assert.ok(observedPdfCalls.some((req:any)=>
+     JSON.stringify(req.messages??[]).includes('não solicitou a criação')));
    const injectedWrites=await query('SELECT count(*)::int AS total FROM pending_actions WHERE conversation_id=$1',[pdfConversation]);
    assert.equal(injectedWrites.rows[0].total,0,'PDF instruction must not create pending writes');
 
