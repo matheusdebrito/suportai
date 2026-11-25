@@ -107,7 +107,8 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
    const a=await requireActor(req);const id=(req.params as {id:string}).id;
    const b=req.body as {message?:unknown}|undefined;
    if(typeof b?.message!=='string'||b.message.trim().length===0||b.message.length>4000) return reply.code(400).send({error:'Mensagem inválida'});
-   if(hasSecrets(b.message)) return reply.code(422).send({error:'Possível credencial detectada. Remova senhas e tokens antes de enviar.'});
+   const userMessage=b.message;
+   if(hasSecrets(userMessage)) return reply.code(422).send({error:'Possível credencial detectada. Remova senhas e tokens antes de enviar.'});
    // Acquire before reading the conversation or writing the user message.
    // Competing turns get 409 instead of racing with stale history.
    const turn=await withConversationTurnLock(id,async()=>{
@@ -138,10 +139,10 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
      await requireCurrentActor(c,a);
      const owned=await c.query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2 FOR SHARE',[id,a.id]);
      if(!owned.rowCount)throw Object.assign(new Error('Conversa removida'),{statusCode:404});
-     await c.query("INSERT INTO messages(conversation_id,role,content,auth_revision) VALUES($1,'user',$2,$3)",[id,b.message,a.auth_revision]);
+     await c.query("INSERT INTO messages(conversation_id,role,content,auth_revision) VALUES($1,'user',$2,$3)",[id,userMessage,a.auth_revision]);
    });
    try {
-     const output=await runAgent(a,id,b.message,history);
+     const output=await runAgent(a,id,userMessage,history);
      // Numeric-only diagnostic signal. Never log prompts, document excerpts or secrets.
      if(output.metrics)req.log.info({agent:output.metrics},'Agent turn finished');
      // Hold a shared account lock while saving the reply. Permission changes
