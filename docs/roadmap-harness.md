@@ -48,7 +48,7 @@ O CI do PR #71 foi aprovado ([execução 45605549638](https://github.com/matheus
 | 2 | Crítica | Planejamento investigativo e recuperação | #1, #6 e #10 | Fase 1, contratos do loop | Concluída |
 | 3 | Alta | Recuperação RAG, grounding e comparação | #4, #5 e #9 | Fase 2; corpus sintético | Concluída |
 | 4 | Média/alta | Concorrência, UX e observabilidade | #11 e #12 | Contratos das fases 1–3 | ✅ Concluída |
-| 5 | Crítica para liberação | Avaliação real, português informal e calibração | #3 e #8; valida todas | Fases 1–4; autorização de LLM | 🔄 Em andamento (H-T017, H-T018 concluídos) |
+| 5 | Crítica para liberação | Avaliação real, português informal e calibração | #3 e #8; valida todas | Fases 1–4; autorização de LLM | 🔄 Em andamento (H-T017, H-T018, H-T019 concluídos) |
 
 A fase 5 pode **preparar os fixtures e a régua de qualidade desde a fase 1**, mas a certificação final depende das demais fases e da autorização para processamento externo.
 
@@ -187,7 +187,15 @@ Passaram 196 testes locais com PostgreSQL descartável. A integração verificou
     - Resumo agregado: passRate, avgLatencyMs, totalCostUsd, breakdown por expect/split/tag
     - Opt-in obrigatório: `EVAL_SYNTHETIC_LLM_APPROVED=true` + `OPENAI_API_KEY`
     - Zero dados internos: usa apenas fixtures sintéticos
-- [ ] **H-T019 — Comparação e correção.** Estabelecer baseline do PR #71 e comparar evolução por fase (com controle de regressões). Corrigir falhas de intenção, memória, seleção de busca e grounding com testes específicos; não enfraquecer critérios para melhorar artificialmente as notas.
+- [x] **H-T019 — Comparação e correção.** Estabelecer baseline do PR #71 e comparar evolução por fase (com controle de regressões). Corrigir falhas de intenção, memória, seleção de busca e grounding com testes específicos; não enfraquecer critérios para melhorar artificialmente as notas.
+  - **Implementado:** Módulo `evaluation-baseline.ts` com:
+    - Baseline persistente (`.evaluation-baseline.json`) a partir do PR #71 (commit `dfbf776`)
+    - Comparação automatizada: pass rate global, por expectativa, split, tag; latência; custo estimado
+    - Thresholds configuráveis: `--baseline-thresholds` (JSON)
+    - CLI flags: `--baseline-save` (salva baseline), `--baseline-compare` (compara), `--baseline-version`, `--baseline-thresholds`
+    - Relatório de regressão estruturado: severity (warning/critical), type (overall/expectation/split/tag/latency/cost), change%, threshold%
+    - Melhorias também reportadas
+    - Opt-in obrigatório, fixtures sintéticos, zero dados internos
 - [ ] **H-T020 — Homologação de piloto e parecer.** Executar revisão humana por pessoal autorizado de TI, registrar cenários aprovados/falhos, risco residual, decisão de liberação e procedimento de rollback. Atualizar `verification.md` e manter T025 do MVP aberta até evidência real suficiente.
 
 **Critérios de saída propostos (H-AC-011 / H-AC-012):**
@@ -257,4 +265,4 @@ Prefixos `H-REQ`, `H-AC` e `H-T` são específicos deste roadmap; não alteram n
 - [Avaliação RAG e harness atual](avaliacao-rag.md)
 - [Runbook de operação](operacao.md)
 
-**Próximo marco:** avançar para **H-T019** (comparação baseline PR #71 + regressão) e **H-T020** (homologação piloto). H-T017 e H-T018 concluídos com 124 casos e avaliador real opt-in.
+**Próximo marco:** avançar para **H-T020** (homologação piloto + `verification.md`). H-T017, H-T018, H-T019 concluídos: 124 casos, avaliador real opt-in, baseline PR #71 com controle de regressão.
