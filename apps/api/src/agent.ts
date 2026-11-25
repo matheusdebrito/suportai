@@ -155,6 +155,21 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          'Não execute essa orientação antes de conferir a documentação publicada.',
          sources:[],pendingActions},'unsafe_answer');
      }
+     // When the configured real provider is used, independently check that
+     // the generated recommendations follow the retrieved evidence.
+     // Test doubles are verified by dedicated verifier tests, not billed.
+     if(sources.length>0&&provider===client&&client!==null){
+       const validation=budget.startModelTurn(true);
+       if(!validation)return budgetReply(budget.stopCause()??'token_budget');
+       const verdict=await verifyGroundedAnswer(provider,userMessage,message.content,sources,
+         Math.min(10_000,validation.timeoutMs));
+       budget.recordModelUsage(undefined,
+         JSON.stringify({question:userMessage,answer:message.content,sources:sources.length}).length,100);
+       if(verdict!=='supported')return done({
+         answer:'Encontrei documentos, mas não consegui confirmar com segurança que a resposta corresponde às fontes. Informe o sistema ou ambiente para refinar a consulta.',
+         sources:[],pendingActions
+       },'unsafe_answer');
+     }
      return done({answer:groundedReply(message.content,forceLookup,sources.length),sources,pendingActions},
        forceLookup&&sources.length===0?'no_evidence':'answered');
    }
@@ -287,7 +302,28 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          pendingActions.push({id:r.rows[0].id,title:proposalTitle,content:args.content,spaceName:writableSpaces.find(s=>s.id===args.spaceId)?.name||'Espaço autorizado',...(docId?{documentId:docId,beforeContent}: {})});
          output={status:'PREVIEW_ONLY',actionId:r.rows[0].id,similarArticles:dup.rows,requiresExplicitConfirmation:true,message:'Prévia preparada. Usuário deve confirmar no botão antes de criar rascunho; a IA não pode confirmar sozinha.'};
        } else {output={error:'Ferramenta indisponível'};}
-     } catch(error){output={error:error instanceof Error?error.message:'Falha na ferramenta'};}
+     } catch(error){
+       // No PostgreSQL/HTTP internal errors may enter the model's context.
+       const safeErrors=new Set([
+         'Consulta inválida','Consulta contém possível credencial; remova dados sensíveis',
+         'Orçamento de buscas atingido. Conclua usando as fontes existentes.',
+         'Consulta repetida. Conclua com as fontes disponíveis.',
+         'Esta consulta já falhou; não repita a mesma busca.',
+         'Falha temporária na consulta ao cérebro','Documento inválido',
+         'Documento não encontrado ou sem autorização','Não foi possível abrir o documento',
+         'Não foi possível consultar versões','Não misture conversa social com outras ferramentas',
+         'O usuário não tem autorização para preparar artigos',
+         'O usuário não solicitou a criação ou atualização de conhecimento nesta mensagem',
+         'Apenas uma prévia por mensagem; confirme a proposta existente','Artigo inválido',
+         'Possíveis credenciais no título ou conteúdo do artigo',
+         'Informe em qual espaço de conhecimento deseja criar o artigo',
+         'O espaço escolhido não corresponde ao pedido do usuário',
+         'Espaço não autorizado','Artigo não autorizado ou não publicado',
+         'Permissão de escrita revogada'
+       ]);
+       const raw=error instanceof Error?error.message:'';
+       output={error:safeErrors.has(raw)?raw:'Falha temporária da ferramenta'};
+     }
      messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify(output)});
    }
    if(budget.shouldFinishAfterTools())finalAnswerNext=true;
