@@ -1,4 +1,5 @@
 import type {FastifyInstance} from 'fastify';
+import {randomUUID} from 'node:crypto';
 import {query,transaction} from './db.js';
 import {requireActor} from './auth.js';
 import {requireCurrentActor} from './security.js';
@@ -6,6 +7,16 @@ import {respond} from './agent.js';
 import {hasSecrets} from './knowledge.js';
 import {safeErrorType} from './safe-errors.js';
 import {withConversationTurnLock} from './conversation-lock.js';
+import {listInvestigationSubjects,readInvestigationState,saveInvestigationState,visibleInvestigationVersions} from './investigation-state.js';
+import {routeInvestigation,updateInvestigationFromMessage} from './investigation-dialogue.js';
+
+const inaccessibleContext=`EXISTS (
+  SELECT 1 FROM unnest(m.context_source_version_ids) AS context(version_id)
+  WHERE NOT EXISTS (
+    SELECT 1 ${visibleInvestigationVersions('$3')} AND v.id=context.version_id
+  )
+)`;
+
 export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond) {
  app.post('/conversations',async req=>{
    const actor=await requireActor(req);
@@ -37,10 +48,10 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
    const r=await query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2',[id,a.id]);
    if(!r.rowCount) return reply.code(404).send({error:'Conversa não encontrada'});
    const messages=await query(`SELECT m.id,m.role,
-       CASE WHEN COALESCE(jsonb_array_length(live_sources.items),0)<>jsonb_array_length(m.sources)
+       CASE WHEN ${inaccessibleContext} OR COALESCE(jsonb_array_length(live_sources.items),0)<>jsonb_array_length(m.sources)
          THEN 'Esta resposta contém fontes arquivadas ou inacessíveis e não pode mais ser exibida.'
          ELSE m.content END AS content,
-       CASE WHEN COALESCE(jsonb_array_length(live_sources.items),0)<>jsonb_array_length(m.sources)
+       CASE WHEN ${inaccessibleContext} OR COALESCE(jsonb_array_length(live_sources.items),0)<>jsonb_array_length(m.sources)
          THEN '[]'::jsonb ELSE COALESCE(live_sources.items,'[]'::jsonb) END AS sources,
        m.created_at,
        f.rating AS feedback_rating,f.comment AS feedback_comment
@@ -117,8 +128,8 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
    // Retain a bounded older window for derived memory. Never reuse inaccessible
    // cited content or messages from an earlier authorization revision.
    // This is a read-time projection; the original message is retained for audit.
-   const previous=await query(`SELECT m.role,
-      CASE WHEN EXISTS (
+   const previous=await query(`SELECT m.role,m.investigation_id,
+      CASE WHEN ${inaccessibleContext} OR EXISTS (
         SELECT 1 FROM jsonb_array_elements(m.sources) AS source(value)
         WHERE NOT EXISTS (
           SELECT 1 FROM documents d
@@ -134,15 +145,27 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
     FROM messages m
     WHERE m.conversation_id=$1 AND m.auth_revision=$2
     ORDER BY m.created_at DESC,m.id DESC LIMIT 60`,[id,a.auth_revision,a.id]);
-   const history=previous.rows.reverse();
+   const subjects=await listInvestigationSubjects(a,id);
+   const route=routeInvestigation(userMessage,subjects,previous.rows[0]?.investigation_id??null);
+   const investigation=route?.kind==='existing' ? await readInvestigationState(a,id,route.id) : null;
+   const clarification=route?.kind==='clarify' ? route.question : route?.kind==='existing'&&!investigation
+     ? 'O contexto anterior não está disponível. Qual sistema ou equipamento você quer investigar agora?' : null;
+   const investigationId=investigation?.id??(route?.kind==='new' ? randomUUID() : null);
+   const topic=investigation?.topic??(route?.kind==='new' ? route.topic : null);
+   const draft=topic ? updateInvestigationFromMessage(topic,userMessage,investigation??undefined) : null;
+   // Older transcripts can inform this turn only when they belong to the selected subject.
+   const history=previous.rows.filter(message=>message.investigation_id===investigationId).reverse()
+     .map(({role,content})=>({role,content}));
    await transaction(async c=>{
      await requireCurrentActor(c,a);
      const owned=await c.query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2 FOR SHARE',[id,a.id]);
      if(!owned.rowCount)throw Object.assign(new Error('Conversa removida'),{statusCode:404});
-     await c.query("INSERT INTO messages(conversation_id,role,content,auth_revision) VALUES($1,'user',$2,$3)",[id,userMessage,a.auth_revision]);
+     await c.query("INSERT INTO messages(conversation_id,role,content,auth_revision,investigation_id) VALUES($1,'user',$2,$3,$4)",
+       [id,userMessage,a.auth_revision,investigationId]);
    });
    try {
-     const output=await runAgent(a,id,userMessage,history);
+     const output=clarification ? {answer:clarification,sources:[],pendingActions:[]} :
+       await runAgent(a,id,userMessage,history,undefined,undefined,{investigation:investigation??undefined});
      // Numeric-only diagnostic signal. Never log prompts, document excerpts or secrets.
      if(output.metrics)req.log.info({agent:output.metrics},'Agent turn finished');
      // Hold a shared account lock while saving the reply. Permission changes
@@ -152,6 +175,10 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
        await requireCurrentActor(c,a);
        const conversation=await c.query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2 FOR SHARE',[id,a.id]);
        if(!conversation.rowCount)throw Object.assign(new Error('Conversa removida'),{statusCode:404});
+       if(investigationId && draft){
+         const state=await saveInvestigationState(a,id,draft,{id:investigationId,expectedRevision:investigation?.revision??null},c);
+         if(state.status!=='saved')return null;
+       }
        // Serializing on each cited document prevents an archived or superseded
        // procedure being presented as current after the model has responded.
        for(const source of sources){
@@ -166,10 +193,12 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
          if(!live.rowCount)
            throw Object.assign(new Error('Fonte arquivada ou atualizada durante a resposta'),{statusCode:409});
        }
-       const result=await c.query(`INSERT INTO messages(conversation_id,role,content,sources,auth_revision)
-         VALUES($1,'assistant',$2,$3,$4) RETURNING id`,[id,output.answer,JSON.stringify(sources),a.auth_revision]);
+       const result=await c.query(`INSERT INTO messages(conversation_id,role,content,sources,auth_revision,investigation_id,context_source_version_ids)
+         VALUES($1,'assistant',$2,$3,$4,$5,$6::uuid[]) RETURNING id`,
+       [id,output.answer,JSON.stringify(sources),a.auth_revision,investigationId,investigation?.sourceVersionIds??[]]);
        return result.rows[0].id as string;
      });
+     if(!saved)return reply.code(409).send({error:'O estado da investigação mudou ou ficou indisponível. Reenvie a pergunta para retomar o assunto.'});
      return {id:saved,answer:output.answer,sources,pendingActions:output.pendingActions};
    }catch(error){
      if((error as {statusCode?:number})?.statusCode===403)
