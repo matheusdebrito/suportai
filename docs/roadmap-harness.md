@@ -38,13 +38,13 @@ Implementações presentes na `main`, conforme PRs [#69](https://github.com/math
 
 O CI do PR #71 foi aprovado ([execução 45605549638](https://github.com/matheusdebrito/suportai/actions/runs/45605549638)). Isso verifica contratos automatizados, **não** a precisão do comportamento de um modelo real nem a segurança do ambiente de produção.
 
-**Status das próximas fases:** todas as tarefas abaixo começam `[ ]`. O código listado acima é a base, não evidência de conclusão das melhorias futuras.
+**Status das próximas fases:** a Fase 1 registra a evidência de cada entrega abaixo. As Fases 2 a 5 seguem planejadas.
 
 ## 3. Visão das fases
 
 | Fase | Prioridade | Foco | Itens do diagnóstico | Dependências | Estado |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Crítica | Memória persistente e continuidade | #2 e #7 | Base atual; desenho de retenção | ☐ Não iniciada |
+| 1 | Crítica | Memória persistente e continuidade | #2 e #7 | Base atual; decisão de retenção H-DEC-003 | Em andamento |
 | 2 | Crítica | Planejamento investigativo e recuperação | #1, #6 e #10 | Fase 1, contratos do loop | ☐ Não iniciada |
 | 3 | Alta | Recuperação RAG, grounding e comparação | #4, #5 e #9 | Fase 2; corpus sintético | ☐ Não iniciada |
 | 4 | Média/alta | Concorrência, UX e observabilidade | #11 e #12 | Contratos das fases 1–3 | ☐ Não iniciada |
@@ -60,10 +60,34 @@ A fase 5 pode **preparar os fixtures e a régua de qualidade desde a fase 1**, m
 
 **Implementações:**
 
-- [ ] **H-T001 — Estado persistente da investigação.** Definir contrato de dados com: `conversation_id`, `user_id`, tópico/assunto, equipamento/sistema, ambiente, fatos informados, hipóteses, perguntas pendentes, testes executados, resultados e referências de fonte/versionamento. Campos opcionais, limites de tamanho e atualização por revisão otimista; não persistir credenciais ou texto integral de PDF.
-- [ ] **H-T002 — Atualização e recuperação do contexto.** Derivar alterações do diálogo e carregar o assunto ativo, distinguindo referência ao problema anterior de troca de assunto. Anotações geradas pelo modelo são hipóteses até confirmação do usuário ou documento.
-- [ ] **H-T003 — Revogação, retenção e isolamento.** Vincular contexto à conta e à revisão de autorização; revalidar referências a espaços/documentos a cada leitura, invalidar conteúdo revogado e estabelecer política de expiração/limpeza antes de persistir novos dados.
+- [x] **H-T001 — Estado persistente da investigação.** Definir contrato de dados com: `conversation_id`, `user_id`, tópico/assunto, equipamento/sistema, ambiente, fatos informados, hipóteses, perguntas pendentes, testes executados, resultados e referências de fonte/versionamento. Campos opcionais, limites de tamanho e atualização por revisão otimista; não persistir credenciais ou texto integral de PDF.
+- [x] **H-T002 — Atualização e recuperação do contexto.** Derivar alterações do diálogo e carregar o assunto ativo, distinguindo referência ao problema anterior de troca de assunto. Anotações geradas pelo modelo são hipóteses até confirmação do usuário ou documento.
+- [x] **H-T003 — Revogação, retenção e isolamento.** Vincular contexto à conta e à revisão de autorização; revalidar referências a espaços/documentos a cada leitura, invalidar conteúdo revogado e estabelecer política de expiração/limpeza antes de persistir novos dados.
 - [ ] **H-T004 — Testes da memória.** Exercitar conversas acima de 60 mensagens, retomada do assunto, dois problemas intercalados, duas contas, revogação de acesso, conteúdo malicioso e atualização simultânea.
+
+### Contrato inicial da H-T001
+
+A migração `006_investigation_state.sql` define um registro por assunto, vinculado ao proprietário da conversa e à revisão de autorização da conta. Cada registro tem revisão própria para controle de concorrência, além de assunto, equipamento ou sistema, ambiente e última atividade. As notas separam fatos relatados, hipóteses, perguntas pendentes e testes, com resultado opcional vinculado ao teste. As fontes guardam o ID da versão, que identifica também o documento associado.
+
+O backend compara a revisão esperada e grava o estado, as notas e as referências na mesma transação. A leitura e a atualização filtram por conta, conversa, revisão de autorização e prazo de 30 dias. Se uma fonte ficar indisponível, o estado fica oculto, inclusive quando uma versão for excluída.
+
+### Integração inicial da H-T002
+
+O chat identifica mudanças explícitas de assunto, retomadas pelo nome e continuações do assunto anterior. Cada turno usa apenas o estado e as mensagens do assunto selecionado. O sistema guarda observações relatadas, hipóteses do usuário, perguntas e testes em campos distintos e persiste a atualização na mesma transação da resposta. Uma resposta dependente de fonte que se tornou inacessível deixa de ser exibida ou reutilizada.
+
+A seleção usa padrões de português e correspondência por assunto ou equipamento. Retomadas explícitas sem correspondência e escolhas ambíguas pedem esclarecimento. A integração tem testes de API com PostgreSQL local e resposta simulada, incluindo retomada após mais de 60 mensagens, troca de assunto e arquivamento de fonte. A compreensão com um modelo real permanece para avaliação posterior.
+
+### Limpeza de estados expirados na H-T003
+
+O worker verifica estados expirados ao iniciar e depois a cada hora. A rotina exclui investigações com mais de 30 dias desde a última atividade, em lotes de até 100. Um lote cheio é seguido de outra verificação após o próximo ciclo de processamento do worker. A exclusão remove as notas e referências da investigação. As mensagens, o feedback e os marcadores de assunto permanecem no histórico.
+
+### Evidências da H-T001 à H-T003
+
+- **H-T001.** A integração PostgreSQL verificou o isolamento entre contas, os limites do esquema, a rejeição de credenciais detectadas e a concorrência entre duas gravações com a mesma revisão.
+- **H-T002.** O teste da API retomou uma investigação depois de 65 mensagens sobre outro assunto e verificou que a troca de contexto preservou os dois estados. A resposta do modelo foi simulada.
+- **H-T003.** Os testes verificaram revogação de acesso, arquivamento e exclusão de fontes e o limite exato de 30 dias. O worker foi testado no PostgreSQL local com dados fictícios e preservou as mensagens da investigação expirada.
+
+O CI aprovado incluiu migrações, testes de integração PostgreSQL, build, Playwright e ensaio de restauração com dados fictícios. A avaliação com modelo real e a homologação do piloto seguem na Fase 5. [PR #73](https://github.com/matheusdebrito/suportai/pull/73) · [Commit de implementação `bb988ca`](https://github.com/matheusdebrito/suportai/commit/bb988ca4cabe173d15666f146fa6f5e76bb9056e) · [CI #45639697456](https://github.com/matheusdebrito/suportai/actions/runs/45639697456)
 
 **Aceitação (H-AC-001 e H-AC-002):** o agente consegue retomar um problema citado há mais de 60 mensagens sem recuperar dados não autorizados; uma troca explícita de assunto não mistura equipamentos ou versões. Histórico antigo não vira fonte oficial. Sem persistência de segredos.
 
@@ -177,7 +201,7 @@ Prefixos `H-REQ`, `H-AC` e `H-T` são específicos deste roadmap; não alteram n
 | --- | --- | --- | --- |
 | H-DEC-001 | VALIDADO (base existente) | Conhecimento compartilhado/restrito, autorização no backend e confirmação editorial humana | Não flexibilizar |
 | H-DEC-002 | ASSUMIDO (roadmap) | Priorizar monolito modular e agente único | Reavaliar só com benchmark/necessidade técnica |
-| H-DEC-003 | ABERTO | Política de retenção/expiração da memória persistente | Definir antes de migrar dados persistentes |
+| H-DEC-003 | DECIDIDO | Expirar o estado após 30 dias de inatividade por investigação | Só atividade no próprio assunto renova o prazo. O estado expirado fica indisponível para leitura e entra na rotina de limpeza. A exclusão da conversa apaga o estado associado. Revogação de acesso é aplicada na próxima leitura, independentemente do prazo. O histórico do chat segue sua política própria. |
 | H-DEC-004 | ABERTO | Provedor, custos e processamento de dados externos para avaliação real | Opt-in e aprovação específica |
 | H-DEC-005 | ABERTO | HTTP 409 com retry vs fila por conversa e contrato de idempotência | Decidir com testes de UX/carga |
 | H-DEC-006 | ABERTO | Limiar de relevância, reranking e metas finais de qualidade/custo | Calibrar com corpus e baseline |
@@ -192,4 +216,4 @@ Prefixos `H-REQ`, `H-AC` e `H-T` são específicos deste roadmap; não alteram n
 - [Avaliação RAG e harness atual](avaliacao-rag.md)
 - [Runbook de operação](operacao.md)
 
-**Próximo marco:** iniciar a **Fase 1 / H-T001**, com desenho do estado de investigação e política de retenção; preparar em paralelo H-T017 usando somente cenários fictícios.
+**Próximo marco:** concluir os cenários de memória da **H-T004**. A **H-T017** pode avançar em paralelo com cenários fictícios.

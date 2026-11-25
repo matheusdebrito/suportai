@@ -13,6 +13,8 @@ import {unsupportedNetworkLiterals} from './answer-evidence.js';
 import {explicitlyTargetedSpace} from './space-targeting.js';
 import {AgentBudget,type AgentMetrics,type AgentStopReason} from './agent-budget.js';
 import {boundedRead} from './agent-deadline.js';
+import {investigationContextMessage} from './investigation-dialogue.js';
+import type {InvestigationDraft} from './investigation-state.js';
 const SYSTEM=`Você é o SuportAI, assistente interno de conhecimento. Converse naturalmente em português do Brasil, inclusive com gírias, abreviações e mensagens curtas. Use o histórico recente para compreender referências como "isso", "aquele problema" e "é a impressora".
 Decida livremente entre conversar sem consulta (respond_social), pesquisar conhecimento (search_knowledge), abrir um documento ou suas versões, e perguntar quando faltar contexto. Para qualquer procedimento, política ou orientação técnica interna, use fontes publicadas e autorizadas antes de responder. Para conversa social use respond_social; nunca use essa ferramenta para instruções operacionais. Reescreva as buscas com o assunto do histórico; caso uma busca não ajude, use termos equivalentes ou pergunte por detalhes, sem repetir buscas inúteis.
 Se o pedido estiver ambíguo ou faltar um detalhe indispensável para buscar com segurança (sistema, equipamento, ambiente ou objetivo), CHAME ask_clarification com uma única pergunta curta e específica. Aguarde a resposta do usuário; não adivinhe. Se o pedido já estiver claro, não faça perguntas desnecessárias.
@@ -29,7 +31,7 @@ const tools:OpenAI.Chat.Completions.ChatCompletionTool[]=[
  {type:'function',function:{name:'prepare_article',description:'Prepara prévia de artigo solicitado explicitamente pelo usuário; requer confirmação humana posterior antes de criar rascunho.',parameters:{type:'object',properties:{spaceId:{type:'string'},title:{type:'string'},content:{type:'string'},documentId:{type:'string',description:'Documento a atualizar se aplicável'}},required:['spaceId','title','content'],additionalProperties:false}}}
 ];
 export type AgentOutput={answer:string;sources:Source[];pendingActions:{id:string;title:string;content:string;spaceName:string;documentId?:string;beforeContent?:string}[];metrics?:AgentMetrics};
-export type AgentOptions={verifyEvidence?:boolean};
+export type AgentOptions={verifyEvidence?:boolean;investigation?:InvestigationDraft};
 export async function respond(actor:Actor,conversationId:string,userMessage:string,history:{role:'user'|'assistant';content:string}[],provider:OpenAI|null=client,knowledgeSearch:typeof searchKnowledge=searchKnowledge,options:AgentOptions={}):Promise<AgentOutput>{
  const sources:Source[]=[];
  const historicalSources:Source[]=[];
@@ -64,7 +66,8 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
    sources:[] as Source[],pendingActions
  },'search_unavailable');
  if(!provider){
-   const found=await boundedRead(knowledgeSearch(actor,userMessage,5),
+   const searchText=options.investigation ? `${options.investigation.topic} ${userMessage}` : userMessage;
+   const found=await boundedRead(knowledgeSearch(actor,searchText,5),
      Math.min(15_000,Math.max(1,budget.remainingMs()-500)));
    return done({answer:found.length?'Não há modelo de IA configurado. Encontrei estes trechos relevantes no cérebro:\n\n'+found.map((s,i)=>`${i+1}. ${s.title} — ${s.content.slice(0,500)}`).join('\n\n'):'Não encontrei um procedimento confirmado no cérebro. O uso do modelo externo não está habilitado nesta instalação.',sources:found,pendingActions},found.length?'answered':'no_evidence');
  }
@@ -72,6 +75,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  const availableTools=tools;
  const messages:OpenAI.Chat.Completions.ChatCompletionMessageParam[]=[
   {role:'system',content:SYSTEM},
+  ...(options.investigation?[{role:'user' as const,content:investigationContextMessage(options.investigation)}]:[]),
   ...(olderMemory?[{role:'user' as const,content:memoryMessage(olderMemory)}]:[]),
   ...history.slice(-8).map(m=>({role:m.role,content:m.content} as OpenAI.Chat.Completions.ChatCompletionMessageParam)),
   {role:'user',content:userMessage}

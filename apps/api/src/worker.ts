@@ -3,8 +3,12 @@ import {extractPdfText} from './pdf-extract.js';
 import {pool,query} from './db.js';
 import {chunks,hasSecrets} from './knowledge.js';
 import {embedText} from './llm.js';
-import {safeWorkerFailure} from './safe-errors.js';
+import {safeErrorType,safeWorkerFailure} from './safe-errors.js';
 import {claimJob,renewLease,storeClaimedResult,failClaimedJob,expireStaleJobs} from './worker-jobs.js';
+import {INVESTIGATION_CLEANUP_BATCH_SIZE,purgeExpiredInvestigations} from './investigation-state.js';
+
+const investigationCleanupIntervalMs=60*60*1000;
+const investigationCleanupRetryMs=60*1000;
 
 async function processNext():Promise<boolean>{
  await expireStaleJobs();
@@ -39,9 +43,20 @@ async function processNext():Promise<boolean>{
 }
 if(process.env.NODE_ENV==='test')throw new Error('Worker not executed in tests');
 let running=true;
+let nextInvestigationCleanup=0;
 process.on('SIGTERM',()=>{running=false;});
 process.on('SIGINT',()=>{running=false;});
 while(running){
+ if(performance.now()>=nextInvestigationCleanup){
+   try{
+     const removed=await purgeExpiredInvestigations();
+     nextInvestigationCleanup=removed===INVESTIGATION_CLEANUP_BATCH_SIZE ? 0 : performance.now()+investigationCleanupIntervalMs;
+     if(removed)console.info('Expired investigations removed',removed);
+   }catch(error){
+     nextInvestigationCleanup=performance.now()+investigationCleanupRetryMs;
+     console.error('Investigation cleanup failure',safeErrorType(error));
+   }
+ }
  const found=await processNext().catch(e=>{
    console.error('Worker job failure',safeWorkerFailure(e));
    return false;
