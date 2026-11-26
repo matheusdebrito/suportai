@@ -166,3 +166,29 @@ test('independent verifier rejection triggers bounded grounded rewrite',async()=
  const result=await respond(actor,randomUUID(),'Como configurar a ZD230?',[],model,async()=>[source],{verifyEvidence:true});
  assert.equal(result.metrics?.steps,5);assert.equal(result.metrics?.stopReason,'answered');assert.match(result.answer,/alinhamento/);assert.doesNotMatch(result.answer,/Reinicie/);
 });
+
+test('generic phone setup after unknown model returns verified documented operational values',async()=>{
+ const phoneSource:Source={...source,title:'Manual de telefone Grandstream',content:'Abra a interface web pelo IP. Senha: fixture-device-only. Configure a conta SIP.'};
+ const answer='Abra a interface web pelo IP. Senha: fixture-device-only. Configure a conta SIP.';
+ const queries:string[]=[];
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('ask_clarification',{question:'Qual é o modelo exato?'},'q')]},
+  {role:'assistant',content:answer},
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[
+   {unit:1,kind:'current',refs:[{evidence:1,quote:'Abra a interface web pelo IP.'}]},
+   {unit:2,kind:'current',refs:[{evidence:1,quote:'Senha: fixture-device-only.'}]},
+   {unit:3,kind:'current',refs:[{evidence:1,quote:'Configure a conta SIP.'}]}
+  ]})}
+ ],[]);
+ const result=await respond(actor,randomUUID(),'Não sei o modelo.',[
+  {role:'user',content:'Preciso configurar um telefone.'},
+  {role:'assistant',content:'Qual a marca?'},
+  {role:'user',content:'Grandstream'},
+  {role:'assistant',content:'Qual o modelo?'}
+ ],model,async(_actor,q)=>{queries.push(q);return [phoneSource];},{verifyEvidence:true});
+ assert.match(queries[0],/telefone.*Grandstream/i);
+ assert.equal(result.metrics?.stopReason,'answered');
+ assert.match(result.answer,/fixture-device-only/);
+ assert.match(result.answer,/Configure a conta SIP/);
+ assert.equal(result.sources[0]?.versionId,phoneSource.versionId);
+});

@@ -1,9 +1,8 @@
 import { query } from './db.js';
 import { embedText } from './llm.js';
-import {hasSecrets,chunks,validArticleContent} from './knowledge.js';
-import {maskOperationalText,containsOperationalText} from './operational-text.js';
+import {hasSecrets,hasInfrastructureSecrets} from './knowledge.js';
 import type { Actor } from './security.js';
-export type Source={documentId:string;versionId:string;versionNumber:number;title:string;ordinal:number;content:string;score:number;historical?:true;excerpts?:string[];hasOperationalCredentials?:boolean};
+export type Source={documentId:string;versionId:string;versionNumber:number;title:string;ordinal:number;content:string;score:number;historical?:true;excerpts?:string[]};
 type Candidate=Source&{semantic:number};
 
 // PostgreSQL's plainto_tsquery requires every query word to be present. This
@@ -29,7 +28,7 @@ export function relaxedLexicalQuery(text:string):string{
 }
 // Defense in depth for articles published before secret scanning was tightened.
 export function safeRetrievedSources<T extends Source>(sources:T[],limit:number):T[]{
- return sources.map(x=>({...x,content:maskOperationalText(x.content)})).filter(x=>!hasSecrets(x.title)&&!containsOperationalText(x.title)&&!hasSecrets(x.content)).slice(0,Math.max(0,limit));
+ return sources.filter(x=>!hasSecrets(x.title)&&!hasInfrastructureSecrets(x.content)).slice(0,Math.max(0,limit));
 }
 const genericTerms=new Set('procedimento procedimentos diagnostico diagnosticar problema problemas erro erros falha falhas ajuda corrigir verificar preciso saber empresa sistema sintoma informacao informacoes orientacao sobre consultar'.split(' '));
 function words(value:string):string[]{
@@ -67,13 +66,13 @@ export function rerankKnowledgeCandidates(text:string,candidates:Candidate[],lim
 export async function retrieveKnowledgeCandidates(actor:Actor,text:string,limit:number,vector:string|null):Promise<Candidate[]>{
   // Check the complete input before truncation. Model-generated search
   // queries are untrusted and must never forward credentials to embeddings.
-  if(hasSecrets(text)||containsOperationalText(text))return [];
+  if(hasSecrets(text))return [];
   const safe=text.trim().slice(0,500);
   if(!safe) return [];
   const relaxed=relaxedLexicalQuery(safe);
   const r=await query(`WITH allowed AS (
    SELECT c.version_id,c.ordinal,c.content,c.embedding,c.search_vector,
-     to_tsvector('simple',d.title) AS title_vector,d.id AS document_id,d.title,v.version_number,v.content AS document_content,s.visibility,d.kind
+     to_tsvector('simple',d.title) AS title_vector,d.id AS document_id,d.title,v.version_number
    FROM knowledge_chunks c JOIN document_versions v ON v.id=c.version_id
    JOIN documents d ON d.id=v.document_id AND d.current_version_id=v.id
    JOIN spaces s ON s.id=d.space_id
@@ -82,7 +81,7 @@ export async function retrieveKnowledgeCandidates(actor:Actor,text:string,limit:
    WHERE v.status='PUBLISHED' AND v.index_status='READY' AND d.archived_at IS NULL
    AND (s.visibility='SHARED' OR COALESCE(g.can_read,false))
    ),
-   ranked AS (SELECT document_id,version_id,version_number,ordinal,content,title,document_content,visibility,kind,
+   ranked AS (SELECT document_id,version_id,version_number,ordinal,content,title,
    ts_rank_cd(search_vector,plainto_tsquery('simple',$2)) AS lexical,
    CASE WHEN $5::text='' THEN 0::real
      ELSE ts_rank_cd(search_vector,to_tsquery('simple',$5)) END AS relaxed,
@@ -96,17 +95,14 @@ export async function retrieveKnowledgeCandidates(actor:Actor,text:string,limit:
      GREATEST(semantic,0)) AS score FROM ranked
    WHERE lexical>0 OR relaxed>0 OR title_lexical>0 OR title_relaxed>0 OR semantic>0.45
    ORDER BY score DESC, document_id, ordinal LIMIT $4`,[actor.id,safe,vector,Math.min(Math.max(1,limit*3),16),relaxed,actor.auth_revision,actor.role]);
-  return r.rows.flatMap(x=>{
-   // Recompute from the complete document for legacy chunks that may split a credential line.
-   const marked=containsOperationalText(x.document_content);
-   const content=marked?chunks(maskOperationalText(x.document_content))[x.ordinal]:x.content;
-   if(!content)return [];
-   return [{documentId:x.document_id,versionId:x.version_id,versionNumber:Number(x.version_number),title:x.title,ordinal:x.ordinal,content,score:Number(x.score),semantic:Number(x.semantic),...(marked&&x.visibility==='RESTRICTED'&&x.kind==='ARTICLE'&&validArticleContent(x.document_content,x.visibility,x.kind)?{hasOperationalCredentials:true}:{})}];
-  });
+  return r.rows.map(x=>({
+   documentId:x.document_id,versionId:x.version_id,versionNumber:Number(x.version_number),
+   title:x.title,ordinal:x.ordinal,content:x.content,score:Number(x.score),semantic:Number(x.semantic)
+  }));
 }
 
 export async function searchKnowledge(actor:Actor,text:string,limit=5):Promise<Source[]>{
- if(hasSecrets(text)||containsOperationalText(text)||!text.trim())return [];
+ if(hasSecrets(text)||!text.trim())return [];
  let vector:string|null=null;
  try{const embedding=await embedText(text.trim().slice(0,500));vector=embedding?JSON.stringify(embedding):null;}
  catch{ /* Textual fallback. */ }

@@ -1,8 +1,7 @@
 import './env.js';
 import {extractPdfText} from './pdf-extract.js';
 import {pool,query} from './db.js';
-import {chunks,validArticleContent} from './knowledge.js';
-import {maskOperationalText} from './operational-text.js';
+import {chunks,hasInfrastructureSecrets} from './knowledge.js';
 import {embedText} from './llm.js';
 import {safeErrorType,safeWorkerFailure} from './safe-errors.js';
 import {claimJob,renewLease,storeClaimedResult,failClaimedJob,expireStaleJobs} from './worker-jobs.js';
@@ -16,7 +15,7 @@ async function processNext():Promise<boolean>{
  const job=await claimJob();
  if(!job)return false;
  try{
-   const r=await query('SELECT v.content,v.pdf_bytes,d.kind,s.visibility FROM document_versions v JOIN documents d ON d.id=v.document_id JOIN spaces s ON s.id=d.space_id WHERE v.id=$1',[job.versionId]);
+   const r=await query('SELECT content,pdf_bytes FROM document_versions WHERE id=$1',[job.versionId]);
    if(!r.rowCount)throw new Error('Versão inexistente');
    let text=r.rows[0].content as string;
    if(r.rows[0].pdf_bytes){
@@ -24,10 +23,10 @@ async function processNext():Promise<boolean>{
      // PDF bytes are untrusted. Parse in a subprocess with no inherited secrets.
      text=await extractPdfText(bytes);
    }
-   if(!validArticleContent(text,r.rows[0].visibility,r.rows[0].kind))throw new Error('Possível credencial detectada; revisão necessária');
+   if(hasInfrastructureSecrets(text))throw new Error('Possível credencial detectada; revisão necessária');
    if(!text.trim())throw new Error('Documento vazio');
    if(text.length>450000)throw new Error('Documento muito extenso; divida-o em arquivos menores');
-   const parts=chunks(maskOperationalText(text));
+   const parts=chunks(text);
    if(parts.length>500)throw new Error('Quantidade de trechos excede o limite; processamento interrompido');
    const vectors:(number[]|null)[]=[];
    for(const part of parts){

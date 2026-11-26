@@ -959,10 +959,7 @@ if(!process.env.TEST_DATABASE_URL){
 
    await query('INSERT INTO space_grants(user_id,space_id,can_read,can_edit,can_approve) VALUES($1,$2,true,true,true)',[reviewer.id,restricted]);
    const operationalFixture='fixture-device-'+randomUUID();
-   const privateContent='Instrução de teste restrito: procedimento interno sobre um servidor de laboratório isolado.\n- Senha operacional: '+operationalFixture;
-   const sharedOperational=await app.inject({method:'POST',url:'/knowledge/articles',headers:auth(reviewer.cookie),payload:{spaceId:shared,title:'Credencial compartilhada '+id,content:privateContent}});
-   assert.equal(sharedOperational.statusCode,422);
-   const privDraft=await app.inject({method:'POST',url:'/knowledge/articles',headers:auth(reviewer.cookie),payload:{spaceId:restricted,title:'Segredo '+id,content:privateContent}});
+   const privDraft=await app.inject({method:'POST',url:'/knowledge/articles',headers:auth(reviewer.cookie),payload:{spaceId:restricted,title:'Segredo '+id,content:'Instrução de teste restrito: procedimento interno sobre um servidor de laboratório isolado.\nSenha: '+operationalFixture}});
    assert.equal(privDraft.statusCode,201,privDraft.body);
    const privateDoc=privDraft.json() as {documentId:string;versionId:string};
    const leaked=await app.inject({method:'GET',url:`/knowledge/documents/${privateDoc.documentId}`,headers:auth(reader.cookie)});
@@ -991,11 +988,6 @@ if(!process.env.TEST_DATABASE_URL){
    assert.equal(readyPrivate,true);
    const privateApproved=await app.inject({method:'POST',url:`/knowledge/versions/${privateVer}/publish`,headers:auth(reviewer.cookie),payload:{confirm:true}});
    assert.equal(privateApproved.statusCode,200,privateApproved.body);
-   const safeChunks=await query('SELECT content FROM knowledge_chunks WHERE version_id=$1',[privateVer]);
-   assert.ok(safeChunks.rowCount);
-   assert.equal(JSON.stringify(safeChunks.rows).includes(operationalFixture),false);
-   const deniedOperational=await app.inject({method:'GET',url:`/knowledge/documents/${privateDoc.documentId}/versions/${privateVer}`,headers:auth(reader.cookie)});
-   assert.equal(deniedOperational.statusCode,404);assert.equal(deniedOperational.body.includes(operationalFixture),false);
    const readerActor=await actorForSession(reader.cookie.split('=')[1]);
    assert.ok(readerActor);
    assert.equal((await searchKnowledge(readerActor!,'laboratório isolado')).some(x=>x.documentId===privateDoc.documentId),false);
@@ -1005,25 +997,18 @@ if(!process.env.TEST_DATABASE_URL){
    const grantedActor=await actorForSession(reader.cookie.split('=')[1]);
    assert.ok(grantedActor);
    assert.equal((await searchKnowledge(grantedActor!,'laboratório isolado')).some(x=>x.documentId===privateDoc.documentId),true);
-   const safeDocument=await getPublishedDocument(grantedActor!,privateDoc.documentId);
-   assert.equal(safeDocument?.versionId,privateDoc.versionId);
-   assert.equal(safeDocument?.hasOperationalCredentials,true);
-   assert.equal(JSON.stringify(safeDocument).includes(operationalFixture),false);
-   assert.equal(JSON.stringify(await getVisibleDocumentVersions(grantedActor!,privateDoc.documentId)).includes(operationalFixture),false);
-   const safeResults=await searchKnowledge(grantedActor!,'laboratório isolado');
-   assert.ok(safeResults.some(s=>s.documentId===privateDoc.documentId&&s.hasOperationalCredentials));
-   assert.equal(JSON.stringify(safeResults).includes(operationalFixture),false);
-   const grantedOperational=await app.inject({method:'GET',url:`/knowledge/documents/${privateDoc.documentId}/versions/${privateVer}`,headers:auth(reader.cookie)});
-   assert.equal(grantedOperational.statusCode,200,grantedOperational.body);
-   assert.equal(grantedOperational.headers['cache-control'],'no-store');
-   assert.ok(grantedOperational.json().operationalCredentials[0].includes(operationalFixture));
-   const credentialAudit=await query("SELECT actor_id,metadata FROM audit_events WHERE action='OPERATIONAL_CREDENTIAL_READ' AND resource_id=$1",[privateVer]);
-   assert.ok(credentialAudit.rows.some(row=>row.actor_id===reader.id));
-   assert.equal(JSON.stringify(credentialAudit.rows).includes(operationalFixture),false);
+   const authorizedDocument=await getPublishedDocument(grantedActor!,privateDoc.documentId);
+   assert.equal(authorizedDocument?.versionId,privateDoc.versionId);
+   assert.ok(authorizedDocument?.content.includes(operationalFixture));
+   assert.ok((await searchKnowledge(grantedActor!,'laboratório isolado')).some(s=>s.documentId===privateDoc.documentId&&s.content.includes(operationalFixture)));
+   const authorizedRead=await app.inject({method:'GET',url:`/knowledge/documents/${privateDoc.documentId}/versions/${privateVer}`,headers:auth(reader.cookie)});
+   assert.equal(authorizedRead.statusCode,200);
+   assert.ok(authorizedRead.json().version.content.includes(operationalFixture));
    await app.inject({method:'POST',url:`/admin/spaces/${restricted}/grants`,headers:auth(admin.cookie),payload:{userId:reader.id,read:false,edit:false,approve:false}});
    assert.equal((await searchKnowledge(grantedActor!,'laboratório isolado')).some(x=>x.documentId===privateDoc.documentId),false);
-   const revokedOperational=await app.inject({method:'GET',url:`/knowledge/documents/${privateDoc.documentId}/versions/${privateVer}`,headers:auth(reader.cookie)});
-   assert.equal(revokedOperational.statusCode,404);assert.equal(revokedOperational.body.includes(operationalFixture),false);
+   const afterRevocation=await app.inject({method:'GET',url:`/knowledge/documents/${privateDoc.documentId}/versions/${privateVer}`,headers:auth(reader.cookie)});
+   assert.equal(afterRevocation.statusCode,404);
+   assert.equal(afterRevocation.body.includes(operationalFixture),false);
 
 
    // Archiving requires an explicit reviewer approval grant; restores preserve versions.
