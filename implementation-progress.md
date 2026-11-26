@@ -32,3 +32,6 @@ Added lexical coverage threshold to offline reranking (default zero preserves ex
 
 ## Latest checkpoint
 Semantic capture integrated into the opt-in real HTTP fixture, with real fixture embeddings and explicit authorization. Added regression tests for reviewed metrics and baseline. The two queries share a single synthetic document: smoke coverage only, not an independent reviewed pilot/holdout corpus. Next: review full diff for compile and schema compatibility, expand independent corpus and execute validation. No tests run yet.
+
+## Latest checkpoint
+Separated calibration from phone episode; four independent synthetic documents across pilot and holdout, with real embeddings. Added npm commands for calibration, review and baseline. Corpus is still small and not human-reviewed. Next: static integration review, build/typecheck and regression execution; expand reviewed pilot before changing thresholds.

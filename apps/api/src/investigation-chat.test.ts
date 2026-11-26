@@ -1,11 +1,11 @@
 import {captureCalibrationCase} from './calibration-capture.js';
-import {embedText} from './llm.js';
+
 import {after,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import type OpenAI from 'openai';
 import {respond} from './agent.js';
-import {client} from './llm.js';
+import {client,embedText} from './llm.js';
 import {searchKnowledge} from './retrieval.js';
 import {episodeQuality,retrievalMetrics} from './episode-quality.js';
 import {writeFileSync} from 'node:fs';
@@ -132,6 +132,35 @@ if(!process.env.TEST_DATABASE_URL){
     }finally{await app.close();await query('DELETE FROM users WHERE id=$1',[actor.id]);}
   });
 
+  test('independent synthetic retrieval calibration corpus',{skip:process.env.RUN_REAL_EPISODES!=='1',timeout:360000},async()=>{
+    assert.ok(client);
+    const {actor}=await createSession();
+    const fixtures=[
+      {id:'phone',title:'Telefone de laboratório',article:'Consulte o endereço IP no menu Status e configure a conta SIP.',query:'configurar ramal no telefone',split:'pilot' as const},
+      {id:'printer',title:'Impressora de etiquetas',article:'Calibre a impressora de etiquetas pelo botão Feed com a tampa fechada.',query:'calibrar impressora de etiquetas',split:'pilot' as const},
+      {id:'wifi',title:'Rede sem fio de visitantes',article:'Selecione a rede Visitantes e abra o portal de acesso.',query:'conectar wifi de visitantes',split:'holdout' as const},
+      {id:'scanner',title:'Digitalizador de documentos',article:'Selecione resolução de 300 DPI e formato PDF no aplicativo do scanner.',query:'digitalizar documento em PDF',split:'holdout' as const}
+    ];
+    const created:Awaited<ReturnType<typeof createPublishedSource>>[]=[];
+    try{
+      for(const fixture of fixtures){
+        const source=await createPublishedSource(actor.id,'SHARED');created.push(source);
+        await query('UPDATE documents SET title=$2 WHERE id=$1',[source.document,fixture.title]);
+        await query('UPDATE document_versions SET content=$2 WHERE id=$1',[source.version,fixture.article]);
+        const embedding=await embedText(fixture.article);assert.ok(embedding);
+        await query('INSERT INTO knowledge_chunks(version_id,ordinal,content,embedding) VALUES($1,0,$2,$3::vector)',[source.version,fixture.article,JSON.stringify(embedding)]);
+      }
+      const allowed=new Set(created.map(x=>x.version));
+      const cases=[];
+      for(const [i,fixture] of fixtures.entries())cases.push(await captureCalibrationCase(actor,{id:fixture.id,query:fixture.query,split:fixture.split,expected:[created[i].version]},allowed,true));
+      if(process.env.CALIBRATION_REPORT_PATH)writeFileSync(process.env.CALIBRATION_REPORT_PATH,JSON.stringify(cases,null,2));
+      assert.equal(cases.length,fixtures.length);
+    }finally{
+      for(const source of created)await query('DELETE FROM documents WHERE id=$1',[source.document]);
+      await query('DELETE FROM users WHERE id=$1',[actor.id]);
+    }
+  });
+
   test('real model phone episode with actual retrieval',{skip:process.env.RUN_REAL_EPISODES!=='1',timeout:360000},async()=>{
     assert.ok(client,'External AI must be explicitly authorized and configured');
     const {actor,headers}=await createSession();
@@ -144,8 +173,7 @@ if(!process.env.TEST_DATABASE_URL){
       const embedding=await embedText(article);
       assert.ok(embedding,'Real evaluation requires fixture embedding');
       await query('INSERT INTO knowledge_chunks(version_id,ordinal,content,embedding) VALUES($1,0,$2,$3::vector)',[source.version,article,JSON.stringify(embedding)]);
-      const calibrationCases=await Promise.all([{id:'phone-pilot',query:'configurar telefone de laboratório',split:'pilot' as const},{id:'phone-holdout',query:'ativar conta do aparelho de laboratório',split:'holdout' as const}].map(item=>captureCalibrationCase(actor,{...item,expected:[source.version]},new Set([source.version]),true)));
-      if(process.env.CALIBRATION_REPORT_PATH)writeFileSync(process.env.CALIBRATION_REPORT_PATH,JSON.stringify(calibrationCases,null,2));
+      
       const conversation=await openConversation(app,headers);
       const retrieved=await searchKnowledge(actor,'configurar telefone de laboratório');
       const ranking=retrievalMetrics([source.version],retrieved.map(x=>x.versionId));
