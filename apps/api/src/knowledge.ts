@@ -122,7 +122,7 @@ export function registerKnowledge(app:FastifyInstance) {
  // A published credential uses the same current space grant as its procedure.
  // Historical and shared versions never expose recognized operational values.
  async function readPublishedVersion(actor:Actor,id:string,versionId:string|null){
-   if(!/^[0-9a-f-]{36}$/i.test(id)||(versionId&&!/^[0-9a-f-]{36}$/i.test(versionId)))throw Object.assign(new Error('Documento não encontrado'),{statusCode:404});
+   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)||(versionId&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(versionId)))throw Object.assign(new Error('Documento não encontrado'),{statusCode:404});
    return transaction(async c=>{
      await requireCurrentActor(c,actor);
      const result=await c.query(`SELECT d.id,d.title,d.kind,d.space_id,d.current_version_id,s.visibility,
@@ -132,6 +132,7 @@ export function registerKnowledge(app:FastifyInstance) {
        WHERE d.id=$1 AND d.archived_at IS NULL AND d.current_version_id IS NOT NULL
        AND (s.visibility='SHARED' OR COALESCE(g.can_read,false))
        AND v.id=COALESCE($3::uuid,d.current_version_id) AND v.status IN ('PUBLISHED','ARCHIVED')
+       AND ($3::uuid IS NOT NULL OR v.status='PUBLISHED')
        FOR SHARE OF d`,[id,actor.id,versionId]);
      const row=result.rows[0];
      if(!row)throw Object.assign(new Error('Documento não encontrado'),{statusCode:404});

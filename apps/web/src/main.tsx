@@ -1,4 +1,4 @@
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useState,useRef} from 'react';
 import {createRoot} from 'react-dom/client';
 import {BrainCircuit,MessageCircle,BookOpen,ShieldCheck,Users,Send,Plus,LogOut,FileUp,Check,RotateCcw,LoaderCircle,ThumbsUp,ThumbsDown,Trash2,Menu,X,Settings,Search} from 'lucide-react';
 import './styles.css';
@@ -49,6 +49,30 @@ async function api<T=any>(path:string,init:RequestInit={}):Promise<T> {
    {code:typeof result.code==='string'?result.code:undefined,
     matches:Array.isArray(result.matches)?result.matches:undefined});
  return result;
+}
+// Reuse the authorized document endpoint; never store the returned password in a chat message.
+function OperationalCredentialPreview({documentId,versionId}:{documentId:string;versionId:string}){
+ const [lines,setLines]=useState<string[]|null>(null);
+ const [loading,setLoading]=useState(false);
+ const [error,setError]=useState('');
+ const generation=useRef(0);
+ useEffect(()=>()=>{generation.current++;},[]);
+ useEffect(()=>{if(!lines)return;const timer=window.setTimeout(()=>setLines(null),30000);return()=>window.clearTimeout(timer);},[lines]);
+ async function show(){
+  const current=++generation.current;setLoading(true);setError('');
+  try{
+   const result=await api<DocDetail>(`/knowledge/documents/${documentId}/versions/${versionId}`,{cache:'no-store'});
+   if(current!==generation.current)return;
+   if(result.operationalCredentials?.length)setLines(result.operationalCredentials);
+   else setError('A credencial não está disponível na versão vigente.');
+  }catch(e){if(current===generation.current)setError(e instanceof Error?e.message:'Acesso indisponível');}
+  finally{if(current===generation.current)setLoading(false);}
+ }
+ return <div className="operational-preview">
+  <button type="button" className="secondary" disabled={loading} onClick={()=>lines?setLines(null):void show()}>{loading?'Consultando...':lines?'Ocultar credenciais':'Ver credenciais do procedimento'}</button>
+  {lines&&<div className="formatted pending">{lines.join('\n')}</div>}
+  {error&&<p className="hint" role="status">{error}</p>}
+ </div>;
 }
 function App(){
  const [user,setUser]=useState<User|null>(null);
@@ -373,7 +397,7 @@ function App(){
   </form>
  </section>}
  {tab==='chat'&&<div className="chat-layout"><section className="chat"><div className="chat-history">{conversationLoading&&<p className="hint"><LoaderCircle className="spin" size={16}/> Abrindo conversa...</p>}{messages.length===0&&<div className="empty"><BrainCircuit size={40}/><h2>Como posso ajudar?</h2><p>Consulte procedimentos, investigue problemas ou peça para preparar um artigo no cérebro.</p><div className="suggestions">{['Como consultar procedimentos de rede?','Como registrar um procedimento novo?','O que fazer quando um servidor não responde?'].map(x=><button key={x} onClick={()=>setInput(x)}>{x}</button>)}</div></div>}
-  {messages.map((m,i)=><div className={'bubble '+m.role} key={m.id||i}><div className="bubble-role">{m.role==='user'?'Você':'SuportAI'}</div><div className="formatted">{m.content}</div>{Boolean(m.sources?.length)&&<div className="sources"><strong>Fontes consultadas</strong>{m.sources!.some(s=>s.hasOperationalCredentials)&&<p className="hint">O procedimento contém credenciais operacionais. Abra a fonte para consultar os valores com sua autorização atual.</p>}{m.sources!.map((s,j)=><button key={j} onClick={()=>openSource(s.documentId,s.versionId)} title={s.excerpts?.join('\n')}>{s.excerpts?.length?`[${j+1}] `:''}{s.title}{s.hasOperationalCredentials?' · credenciais disponíveis':''} · versão {s.versionNumber??s.versionId.slice(0,8)}{s.historical?' · histórica':''}</button>)}</div>}
+  {messages.map((m,i)=><div className={'bubble '+m.role} key={m.id||i}><div className="bubble-role">{m.role==='user'?'Você':'SuportAI'}</div><div className="formatted">{m.content}</div>{Boolean(m.sources?.length)&&<div className="sources"><strong>Fontes consultadas</strong>{m.sources!.some(s=>s.hasOperationalCredentials)&&<p className="hint">O procedimento contém credenciais operacionais disponíveis com sua autorização atual.</p>}{m.sources!.map((s,j)=><button key={j} onClick={()=>openSource(s.documentId,s.versionId)} title={s.excerpts?.join('\n')}>{s.excerpts?.length?`[${j+1}] `:''}{s.title}{s.hasOperationalCredentials?' · credenciais disponíveis':''} · versão {s.versionNumber??s.versionId.slice(0,8)}{s.historical?' · histórica':''}</button>)}{m.sources!.filter((s,i,all)=>s.hasOperationalCredentials&&!s.historical&&all.findIndex(x=>x.documentId===s.documentId&&x.versionId===s.versionId&&x.hasOperationalCredentials)===i).map(s=><OperationalCredentialPreview key={s.versionId} documentId={s.documentId} versionId={s.versionId}/>)}</div>}
  {m.role==='assistant'&&m.id&&<div className="feedback-area">
   <div className="feedback-controls"><span className="hint">Esta resposta ajudou?</span>
    <button type="button" aria-label="Resposta útil" title="Resposta útil" aria-pressed={m.feedback_rating==='GOOD'} disabled={feedbackSaving===m.id} className={m.feedback_rating==='GOOD'?'feedback-selected':''} onClick={()=>void rateMessage(m.id!,'GOOD')}><ThumbsUp size={16}/></button>
@@ -401,7 +425,7 @@ function App(){
   {draftView&&<article className="document"><div className="drafts-header"><h3>{draftView.title} · v{draftView.version_number}</h3><button className="ghost" onClick={()=>setDraftView(null)}>Fechar</button></div><small>{draftView.status}</small><div className="formatted">{draftView.content||'Aguardando extração do PDF.'}</div></article>}
   </section><section className="panel"><h2>{pdfTarget?'Enviar versão de PDF':correctionOf?'Corrigir proposta':editing?'Propor atualização':'Adicionar conhecimento'}</h2><p className="hint">{pdfTarget?'O novo arquivo será processado como rascunho. O PDF publicado continuará disponível até a aprovação.':correctionOf?'A correção será uma nova versão em rascunho.':editing?'A revisão só substituirá o artigo publicado após aprovação.':'Crie um artigo ou importe um PDF. O conteúdo só ficará público após revisão.'}</p>
  {editable.length===0?<p>Você não possui permissão de edição.</p>:<><label>Espaço<select value={spaceId} disabled={Boolean(editing||correctionOf||pdfTarget)} onChange={e=>setSpaceId(e.target.value)}>{editable.map(s=><option value={s.id} key={s.id}>{s.name}</option>)}</select></label>
- {!pdfTarget&&<form onSubmit={saveArticle}><label>Título<input required minLength={3} value={title} readOnly={Boolean(editing||correctionOf)} onChange={e=>setTitle(e.target.value)}/></label><label>Procedimento<textarea required minLength={20} value={content} onChange={e=>setContent(e.target.value)} rows={7}/></label><button><Plus size={17}/> {correctionOf?'Salvar correção em novo rascunho':editing?'Salvar proposta de revisão':'Criar rascunho'}</button>{(editing||correctionOf)&&<button type="button" className="secondary" onClick={cancelEditing}>Cancelar edição</button>}</form>}
+ {!pdfTarget&&<form onSubmit={saveArticle}>{spaces.find(s=>s.id===spaceId)?.visibility==='RESTRICTED'&&<p className="hint">Se necessário, inclua em linha própria: Senha operacional: valor. Somente leitores autorizados deste espaço terão acesso; o modelo recebe uma referência mascarada.</p>}<label>Título<input required minLength={3} value={title} readOnly={Boolean(editing||correctionOf)} onChange={e=>setTitle(e.target.value)}/></label><label>Procedimento<textarea required minLength={20} value={content} onChange={e=>setContent(e.target.value)} rows={7}/></label><button><Plus size={17}/> {correctionOf?'Salvar correção em novo rascunho':editing?'Salvar proposta de revisão':'Criar rascunho'}</button>{(editing||correctionOf)&&<button type="button" className="secondary" onClick={cancelEditing}>Cancelar edição</button>}</form>}
  {editing&&<details className="diff-preview"><summary>Comparar alterações com a versão publicada</summary>{(()=>{
    const changes=textDiff(selectedDoc?.version.content||'',content);
    return changes.unchanged?<p className="hint">Nenhuma mudança detectada.</p>:<div className="diff-columns"><div><strong>Removido</strong><pre className="diff-removed">{changes.removed||'Nenhum trecho removido'}</pre></div><div><strong>Adicionado</strong><pre className="diff-added">{changes.added||'Nenhum trecho adicionado'}</pre></div></div>;
