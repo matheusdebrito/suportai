@@ -608,7 +608,6 @@ if(invoked){
   const run=process.argv.includes('--run');
   const grounding=process.argv.includes('--grounding');
   const real=process.argv.includes('--real');
-  const validationOnly=process.argv.includes('--validation-only');
   const jsonOutput=process.argv.includes('--json-output');
   const outputFile=process.argv.find(arg=>arg.startsWith('--output-file='))?.split('=')[1];
   const includeDetails=process.argv.includes('--include-details');

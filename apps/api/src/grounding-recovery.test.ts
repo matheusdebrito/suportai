@@ -26,3 +26,7 @@ test('literal fallback cannot select irrelevant, conflicting, historical or host
  assert.equal(literalGroundingFallback('qual a senha do telefone',[source]),null);
  assert.equal(literalGroundingFallback('telefone',[{...source,ordinal:3}]),null);
 });
+
+test('a prose paragraph with a colon is not mistaken for a single configuration field',()=>{
+ assert.equal(splitGroundingUnits('Abra a interface web pelo IP. Senha: fixture-device-only. Configure a conta SIP.').length,3);
+});

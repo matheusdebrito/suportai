@@ -1,6 +1,6 @@
 import type OpenAI from 'openai';
 import type {Source} from './retrieval.js';
-import {unsupportedNetworkLiterals,unsupportedNumbers} from './answer-evidence.js';
+import {unsupportedNetworkLiterals,unsupportedNumbers,unsupportedConfigurationField} from './answer-evidence.js';
 
 export type GroundingFailure='no_current_evidence'|'answer_limit'|'injected_directive'|'fabricated_citation'|'unit_limit'|'claim_shape'|'missing_reference'|'invalid_reference'|'historical_mismatch'|'unsupported_literal'|'invalid_question'|'no_supported_claim'|'model_rejected'|'model_uncertain'|'conflicting_evidence'|'provider_error'|'invalid_json'|'model_interrupted';
 export type GroundingResult={verdict:'supported';answer:string;sources:Source[]}|
@@ -53,7 +53,8 @@ function reviewClaims(answer:string,units:{text:string;end:number}[],passages:Pa
   const measurable=unit.text.replace(/\bvers(?:ão|ao)\s+(\d+)\b/gi,(match,version:string)=>
    references.some(ref=>ref.source.versionNumber===Number(version))?'versão':match);
   if(unsupportedNetworkLiterals(unit.text,references.map(ref=>({content:ref.quote}))).length||
-     unsupportedNumbers(measurable,references.map(ref=>ref.quote)))return rejected('unsupported_literal');
+     unsupportedNumbers(measurable,references.map(ref=>ref.quote))||
+     unsupportedConfigurationField(unit.text,references.map(ref=>ref.quote)))return rejected('unsupported_literal');
 
   const labels=new Set<number>();
   for(const ref of references){
@@ -79,7 +80,7 @@ export function splitGroundingUnits(answer:string):{text:string;end:number}[]{
  for(const line of answer.split('\n')){
   const trimmed=line.trim();
   // Do not let Intl.Segmenter interpret "1." as a separate factual claim.
-  if(/^(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|[^:]{1,45}:\s*\S)/.test(trimmed)){
+  if(/^(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|[\p{L}\p{N}][\p{L}\p{N} _/-]{0,44}:\s*\S)/u.test(trimmed)){
    units.push({text:trimmed,end:offset+line.trimEnd().length});
   }else{
    for(const {segment,index} of segmenter.segment(line)){
