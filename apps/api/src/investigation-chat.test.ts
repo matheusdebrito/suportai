@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import type OpenAI from 'openai';
 import {respond} from './agent.js';
+import {client} from './llm.js';
+import {searchKnowledge} from './retrieval.js';
+import {episodeQuality,retrievalMetrics} from './episode-quality.js';
+import {writeFileSync} from 'node:fs';
 import {pool,query,transaction} from './db.js';
 import {buildApp} from './server.js';
 import {hashToken,type Actor} from './security.js';
@@ -121,6 +125,36 @@ if(!process.env.TEST_DATABASE_URL){
       await send('e depois?');
       assert.equal(seen.at(-1)?.supportPreference,'complete');
     }finally{await app.close();await query('DELETE FROM users WHERE id=$1',[actor.id]);}
+  });
+
+  test('real model phone episode with actual retrieval',{skip:process.env.RUN_REAL_EPISODES!=='1',timeout:360000},async()=>{
+    assert.ok(client,'External AI must be explicitly authorized and configured');
+    const {actor,headers}=await createSession();
+    const source=await createPublishedSource(actor.id,'SHARED');
+    const article='Configuração do telefone de laboratório.\n1. Consulte o IP no menu Status.\n2. Abra o IP no navegador.\n3. Use a senha padrão admin.\n4. Ative Account Active: YES.';
+    const app=await buildApp();
+    try{
+      await query('UPDATE documents SET title=$2 WHERE id=$1',[source.document,'Telefone de laboratório']);
+      await query('UPDATE document_versions SET content=$2 WHERE id=$1',[source.version,article]);
+      await query('INSERT INTO knowledge_chunks(version_id,ordinal,content) VALUES($1,0,$2)',[source.version,article]);
+      const conversation=await openConversation(app,headers);
+      const retrieved=await searchKnowledge(actor,'configurar telefone de laboratório');
+      const ranking=retrievalMetrics([source.version],retrieved.map(x=>x.versionId));
+      const turns=[];
+      const previous:string[]=[];
+      for(const message of ['Preciso configurar um telefone de laboratório','sim','não entendi a parte da senha','a senha pode ser admin','me dê o passo a passo completo']){
+        const response=await postTurn(app,headers,conversation,message);
+        assert.equal(response.statusCode,200,response.body);
+        const result=response.json<{answer:string;sources:unknown[]}>();
+        const states=await query('SELECT id,topic,support_preference FROM investigations WHERE conversation_id=$1',[conversation]);
+        turns.push({message,answer:result.answer,sources:result.sources,states:states.rows,quality:episodeQuality(result.answer,article,previous)});
+        previous.push(result.answer);
+      }
+      writeFileSync(process.env.EPISODE_REPORT_PATH||'episode-real-report.json',JSON.stringify({mode:'real-http',model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',ranking,turns,humanReview:'pending'},null,2));
+      assert.equal(ranking.recall,1);
+      assert.ok(turns.every(t=>t.states.length===1));
+      assert.equal(turns.at(-1)?.states[0].support_preference,'complete');
+    }finally{await app.close();await query('DELETE FROM documents WHERE id=$1',[source.document]);await query('DELETE FROM users WHERE id=$1',[actor.id]);}
   });
 
   test('chat hides a reply derived from a source after that source is archived',async()=>{
