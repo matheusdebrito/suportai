@@ -26,3 +26,6 @@ Next: inspect verifier function signature and procedure rejection, wire episode-
 
 ## Latest checkpoint
 Episode reports now capture returned agent metrics, assert stable investigation identity and require evidence on the password and complete-procedure turns. Neighbor chunks are ordered within their version. Calibration CLI import side effects guarded and policy input validated. Next: inspect compile/schema compatibility, complete candidate capture and lexical calibration, add regression tests and baseline workflow. All changes remain unverified.
+
+## Latest checkpoint: calibration and baseline
+Added lexical coverage threshold to offline reranking (default zero preserves existing behavior), isolated synthetic lexical candidate capture, and reviewed real-episode baseline generator. Semantic candidate capture and end-to-end SQL threshold calibration remain pending; no experimental baseline has been generated. Next: wire capture into fixture runner, add regression tests, review compile/schema compatibility, then execute validation.

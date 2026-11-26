@@ -4,7 +4,7 @@ import {hasSecrets,hasInfrastructureSecrets} from './knowledge.js';
 import type { Actor } from './security.js';
 export type Source={documentId:string;versionId:string;versionNumber:number;title:string;ordinal:number;content:string;score:number;historical?:true;completeDocument?:boolean;excerpts?:string[]};
 export type Candidate=Source&{semantic:number};
-export const DEFAULT_RERANK_POLICY={semanticMinimum:0.56,diversityPenalty:0.18};
+export const DEFAULT_RERANK_POLICY={semanticMinimum:0.56,diversityPenalty:0.18,lexicalMinimum:0};
 export type RerankPolicy=typeof DEFAULT_RERANK_POLICY;
 
 // PostgreSQL's plainto_tsquery requires every query word to be present. This
@@ -50,6 +50,7 @@ export function rerankKnowledgeCandidates(text:string,candidates:Candidate[],lim
    const bodyHits=terms.filter(term=>body.has(term)).length;
    if(!titleHits&&!bodyHits&&semantic<policy.semanticMinimum)return [];
    const coverage=(titleHits*0.75+bodyHits)/Math.max(1,terms.length);
+   if(coverage<policy.lexicalMinimum&&semantic<policy.semanticMinimum)return [];
    const score=coverage+Math.log1p(Math.max(0,source.score))*0.12+Math.max(0,semantic)*0.35;
    return [{source,score}];
  });
