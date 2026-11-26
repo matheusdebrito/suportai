@@ -30,7 +30,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - run: npm run db:migrate
       - run: npm run db:migrate # Deve ser idempotente sem reaplicar DDL
       - run: npm run typecheck
@@ -82,6 +82,8 @@ jobs:
           docker run --rm -e SUPORTAI_DOMAIN=suportai.example.org \
             -e SUPORTAI_TLS_CONTACT=ti@example.org --entrypoint caddy \
             suportai/web:ci validate --config /etc/caddy/Caddyfile
+      - name: Full local Compose smoke (synthetic credentials)
+        run: bash scripts/compose-smoke.sh
       - name: Verify real PDF sandbox and Unix-socket fail-closed behavior
         shell: bash
         run: bash deploy/test-pdf-isolation.sh

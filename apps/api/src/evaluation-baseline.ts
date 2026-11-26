@@ -1,3 +1,5 @@
+import {existsSync,readFileSync,writeFileSync} from 'node:fs';
+import {join} from 'node:path';
 import {RealEvaluationRecord,RealEvaluationOptions} from './rag-evaluation.js';
 
 export interface BaselineMetrics{
@@ -71,11 +73,9 @@ const BASELINE_KEY='evaluation-baseline-pr71';
 
 export function loadBaseline():BaselineMetrics|null{
   try{
-    const fs=require('fs');
-    const path=require('path');
-    const filePath=path.join(process.cwd(),'.evaluation-baseline.json');
-    if(!fs.existsSync(filePath))return null;
-    const data=fs.readFileSync(filePath,'utf8');
+    const filePath=join(process.cwd(),'.evaluation-baseline.json');
+    if(!existsSync(filePath))return null;
+    const data=readFileSync(filePath,'utf8');
     return JSON.parse(data) as BaselineMetrics;
   }catch{
     return null;
@@ -83,10 +83,8 @@ export function loadBaseline():BaselineMetrics|null{
 }
 
 export function saveBaseline(baseline:BaselineMetrics):void{
-  const fs=require('fs');
-  const path=require('path');
-  const filePath=path.join(process.cwd(),'.evaluation-baseline.json');
-  fs.writeFileSync(filePath,JSON.stringify(baseline,null,2));
+  const filePath=join(process.cwd(),'.evaluation-baseline.json');
+  writeFileSync(filePath,JSON.stringify(baseline,null,2));
 }
 
 export interface CurrentSummary{

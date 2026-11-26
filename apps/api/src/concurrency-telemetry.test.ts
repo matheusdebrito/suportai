@@ -17,8 +17,8 @@ if(!process.env.TEST_DATABASE_URL){
 }else{
   if(process.env.DATABASE_URL!==process.env.TEST_DATABASE_URL) throw new Error('Integration tests require DATABASE_URL to equal TEST_DATABASE_URL');
 
-  test('H-T016: concurrency, idempotency, and operation scenarios',async()=>{
-    const app=await buildApp();
+  test('H-T016: concurrency, idempotency, and operation scenarios',{timeout:45000},async()=>{
+    const app=await buildApp({agentResponder:async(_a,_id,message)=>({answer:'Resposta: '+message,sources:[],pendingActions:[]})});
     const origin=process.env.APP_ORIGIN||'http://localhost:5173';
     const id=randomUUID().slice(0,8);
 
@@ -89,6 +89,15 @@ if(!process.env.TEST_DATABASE_URL){
     const noKeyBody=noKey.json();
     assert.notEqual(noKeyBody.id,firstBody.id,'Request without key must create new message');
 
+    const foreignRetry=await app.inject({method:'POST',url:'/conversations/'+convIdemId+'/messages',headers:{...auth(reviewer.cookie),'idempotency-key':idemKey},payload:{message:'Olá, como configurar o roteador?'}});
+    assert.equal(foreignRetry.statusCode,404);
+    const alteredRetry=await app.inject({method:'POST',url:'/conversations/'+convIdemId+'/messages',headers:{...auth(reader.cookie),'idempotency-key':idemKey},payload:{message:'Outra pergunta'}});
+    assert.equal(alteredRetry.statusCode,409);
+    const afterOtherTurn=await app.inject({method:'POST',url:'/conversations/'+convIdemId+'/messages',headers:{...auth(reader.cookie),'idempotency-key':idemKey},payload:{message:'Olá, como configurar o roteador?'}});
+    assert.equal(afterOtherTurn.statusCode,200);
+    assert.equal(afterOtherTurn.json().id,firstBody.id);
+    assert.equal((await query('SELECT count(*)::int AS n FROM request_telemetry WHERE conversation_id=$1 AND idempotent_hit=true',[convIdemId])).rows[0].n,2);
+
     // Test 2: Concurrent requests - second gets 409 with Retry-After
     const convConcurrent=await app.inject({method:'POST',url:'/conversations',headers:auth(reader.cookie)});
     assert.equal(convConcurrent.statusCode,200);
@@ -97,7 +106,10 @@ if(!process.env.TEST_DATABASE_URL){
     let releaseFirst:()=>void=()=>{};
     const firstLock=new Promise<void>(resolve=>{releaseFirst=resolve;});
 
+    let markStarted:()=>void=()=>{};
+    const started=new Promise<void>(resolve=>{markStarted=resolve;});
     const concurrentApp=await buildApp({agentResponder:async()=>{
+      markStarted();
       await firstLock;
       return {answer:'First response',sources:[],pendingActions:[]};
     }});
@@ -106,15 +118,15 @@ if(!process.env.TEST_DATABASE_URL){
       method:'POST',url:'/conversations/'+convConcurrentId+'/messages',
       headers:auth(reader.cookie),payload:{message:'Concurrent test 1'}
     });
-    await new Promise(r=>setTimeout(r,100));
+    await Promise.race([started,req1.then(r=>{throw new Error('First turn ended before acquiring lock: '+r.statusCode);})]);
 
     const req2=concurrentApp.inject({
       method:'POST',url:'/conversations/'+convConcurrentId+'/messages',
       headers:auth(reader.cookie),payload:{message:'Concurrent test 2'}
     });
 
+    const res2=await req2.finally(releaseFirst);
     const res1=await req1;
-    const res2=await req2;
 
     const success=res1.statusCode===200?res1:res2;
     const busy=res1.statusCode===409?res1:res2;
@@ -123,7 +135,6 @@ if(!process.env.TEST_DATABASE_URL){
     assert.ok(busy.headers['retry-after'],'409 response must include Retry-After header');
     assert.ok(parseInt(busy.headers['retry-after'])>0,'Retry-After must be positive');
 
-    releaseFirst();
     await concurrentApp.close();
 
     // Test 3: Different conversations proceed independently
@@ -179,6 +190,8 @@ if(!process.env.TEST_DATABASE_URL){
 
     await revokeApp.close();
 
+    const staleRetry=await app.inject({method:'POST',url:'/conversations/'+convIdemId+'/messages',headers:{...auth(reader.cookie),'idempotency-key':idemKey},payload:{message:'Olá, como configurar o roteador?'}});
+    assert.equal(staleRetry.statusCode,409,'Old authorization revision must not replay');
     // Test 6: Client disconnect - lock is released, retry with idempotency key works
     const convDisconnect=await app.inject({method:'POST',url:'/conversations',headers:auth(reader.cookie)});
     assert.equal(convDisconnect.statusCode,200);

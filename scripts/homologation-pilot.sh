@@ -12,6 +12,10 @@ echo ""
 : "${EVAL_SYNTHETIC_LLM_APPROVED:=false}"
 : "${OPENAI_API_KEY:?OPENAI_API_KEY não definida}"
 : "${DATABASE_URL:?DATABASE_URL não definida}"
+: "${TEST_DATABASE_URL:?TEST_DATABASE_URL isolado não definido}"
+if [[ "$DATABASE_URL" != "$TEST_DATABASE_URL" ]]; then echo 'Banco de teste isolado obrigatório'; exit 1; fi
+if [[ ! -f apps/api/.evaluation-baseline.json ]]; then echo 'Baseline real ausente; recupere o artefato original antes de comparar'; exit 1; fi
+export NODE_ENV=test
 
 if [[ "$EVAL_SYNTHETIC_LLM_APPROVED" != "true" ]]; then
   echo "ERRO: EVAL_SYNTHETIC_LLM_APPROVED=true necessário para homologação com modelo real"
@@ -42,25 +46,25 @@ echo ""
 
 # 4. Avaliação com modelo real (validation split)
 echo "=== 4. Avaliação com modelo real (validation split) ==="
-npm run rag:evaluate -- --run --real --validation-only --json-output --output-file=homologation-results.json
+npm run rag:evaluate -w @suportai/api -- --run --real --validation-only --json-output --output-file=../../homologation-results.json
 echo "✓ Avaliação real concluída"
 echo ""
 
 # 5. Comparação com baseline
 echo "=== 5. Comparação com baseline PR #71 ==="
-npm run rag:evaluate -- --run --real --validation-only --baseline-compare --baseline-version=pr-71-dfbf776
+npm run rag:evaluate -w @suportai/api -- --run --real --validation-only --baseline-compare --baseline-version=pr-71-dfbf776 | tee regression-report.txt
 echo "✓ Comparação com baseline concluída"
 echo ""
 
 # 6. Testes E2E (Playwright)
 echo "=== 6. Testes E2E (Playwright/Chromium) ==="
-npm run e2e
+NODE_ENV=development npm run e2e
 echo "✓ Testes E2E OK"
 echo ""
 
 # 7. Validação de segurança (PDF adversariais, injeção, etc.)
 echo "=== 7. Validação de segurança ==="
-npm test -- --grep="adversarial\|injection\|credential\|security"
+npm exec -w @suportai/api -- node --import tsx --test --test-name-pattern="adversarial|injection|credential|security" src/**/*.test.ts
 echo "✓ Validação de segurança OK"
 echo ""
 
