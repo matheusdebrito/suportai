@@ -335,39 +335,6 @@ if(!process.env.TEST_DATABASE_URL){
    assert.equal(allowedRead.statusCode,200,allowedRead.body);
    assert.equal(allowedRead.json().space_id,shared);
    assert.equal(allowedRead.json().version.id,sharedDoc.versionId);
-   // Operational secrets never enter document text, chunks, or model context.
-   const oldVaultKey=process.env.OPERATIONAL_CREDENTIAL_KEY;
-   process.env.OPERATIONAL_CREDENTIAL_KEY='a'.repeat(64);
-   try{
-    const fixture='synthetic-device-'+randomUUID();
-    const listUrl=`/knowledge/documents/${sharedDoc.documentId}/credentials`;
-    const creation=await app.inject({method:'POST',url:listUrl,headers:auth(admin.cookie),payload:{label:'Acesso operacional de teste',value:fixture}});
-    assert.equal(creation.statusCode,201,creation.body);
-    assert.doesNotMatch(creation.body,new RegExp(fixture));
-    const credentialId=creation.json().id;
-    const root=`/knowledge/credentials/${credentialId}`;
-    const reveal=(cookie:string)=>app.inject({method:'POST',url:root+'/reveal',headers:auth(cookie),payload:{confirm:true}});
-    assert.equal((await reveal(reader.cookie)).statusCode,404);
-    assert.equal((await reveal(admin.cookie)).statusCode,404);
-    assert.equal((await app.inject({method:'GET',url:listUrl,headers:auth(reader.cookie)})).json().credentials.length,0);
-    const grantUrl=root+'/grants/'+reader.id;
-    assert.equal((await app.inject({method:'PUT',url:grantUrl,headers:auth(reader.cookie),payload:{allowed:true}})).statusCode,403);
-    assert.equal((await app.inject({method:'PUT',url:grantUrl,headers:auth(admin.cookie),payload:{allowed:true}})).statusCode,200);
-    const exposed=await reveal(reader.cookie);
-    assert.equal(exposed.statusCode,200);assert.equal(exposed.json().value,fixture);
-    assert.equal(exposed.headers['cache-control'],'no-store');
-    const stored=await query('SELECT ciphertext FROM operational_credentials WHERE id=$1',[credentialId]);
-    assert.equal(stored.rows[0].ciphertext.includes(Buffer.from(fixture)),false);
-    const logged=await query("SELECT metadata FROM audit_events WHERE action='OPERATIONAL_CREDENTIAL_REVEALED' AND resource_id=$1",[credentialId]);
-    assert.equal(logged.rowCount,1);assert.doesNotMatch(JSON.stringify(logged.rows),new RegExp(fixture));
-    assert.doesNotMatch((await app.inject({method:'GET',url:`/knowledge/documents/${sharedDoc.documentId}`,headers:auth(reader.cookie)})).body,new RegExp(fixture));
-    const credentialActor=await actorForSession(reader.cookie.split('=')[1]);assert.ok(credentialActor);
-    assert.equal(JSON.stringify(await searchKnowledge(credentialActor!,'DNS')).includes(fixture),false);
-    assert.equal((await app.inject({method:'PUT',url:grantUrl,headers:auth(admin.cookie),payload:{allowed:false}})).statusCode,200);
-    assert.equal((await reveal(reader.cookie)).statusCode,404);
-    assert.equal((await app.inject({method:'DELETE',url:root,headers:auth(admin.cookie),payload:{confirm:true}})).statusCode,200);
-    assert.equal((await reveal(reader.cookie)).statusCode,404);
-   }finally{if(oldVaultKey===undefined)delete process.env.OPERATIONAL_CREDENTIAL_KEY;else process.env.OPERATIONAL_CREDENTIAL_KEY=oldVaultKey;}
    // Previously plainto_tsquery('simple') required ALL words from this
    // natural question, including "como" and "empresa", and returned zero.
    const naturalActor=await actorForSession(reader.cookie.split('=')[1]);

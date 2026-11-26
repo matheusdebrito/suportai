@@ -1,0 +1,20 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {containsOperationalText,maskOperationalText,operationalLines} from './operational-text.js';
+import {validArticleContent,hasSecrets} from './knowledge.js';
+test('operational password is accepted only in a restricted article and masked before AI use',()=>{
+ const value='fixture-operational-123!';
+ const content='Abra a interface.\n- Senha operacional: '+value+'\nConfigure a conta.';
+ assert.equal(containsOperationalText(content),true);
+ assert.equal(validArticleContent(content,'RESTRICTED','ARTICLE'),true);
+ assert.equal(validArticleContent(content,'SHARED','ARTICLE'),false);
+ assert.equal(validArticleContent(content,'RESTRICTED','PDF'),false);
+ assert.equal(maskOperationalText(content).includes(value),false);
+ assert.equal(operationalLines(content)[0].includes(value),true);
+ assert.equal(validArticleContent('Credencial operacional: api_key=fixture-token-123456','RESTRICTED','ARTICLE'),false);
+ assert.equal(validArticleContent('senha: fixture-password-123456','RESTRICTED','ARTICLE'),false);
+ assert.equal(hasSecrets('password=fixture-password-123456'),true);
+ const legacy='- Fazer login (user - '+value+' ou user - default que é a senha padrão)';
+ assert.equal(containsOperationalText(legacy),true);
+ assert.equal(maskOperationalText(legacy).includes(value),false);
+});

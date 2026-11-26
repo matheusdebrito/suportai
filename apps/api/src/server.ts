@@ -7,7 +7,6 @@ import multipart from '@fastify/multipart';
 import {pool,query} from './db.js';
 import {registerAuth} from './auth.js';
 import {registerKnowledge} from './knowledge.js';
-import {registerOperationalCredentials} from './operational-credentials.js';
 import {registerChat} from './chat.js';
 import {registerOperations} from './operations.js';
 import {respond} from './agent.js';
@@ -33,7 +32,6 @@ export async function buildApp(options:{agentResponder?:typeof respond}={}){
  registerAuth(app);
  registerOperations(app);
  registerKnowledge(app);
- registerOperationalCredentials(app);
  registerChat(app,options.agentResponder??respond);
  app.setErrorHandler((error,req,reply)=>{
    const err=error as Error & {statusCode?:number};

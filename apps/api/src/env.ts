@@ -8,7 +8,7 @@ if(existsSync(path))process.loadEnvFile(path);
 
 /** Compose secrets: only the file path is visible in container environment. */
 export function hydrateFileSecrets(env:NodeJS.ProcessEnv,read:(path:string)=>string=path=>readFileSync(path,'utf8')){
- for(const key of ['DATABASE_URL','OPENAI_API_KEY','BOOTSTRAP_ADMIN_PASSWORD','OPERATIONAL_CREDENTIAL_KEY'] as const){
+ for(const key of ['DATABASE_URL','OPENAI_API_KEY','BOOTSTRAP_ADMIN_PASSWORD'] as const){
    const file=env[key+'_FILE'];
    if(!file)continue;
    if(!isAbsolute(file)||env[key]!==undefined)

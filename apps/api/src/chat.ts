@@ -5,6 +5,7 @@ import {requireActor} from './auth.js';
 import {requireCurrentActor} from './security.js';
 import {respond} from './agent.js';
 import {hasSecrets} from './knowledge.js';
+import {containsOperationalText} from './operational-text.js';
 import {safeErrorType} from './safe-errors.js';
 import {withConversationTurnLock} from './conversation-lock.js';
 import {listInvestigationSubjects,readInvestigationState,saveInvestigationState,visibleInvestigationVersions} from './investigation-state.js';
@@ -121,7 +122,7 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
    const b=req.body as {message?:unknown}|undefined;
    if(typeof b?.message!=='string'||b.message.trim().length===0||b.message.length>4000) return reply.code(400).send({error:'Mensagem inválida'});
    const userMessage=b.message;
-   if(hasSecrets(userMessage)) return reply.code(422).send({error:'Possível credencial detectada. Remova senhas e tokens antes de enviar.'});
+   if(hasSecrets(userMessage)||containsOperationalText(userMessage)) return reply.code(422).send({error:'Possível credencial detectada. Remova senhas e tokens antes de enviar.'});
 
    // Idempotency-Key: optional header for client-controlled deduplication.
    // If provided, must be a valid UUID v4. Returns existing response if key was already processed.
@@ -217,7 +218,7 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
      // Hold a shared account lock while saving the reply. Permission changes
      // must serialize either entirely before or after this commit.
      const sources=output.sources.map(s=>({documentId:s.documentId,versionId:s.versionId,versionNumber:s.versionNumber,title:s.title,ordinal:s.ordinal,
-       ...(s.historical?{historical:true}:{}),...(s.excerpts?{excerpts:s.excerpts}:{})}));
+       ...(s.historical?{historical:true}:{}),...(s.hasOperationalCredentials&&!s.historical?{hasOperationalCredentials:true}:{}),...(s.excerpts?{excerpts:s.excerpts}:{})}));
      const saved=await transaction(async c=>{
        await requireCurrentActor(c,a);
        const conversation=await c.query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2 FOR SHARE',[id,a.id]);

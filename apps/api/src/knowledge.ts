@@ -3,8 +3,14 @@ import {query,transaction,audit} from './db.js';
 import {requireActor} from './auth.js';
 import {spacePermission,requireCurrentActor,canApprove,type Actor} from './security.js';
 import {findSimilarPublished, validDuplicateReason, SimilarArticlesError} from './similar.js';
+import {containsOperationalText,maskOperationalText,forbiddenOperationalText,operationalLines} from './operational-text.js';
 export function hasSecrets(text:string) {
  return /-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----|(?:api[_-]?key|secret|senha|password|token|authorization)\s*[:=]\s*(?:bearer\s+)?(?:["'][^"'\r\n]{12,}["']|[^\s"']{12,})|(?:ghp|gho|ghu|ghs|ghr)_[a-z0-9]{30,}|github_pat_[a-z0-9_]{25,}|sk-[a-z0-9_-]{20,}|AKIA[0-9A-Z]{16}/i.test(text);
+}
+export function validArticleContent(content:string,visibility:string,kind:string):boolean{
+ if(forbiddenOperationalText(content))return false;
+ if(containsOperationalText(content)&&(visibility!=='RESTRICTED'||kind!=='ARTICLE'))return false;
+ return !hasSecrets(maskOperationalText(content));
 }
 async function readPdfBytes(file:{mimetype:string;filename:string;toBuffer:()=>Promise<Buffer>}|undefined):Promise<Buffer>{
  if(!file) throw Object.assign(new Error('PDF obrigatório'),{statusCode:400});
@@ -23,11 +29,13 @@ export function chunks(text:string,size=1100,overlap=150) {
 async function createVersion(actor:Actor,spaceId:string,title:string,content:string,kind:'ARTICLE'|'PDF',pdfBytes?:Buffer,documentId?:string,baseVersionId?:string,duplicateReason?:string) {
  const p=await spacePermission(actor,spaceId);
  if(!p?.edit) throw Object.assign(new Error('Sem permissão para escrever neste espaço'),{statusCode:403});
- if(hasSecrets(title)||hasSecrets(content)) throw Object.assign(new Error('Possível credencial no título ou conteúdo. Remova-a antes de enviar'),{statusCode:422});
+ if(hasSecrets(title)||containsOperationalText(title)) throw Object.assign(new Error('Possível credencial no título. Remova-a antes de enviar'),{statusCode:422});
  if(duplicateReason && hasSecrets(duplicateReason)) throw Object.assign(new Error('Remova credenciais da justificativa'),{statusCode:422});
  if(kind==='ARTICLE' && !p.read)throw Object.assign(new Error('Permissão de leitura obrigatória para verificar artigos existentes'),{statusCode:403});
  const result=await transaction(async c=>{
    await requireCurrentActor(c,actor);
+   const allowedSpace=await c.query('SELECT visibility FROM spaces WHERE id=$1',[spaceId]);
+   if(!validArticleContent(content,allowedSpace.rows[0]?.visibility??'',kind))throw Object.assign(new Error('Credenciais operacionais somente em artigo restrito, identificadas em linha própria. Não inclua tokens ou chaves de API.'),{statusCode:422});
    let docId=documentId;
    let versionNo=1;
    let similarCount=0;
@@ -111,25 +119,39 @@ export function registerKnowledge(app:FastifyInstance) {
    if(!r.rowCount) throw Object.assign(new Error('Rascunho não encontrado'),{statusCode:404});
    return r.rows[0];
  });
- app.get('/knowledge/documents/:id',async req=>{
-   const a=await requireActor(req);
-   const {doc}=await authorizedDoc(a,(req.params as {id:string}).id);
-   const r=await query("SELECT id,version_number,content,status FROM document_versions WHERE id=$1 AND status='PUBLISHED'",[doc.current_version_id]);
-   if(!r.rowCount) throw Object.assign(new Error('Documento não encontrado'),{statusCode:404});
-   return {id:doc.id,title:doc.title,kind:doc.kind,space_id:doc.space_id,version:r.rows[0]};
+ // A published credential uses the same current space grant as its procedure.
+ // Historical and shared versions never expose recognized operational values.
+ async function readPublishedVersion(actor:Actor,id:string,versionId:string|null){
+   if(!/^[0-9a-f-]{36}$/i.test(id)||(versionId&&!/^[0-9a-f-]{36}$/i.test(versionId)))throw Object.assign(new Error('Documento não encontrado'),{statusCode:404});
+   return transaction(async c=>{
+     await requireCurrentActor(c,actor);
+     const result=await c.query(`SELECT d.id,d.title,d.kind,d.space_id,d.current_version_id,s.visibility,
+       v.id AS version_id,v.version_number,v.content,v.status
+       FROM documents d JOIN document_versions v ON v.document_id=d.id
+       JOIN spaces s ON s.id=d.space_id LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2
+       WHERE d.id=$1 AND d.archived_at IS NULL AND d.current_version_id IS NOT NULL
+       AND (s.visibility='SHARED' OR COALESCE(g.can_read,false))
+       AND v.id=COALESCE($3::uuid,d.current_version_id) AND v.status IN ('PUBLISHED','ARCHIVED')
+       FOR SHARE OF d`,[id,actor.id,versionId]);
+     const row=result.rows[0];
+     if(!row)throw Object.assign(new Error('Documento não encontrado'),{statusCode:404});
+     const isCurrent=row.current_version_id===row.version_id;
+     const allowed=isCurrent&&row.status==='PUBLISHED'&&row.visibility==='RESTRICTED'&&row.kind==='ARTICLE'&&validArticleContent(row.content,row.visibility,row.kind);
+     const lines=allowed?operationalLines(row.content):[];
+     if(lines.length)await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'OPERATIONAL_CREDENTIAL_READ',$2)",[actor.id,row.version_id]);
+     return {id:row.id,title:row.title,kind:row.kind,space_id:row.space_id,isCurrent,
+       version:{id:row.version_id,version_number:row.version_number,status:row.status,content:allowed?row.content:maskOperationalText(row.content)},
+       operationalCredentials:lines};
+   });
+ }
+ app.get('/knowledge/documents/:id',async(req,reply)=>{
+   reply.header('Cache-Control','no-store');
+   return readPublishedVersion(await requireActor(req),(req.params as {id:string}).id,null);
  });
- app.get('/knowledge/documents/:id/versions/:versionId',async req=>{
-   const actor=await requireActor(req);
-   const params=req.params as {id:string;versionId:string};
-   const {doc}=await authorizedDoc(actor,params.id);
-   // Historical citations remain resolvable only while the reader is authorized.
-   // Drafts, rejected versions and revisions under review are never exposed.
-   const version=await query(`SELECT id,version_number,content,status FROM document_versions
-     WHERE id=$1 AND document_id=$2 AND status IN ('PUBLISHED','ARCHIVED')`,
-     [params.versionId,doc.id]);
-   if(!version.rowCount) throw Object.assign(new Error('Versão não encontrada'),{statusCode:404});
-   return {id:doc.id,title:doc.title,kind:doc.kind,space_id:doc.space_id,version:version.rows[0],
-     isCurrent:doc.current_version_id===params.versionId};
+ app.get('/knowledge/documents/:id/versions/:versionId',async(req,reply)=>{
+   reply.header('Cache-Control','no-store');
+   const {id,versionId}=req.params as {id:string;versionId:string};
+   return readPublishedVersion(await requireActor(req),id,versionId);
  });
 
  // Archiving is an explicit editorial action. It only changes document visibility,
@@ -348,7 +370,7 @@ export function registerKnowledge(app:FastifyInstance) {
    const id=(req.params as {id:string}).id;
    const b=req.body as {content?:unknown}|undefined;
    const content=typeof b?.content==='string'?b.content.trim():'';
-   if(content.length<20||content.length>100000||hasSecrets(content))
+   if(content.length<20||content.length>100000)
      return reply.code(400).send({error:'Artigo corrigido inválido ou contém possível credencial'});
    const result=await transaction(async c=>{
      await requireCurrentActor(c,actor);
@@ -362,6 +384,7 @@ export function registerKnowledge(app:FastifyInstance) {
      const p=perm.rows[0];
      if(!(p && (p.can_edit && (p.visibility==='SHARED'||p.can_read))))return {error:'FORBIDDEN'};
      if(ver.kind!=='ARTICLE')return {error:'UNSUPPORTED'};
+     if(!validArticleContent(content,p.visibility,ver.kind))return {error:'SECRETS'};
      if(ver.status!=='CHANGES_REQUESTED'||ver.superseded_by)return {error:'CONFLICT'};
      if(ver.current_version_id!==ver.base_version_id)return {error:'STALE'};
      const next=await c.query('SELECT COALESCE(MAX(version_number),0)+1 AS number FROM document_versions WHERE document_id=$1',[ver.document_id]);
@@ -376,6 +399,7 @@ export function registerKnowledge(app:FastifyInstance) {
      if(result.error==='NOT_FOUND')return reply.code(404).send({error:'Proposta não encontrada'});
      if(result.error==='FORBIDDEN')return reply.code(403).send({error:'Permissão de edição revogada'});
      if(result.error==='UNSUPPORTED')return reply.code(415).send({error:'Reenvie um PDF corrigido como novo documento'});
+     if(result.error==='SECRETS')return reply.code(422).send({error:'Credenciais operacionais somente em artigo restrito e identificado'});
      return reply.code(409).send({error:result.error==='STALE'?'O artigo publicado mudou. Reabra a revisão':'A proposta já foi corrigida ou não está aguardando ajustes'});
    }
    return reply.code(201).send(result);
@@ -472,7 +496,7 @@ export function registerKnowledge(app:FastifyInstance) {
      if(pending.expires_at<=new Date()) return {error:'EXPIRED'};
      const p=await spacePermission(a,pending.space_id);
      if(!p?.edit) return {error:'FORBIDDEN'};
-     if(hasSecrets(pending.title)||hasSecrets(pending.content)) return {error:'SECRETS'};
+     if(hasSecrets(pending.title)||hasSecrets(pending.content)||containsOperationalText(pending.title)||containsOperationalText(pending.content)) return {error:'SECRETS'};
      let docId=pending.document_id;let version=1;
      let similarCount=0;
      if(docId){

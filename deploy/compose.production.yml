@@ -60,7 +60,6 @@ services:
       OPENAI_API_KEY_FILE: /run/secrets/ai_key
       ALLOW_EXTERNAL_AI_DATA_PROCESSING: ${ALLOW_EXTERNAL_AI_DATA_PROCESSING:-false}
       APP_ORIGIN: ${APP_ORIGIN:?set APP_ORIGIN}
-      OPERATIONAL_CREDENTIAL_KEY: ${OPERATIONAL_CREDENTIAL_KEY:-}
     secrets: [database_url,ai_key]
     networks: [frontend,database]
     depends_on:

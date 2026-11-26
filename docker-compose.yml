@@ -102,7 +102,6 @@ services:
       NODE_ENV: development
       APP_ORIGIN: ${SUPORTAI_LOCAL_ORIGIN:-http://localhost:5173}
       API_PORT: "4000"
-      OPERATIONAL_CREDENTIAL_KEY: ${OPERATIONAL_CREDENTIAL_KEY:-}
     expose: ["4000"]
     depends_on:
       bootstrap: {condition: service_completed_successfully}
