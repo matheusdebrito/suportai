@@ -177,7 +177,7 @@ if(!process.env.TEST_DATABASE_URL){
       const conversation=await openConversation(app,headers);
       const retrieved=await searchKnowledge(actor,'configurar telefone de laboratório');
       const ranking=retrievalMetrics([source.version],retrieved.map(x=>x.versionId));
-      const turns=[];
+      const turns:{message:string;answer:string;sources:{versionId:string}[];states:{id:string;topic:string;support_preference:string}[];agentMetrics?:import('./agent-budget.js').AgentMetrics;quality:ReturnType<typeof episodeQuality>}[]=[];
       const previous:string[]=[];
       for(const message of ['Preciso configurar um telefone de laboratório','sim','não entendi a parte da senha','a senha pode ser admin','me dê o passo a passo completo']){
         const response=await postTurn(app,headers,conversation,message);
@@ -185,7 +185,7 @@ if(!process.env.TEST_DATABASE_URL){
         const result=response.json<{answer:string;sources:{versionId:string}[];agentMetrics?:import('./agent-budget.js').AgentMetrics}>();
         assert.ok(result.sources.every(sourceRef=>sourceRef.versionId===source.version),'Unexpected source in isolated synthetic episode');
         const states=await query('SELECT id,topic,support_preference FROM investigations WHERE conversation_id=$1',[conversation]);
-        turns.push({message,answer:result.answer,sources:result.sources,states:states.rows,agentMetrics:result.agentMetrics,quality:episodeQuality(result.answer,article,previous)});
+        turns.push({message,answer:result.answer,sources:result.sources,states:states.rows.map(row=>({id:String(row.id),topic:String(row.topic),support_preference:String(row.support_preference)})),agentMetrics:result.agentMetrics,quality:episodeQuality(result.answer,article,previous)});
         previous.push(result.answer);
       }
       writeFileSync(process.env.EPISODE_REPORT_PATH||'episode-real-report.json',JSON.stringify({mode:'real-http',model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',embeddingModel:process.env.OPENAI_EMBED_MODEL||'text-embedding-3-small',temperature:AGENT_GENERATION_TEMPERATURE,limits:resolveAgentLimits(),corpusHash:createHash('sha256').update(article).digest('hex'),commit:process.env.EVALUATION_COMMIT||null,ranking,turns,humanReview:'pending'},null,2));

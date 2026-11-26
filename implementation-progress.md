@@ -35,3 +35,6 @@ Semantic capture integrated into the opt-in real HTTP fixture, with real fixture
 
 ## Latest checkpoint
 Separated calibration from phone episode; four independent synthetic documents across pilot and holdout, with real embeddings. Added npm commands for calibration, review and baseline. Corpus is still small and not human-reviewed. Next: static integration review, build/typecheck and regression execution; expand reviewed pilot before changing thresholds.
+
+## CI review
+CI run 45907280551 failed typecheck TS7034/TS7005 in episode turns; explicit report type added. Production dependency audit passed on 3482dc8. Await new CI; remaining integration review and real evaluation pending.
