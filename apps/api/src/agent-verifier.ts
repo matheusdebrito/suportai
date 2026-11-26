@@ -79,7 +79,7 @@ function reviewClaims(answer:string,units:{text:string;end:number}[],passages:Pa
  }
  if(!cited.size)return rejected('no_supported_claim');
  // Do not present a numbered or bulleted procedure after removing an unsupported prerequisite.
- if(unsupportedUnits&&units.some(unit=>/^(?:\d+[.)]\s|[-*+]\s)/.test(unit.text)))return rejected('model_rejected');
+ if(unsupportedUnits&&(/\b(?:procedimento|passo a passo|configur\w*|instal\w*)\b/i.test(question)||units.some(unit=>/^(?:\d+[.)]\s|[-*+]\s)/.test(unit.text))))return rejected('model_rejected');
  flushLabels();
  return {verdict:'supported',answer:rendered+answer.slice(start)+(unsupportedUnits?'\n\nNão consegui confirmar todos os detalhes nas fontes. O texto acima é apenas a parte verificada.':''),sources:[...cited.values()].map(value=>value.source),nonclaimsRemoved,unsupportedUnits};
 }
