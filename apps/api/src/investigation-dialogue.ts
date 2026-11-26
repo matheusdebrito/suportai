@@ -1,5 +1,5 @@
 import type {InvestigationDraft,InvestigationSubject} from './investigation-state.js';
-import {setupObjective,safeProgressQuestion} from './support-dialogue.js';
+import {setupObjective,lastProgressQuestion,requestsSupportMode} from './support-dialogue.js';
 import {hasSecrets} from './knowledge.js';
 
 type Route={kind:'new';topic:string}|{kind:'existing';id:string}|{kind:'clarify';question:string};
@@ -42,7 +42,8 @@ export function routeInvestigation(userMessage:string,subjects:InvestigationSubj
   const setup=setupObjective(userMessage);
   if(setup)return {kind:'new',topic:setup};
   if(activeId && continuation.test(userMessage))return {kind:'existing',id:activeId};
-  if(activeId&&lastAssistant&&!hasSecrets(lastAssistant)&&lastAssistant.split('\n').some(line=>safeProgressQuestion(line.trim()))&&
+  if(activeId&&requestsSupportMode(userMessage))return {kind:'existing',id:activeId};
+  if(activeId&&lastAssistant&&lastProgressQuestion(lastAssistant)&&
      userMessage.trim().length<=160&&!userMessage.trim().endsWith('?')&&!hasSecrets(userMessage))return {kind:'existing',id:activeId};
   return null;
 }
@@ -66,7 +67,7 @@ export function updateInvestigationFromMessage(topic:string,message:string,previ
     /\b(?:agora|ainda|notei|observei|confirmei|apareceu|falhou|travou|caiu|pisca|parou|deu|funcionou|resolveu)\b/i.test(text)){
     return {...draft,reportedFacts:append(draft.reportedFacts,text.slice(0,400))};
   }
-  if(previous&&lastAssistant&&!hasSecrets(lastAssistant)&&lastAssistant.split('\n').some(line=>safeProgressQuestion(line.trim()))&&text.length<=160&&!hasSecrets(text)){
+  if(previous&&lastAssistant&&lastProgressQuestion(lastAssistant)&&text.length<=160&&!hasSecrets(text)){
     return {...draft,reportedFacts:append(draft.reportedFacts,text.slice(0,400))};
   }
   return draft;

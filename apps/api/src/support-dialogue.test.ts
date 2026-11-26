@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {supportPreference,supportContext,safeProgressQuestion,setupObjective} from './support-dialogue.js';
+import {supportPreference,supportContext,safeProgressQuestion,setupObjective,lastProgressQuestion} from './support-dialogue.js';
 import {routeInvestigation,updateInvestigationFromMessage} from './investigation-dialogue.js';
 test('guided setup and full procedure preference remain distinct',()=>{
  assert.equal(supportPreference('Preciso configurar um telefone',[]),'guided');
@@ -28,4 +28,10 @@ test('setup objective and short user observations can persist in existing invest
  assert.deepEqual(routeInvestigation('Mudando de assunto: impressora',subjects,'i','Conseguiu identificar o endereço?'),{kind:'new',topic:'impressora'});
  const context=supportContext('Consegui',[{role:'user',content:'Preciso configurar um telefone'},{role:'assistant',content:'Conseguiu identificar o endereço?'}],draft);
  assert.match(context,/lastQuestion":"Conseguiu identificar o endereço\?/);
+});
+
+test('mode changes retain active subject and inline progress questions remain detectable',()=>{
+ assert.equal(lastProgressQuestion('Abra a interface web. [1] Apareceu a tela de login?'),'Apareceu a tela de login?');
+ assert.deepEqual(routeInvestigation('Me passe o procedimento completo',[{id:'i',topic:'telefone'}],'i'),{kind:'existing',id:'i'});
+ assert.equal(supportPreference('Mudando de assunto: qual o DNS?',[{role:'user',content:'Preciso configurar um telefone'}]),'adaptive');
 });
