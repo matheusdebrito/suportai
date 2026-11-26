@@ -1303,3 +1303,6 @@ input,textarea,select{border-color:#dedede;color:#202124;min-width:0}
 }
 @media(max-width:400px){.main,.chat-page .main{padding:10px}.panel{padding:12px}.user-item{grid-template-columns:minmax(0,1fr)}.user-item>*{grid-column:1/-1}.suggestions button{width:100%}}
 @media(prefers-reduced-motion:reduce){.sidebar{transition:none}}
+
+/* Plain-text chat remains escaped by React; preserve model paragraph and list breaks. */
+.chat .bubble .formatted { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }

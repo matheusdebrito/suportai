@@ -1,4 +1,6 @@
 import type {InvestigationDraft,InvestigationSubject} from './investigation-state.js';
+import {setupObjective,lastProgressQuestion,requestsSupportMode} from './support-dialogue.js';
+import {hasSecrets} from './knowledge.js';
 
 type Route={kind:'new';topic:string}|{kind:'existing';id:string}|{kind:'clarify';question:string};
 const switchSubject=/^\s*(?:mudando de assunto|mudei de assunto|(?:um )?outro (?:assunto|problema|incidente)|agora (?:sobre|vamos falar de))\b\s*[:;,–-]?\s*/i;
@@ -16,7 +18,7 @@ function subjectLabel(value:string):string{
     .split(/[,.;!?\n]/,1)[0].trim().slice(0,160);
 }
 
-export function routeInvestigation(userMessage:string,subjects:InvestigationSubject[],activeId:string|null):Route|null{
+export function routeInvestigation(userMessage:string,subjects:InvestigationSubject[],activeId:string|null,lastAssistant?:string):Route|null{
   if(/(?:^|\n)\s*%PDF-/.test(userMessage))return null;
   const switching=switchSubject.exec(userMessage);
   const resuming=resumeSubject.exec(userMessage);
@@ -37,12 +39,17 @@ export function routeInvestigation(userMessage:string,subjects:InvestigationSubj
   if(resuming)return {kind:'clarify',question:'Qual assunto você quer retomar? Informe o nome do sistema ou equipamento para eu localizar a investigação.'};
   if(key && (switching||incident))return {kind:'new',topic:label};
   if(switching)return {kind:'clarify',question:'Qual é o novo problema que você quer investigar?'};
+  const setup=setupObjective(userMessage);
+  if(setup)return {kind:'new',topic:setup};
   if(activeId && continuation.test(userMessage))return {kind:'existing',id:activeId};
+  if(activeId&&requestsSupportMode(userMessage))return {kind:'existing',id:activeId};
+  if(activeId&&lastAssistant&&lastProgressQuestion(lastAssistant)&&
+     userMessage.trim().length<=160&&!userMessage.trim().endsWith('?')&&!hasSecrets(userMessage))return {kind:'existing',id:activeId};
   return null;
 }
 
 /** Record reported observations only. Assistant replies are never promoted to facts. */
-export function updateInvestigationFromMessage(topic:string,message:string,previous?:InvestigationDraft):InvestigationDraft{
+export function updateInvestigationFromMessage(topic:string,message:string,previous?:InvestigationDraft,lastAssistant?:string):InvestigationDraft{
   const draft:InvestigationDraft={topic,reportedFacts:[],hypotheses:[],openQuestions:[],tests:[],sourceVersionIds:[],...previous};
   const text=message.trim();
   if(/(?:^|\n)\s*%PDF-/.test(text))return draft;
@@ -56,8 +63,11 @@ export function updateInvestigationFromMessage(topic:string,message:string,previ
     const test={content:content.slice(0,400),result:result?.trim().slice(0,400)||null};
     return {...draft,tests:[...draft.tests.filter(item=>item.content!==test.content),test].slice(-12)};
   }
-  if(observedIncident.test(text)||namedIncident.test(text)||
+  if(setupObjective(text)||observedIncident.test(text)||namedIncident.test(text)||
     /\b(?:agora|ainda|notei|observei|confirmei|apareceu|falhou|travou|caiu|pisca|parou|deu|funcionou|resolveu)\b/i.test(text)){
+    return {...draft,reportedFacts:append(draft.reportedFacts,text.slice(0,400))};
+  }
+  if(previous&&lastAssistant&&lastProgressQuestion(lastAssistant)&&text.length<=160&&!hasSecrets(text)){
     return {...draft,reportedFacts:append(draft.reportedFacts,text.slice(0,400))};
   }
   return draft;

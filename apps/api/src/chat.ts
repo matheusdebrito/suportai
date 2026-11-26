@@ -191,13 +191,15 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
     WHERE m.conversation_id=$1 AND m.auth_revision=$2
     ORDER BY m.created_at DESC,m.id DESC LIMIT 60`,[id,a.auth_revision,a.id]);
    const subjects=await listInvestigationSubjects(a,id);
-   const route=routeInvestigation(userMessage,subjects,previous.rows[0]?.investigation_id??null);
+   const activeId=previous.rows[0]?.investigation_id??null;
+   const lastAssistant=previous.rows[0]?.role==='assistant'?previous.rows[0].content:undefined;
+   const route=routeInvestigation(userMessage,subjects,activeId,lastAssistant);
    const investigation=route?.kind==='existing' ? await readInvestigationState(a,id,route.id) : null;
    const clarification=route?.kind==='clarify' ? route.question : route?.kind==='existing'&&!investigation
      ? 'O contexto anterior não está disponível. Qual sistema ou equipamento você quer investigar agora?' : null;
    const investigationId=investigation?.id??(route?.kind==='new' ? randomUUID() : null);
    const topic=investigation?.topic??(route?.kind==='new' ? route.topic : null);
-   const draft=topic ? updateInvestigationFromMessage(topic,userMessage,investigation??undefined) : null;
+   const draft=topic ? updateInvestigationFromMessage(topic,userMessage,investigation??undefined,investigation?.id===activeId?lastAssistant:undefined) : null;
    // Older transcripts can inform this turn only when they belong to the selected subject.
    const history=previous.rows.filter(message=>message.investigation_id===investigationId).reverse()
      .map(({role,content})=>({role,content}));
@@ -212,7 +214,7 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
    try {
      const output=clarification ? {answer:clarification,sources:[],pendingActions:[]} :
        await runAgent(a,id,userMessage,history,undefined,undefined,{investigation:investigation??undefined});
-     // Numeric-only diagnostic signal. Never log prompts, document excerpts or secrets.
+     // Bounded categorical and numeric diagnostic signal. Never log prompts, document excerpts or secrets.
      if(output.metrics)req.log.info({agent:output.metrics},'Agent turn finished');
      // Hold a shared account lock while saving the reply. Permission changes
      // must serialize either entirely before or after this commit.

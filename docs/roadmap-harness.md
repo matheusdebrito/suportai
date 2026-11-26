@@ -286,3 +286,12 @@ Fase 5 **reaberta para validação**: resultados históricos declarados não equ
 ### Estabilização da resposta fundamentada — recuperação após rejeição
 
 H-T007/H-T010/H-T012/H-T015/H-T019: registrar motivos categóricos de rejeição (sem textos, prompts ou credenciais), preservar listas e campos na segmentação, realizar uma busca contextual complementar dentro do orçamento e tentar uma única nova síntese. Se não for possível validar a síntese, oferecer apenas trecho literal de uma fonte vigente autorizada com correspondência lexical estrita, escopo explícito e sem conflito, conteúdo histórico ou sinais de injeção. A persistência do chat mantém a revalidação de autorização e versão. Cenários sintéticos de telefone incluem pedido genérico e modelo desconhecido. Validação real opcional: `EVAL_SYNTHETIC_LLM_APPROVED=true npm run rag:evaluate -w @suportai/api -- --run --real --case-prefix=phone-` (requer chave já configurada e autorização de custos). Não inclui dados reais. CI e execução real ainda precisam ser comprovados; não marcar os critérios como concluídos sem evidência.
+
+## Fase 6 — atendimento adaptativo e resolução orientada por objetivo
+
+- H6-01: substituir obrigação de repetir procedimento completo por estratégia adaptativa (orientar, investigar, esclarecer, responder diretamente ou concluir), usando o loop e as ferramentas existentes.
+- H6-02: preferência explícita por atendimento guiado ou procedimento integral, memória de observações e última pergunta; não promover texto da IA a fato.
+- H6-03: acompanhar solicitações de configuração/instalação no estado persistente de investigação e respostas curtas, preservar isolamento por assunto e revalidar fontes como antes.
+- H6-04: verificar orientações e perguntas neutras de progresso separadamente; reduzir repetição de citações consecutivas e preservar formatação textual.
+- H6-05: recuperação com reescrita adaptativa limitada pelo orçamento, sem transformar fallback literal em síntese verificada.
+- H6-06: regressões determinísticas e avaliação sintética real de pedido amplo, pedido integral, avanço e dificuldade relatada. Executar `EVAL_SYNTHETIC_LLM_APPROVED=true npm run rag:evaluate -w @suportai/api -- --run --real --case-prefix=phone-` com chave e custos autorizados. CI e piloto real pendentes; não marcar a fase concluída apenas com simulações. Sem fluxos fixos por equipamento, migrations ou novas ferramentas de escrita.

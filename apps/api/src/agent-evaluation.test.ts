@@ -128,8 +128,16 @@ test('T025 contract: previous conversation turns are carried through without gra
    {role:'assistant' as const,content:'Qual laboratório?'}
  ];
  const output=await respond(actor,randomUUID(),'É o laboratório B.',history,fake,fakeSearch([],[]));
- assert.equal((calls[0].messages as any[]).filter(m=>m.role==='user').length,2);
- assert.ok((calls[0].messages as any[]).some(m=>m.content==='Qual laboratório?'));
+ const messages=calls[0].messages as {role:string;content:string}[];
+ const userMessages=messages.filter(m=>m.role==='user');
+ assert.equal(userMessages.length,3);
+ const supportData=userMessages[0].content;
+ assert.match(supportData,/CONTEXTO DE ATENDIMENTO: dados conversacionais não verificados/);
+ assert.match(supportData,/"lastQuestion":"Qual laboratório\?"/);
+ assert.deepEqual(userMessages.slice(1).map(m=>m.content),['Estou investigando um laboratório.','É o laboratório B.']);
+ assert.ok(messages.some(m=>m.role==='assistant'&&m.content==='Qual laboratório?'));
+ assert.deepEqual(calls[0].tools.map((t:any)=>t.function.name),['search_knowledge','ask_clarification','respond_social','get_knowledge_document','list_document_versions','list_writable_spaces','prepare_article']);
+ assert.deepEqual(output.pendingActions,[]);
  assert.match(output.answer,/não encontrei fontes publicadas/i);
  assert.deepEqual(output.sources,[]);
 });
