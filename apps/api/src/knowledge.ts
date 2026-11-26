@@ -1,7 +1,7 @@
 import type {FastifyInstance} from 'fastify';
 import {query,transaction,audit} from './db.js';
 import {requireActor} from './auth.js';
-import {spacePermission,requireCurrentActor,type Actor} from './security.js';
+import {spacePermission,requireCurrentActor,canApprove,type Actor} from './security.js';
 import {findSimilarPublished, validDuplicateReason, SimilarArticlesError} from './similar.js';
 export function hasSecrets(text:string) {
  return /-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----|(?:api[_-]?key|secret|senha|password|token|authorization)\s*[:=]\s*(?:bearer\s+)?(?:["'][^"'\r\n]{12,}["']|[^\s"']{12,})|(?:ghp|gho|ghu|ghs|ghr)_[a-z0-9]{30,}|github_pat_[a-z0-9_]{25,}|sk-[a-z0-9_-]{20,}|AKIA[0-9A-Z]{16}/i.test(text);
@@ -136,14 +136,14 @@ export function registerKnowledge(app:FastifyInstance) {
  // never deletes the version history, source bytes or previously audited decisions.
  app.get('/knowledge/archived',async req=>{
    const actor=await requireActor(req);
-   if(actor.role!=='APPROVER')return {documents:[]};
+   if(actor.role!=='APPROVER'&&actor.role!=='ADMIN')return {documents:[]};
    const rows=await query(`SELECT d.id,d.title,d.kind,d.archived_at,d.current_version_id,
        s.name AS space_name FROM documents d
        JOIN spaces s ON s.id=d.space_id
-       JOIN space_grants g ON g.space_id=d.space_id AND g.user_id=$1
+       LEFT JOIN space_grants g ON g.space_id=d.space_id AND g.user_id=$1
        WHERE d.archived_at IS NOT NULL AND d.current_version_id IS NOT NULL
-         AND g.can_approve=true AND (s.visibility='SHARED' OR g.can_read=true)
-       ORDER BY d.archived_at DESC,d.id DESC LIMIT 100`,[actor.id]);
+         AND (($2='ADMIN' AND s.visibility='SHARED') OR (g.can_approve=true AND (s.visibility='SHARED' OR g.can_read=true)))
+       ORDER BY d.archived_at DESC,d.id DESC LIMIT 100`,[actor.id,actor.role]);
    return {documents:rows.rows};
  });
  for(const action of ['archive','restore'] as const){
@@ -160,8 +160,7 @@ export function registerKnowledge(app:FastifyInstance) {
          LEFT JOIN space_grants g ON g.space_id=d.space_id AND g.user_id=$2
          WHERE d.id=$1 FOR UPDATE OF d`,[id,actor.id]);
        const doc=found.rows[0];
-       if(!doc||actor.role!=='APPROVER'||!doc.can_approve
-         ||!(doc.visibility==='SHARED'||doc.can_read))return 'NOT_FOUND';
+       if(!doc||!canApprove(actor.role,doc.visibility,doc))return 'NOT_FOUND';
        if(!doc.current_version_id)return 'NO_PUBLISHED';
        if(action==='archive'){
          if(doc.archived_at)return 'UNCHANGED';
@@ -236,14 +235,14 @@ export function registerKnowledge(app:FastifyInstance) {
  });
  app.get('/knowledge/reviews',async req=>{
    const a=await requireActor(req);
-   if(a.role!=='APPROVER') return {reviews:[]};
+   if(a.role!=='APPROVER'&&a.role!=='ADMIN') return {reviews:[]};
    const r=await query(`SELECT v.id AS version_id,v.status,v.index_status,v.content,base.content AS base_content,j.error AS ingestion_error,d.id AS document_id,d.title,s.name AS space_name
     FROM document_versions v JOIN documents d ON d.id=v.document_id JOIN spaces s ON s.id=d.space_id
     LEFT JOIN document_versions base ON base.id=v.base_version_id
     LEFT JOIN ingestion_jobs j ON j.version_id=v.id
     LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$1
-    WHERE v.status='IN_REVIEW' AND d.archived_at IS NULL AND v.superseded_by IS NULL AND (s.visibility='SHARED' OR COALESCE(g.can_read,false)) AND COALESCE(g.can_approve,false)
-    ORDER BY v.created_at DESC LIMIT 100`,[a.id]);
+    WHERE v.status='IN_REVIEW' AND d.archived_at IS NULL AND v.superseded_by IS NULL AND (($2='ADMIN' AND s.visibility='SHARED') OR ((s.visibility='SHARED' OR COALESCE(g.can_read,false)) AND COALESCE(g.can_approve,false)))
+    ORDER BY v.created_at DESC LIMIT 100`,[a.id,a.role]);
    return {reviews:r.rows};
  });
  app.post('/knowledge/versions/:id/retry',async(req,reply)=>{
@@ -297,7 +296,7 @@ export function registerKnowledge(app:FastifyInstance) {
         LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$2 WHERE v.id=$1 FOR UPDATE OF v,d`,[id,a.id]);
      const v=r.rows[0];
      if(!v) return 'NOT_FOUND';
-     if(a.role!=='APPROVER'||!(v.can_approve && (v.visibility==='SHARED'||v.can_read))) return 'FORBIDDEN';
+     if(!canApprove(a.role,v.visibility,v)) return 'FORBIDDEN';
      if(v.archived_at)return 'ARCHIVED';
      if(v.status==='PUBLISHED'&&v.current_version_id===v.id) return 'OK';
      if(v.status!=='IN_REVIEW'||v.index_status!=='READY') return 'NOT_READY';
@@ -332,7 +331,7 @@ export function registerKnowledge(app:FastifyInstance) {
        'WHERE v.id=$1 FOR UPDATE OF v,d',[id,actor.id]);
      const item=r.rows[0];
      if(!item)return 'NOT_FOUND';
-     if(actor.role!=='APPROVER'||!(item.can_approve && (item.visibility==='SHARED'||item.can_read)))return 'FORBIDDEN';
+     if(!canApprove(actor.role,item.visibility,item))return 'FORBIDDEN';
      if(item.status!=='IN_REVIEW')return 'CONFLICT';
      await c.query("UPDATE document_versions SET status='CHANGES_REQUESTED',reviewed_by=$2,reviewed_at=now(),review_note=$3 WHERE id=$1",[id,actor.id,note]);
      await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'KNOWLEDGE_CHANGES_REQUESTED',$2)",[actor.id,item.document_id]);
@@ -447,7 +446,7 @@ export function registerKnowledge(app:FastifyInstance) {
        'WHERE v.id=$1 FOR UPDATE OF v,d',[id,actor.id]);
      const ver=r.rows[0];
      if(!ver)return 'NOT_FOUND';
-     if(actor.role!=='APPROVER'||!(ver.can_approve && (ver.visibility==='SHARED'||ver.can_read)))return 'FORBIDDEN';
+     if(!canApprove(actor.role,ver.visibility,ver))return 'FORBIDDEN';
      if(ver.status!=='IN_REVIEW')return 'CONFLICT';
      await c.query("UPDATE document_versions SET status='REJECTED',review_note=$3,reviewed_by=$2,reviewed_at=now() WHERE id=$1",[id,actor.id,note]);
      await c.query("INSERT INTO audit_events(actor_id,action,resource_id) VALUES($1,'KNOWLEDGE_REJECTED',$2)",[actor.id,ver.document_id]);
