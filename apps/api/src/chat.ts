@@ -8,7 +8,7 @@ import {hasSecrets} from './knowledge.js';
 import {safeErrorType} from './safe-errors.js';
 import {withConversationTurnLock} from './conversation-lock.js';
 import {listInvestigationSubjects,readInvestigationState,saveInvestigationState,visibleInvestigationVersions} from './investigation-state.js';
-import {routeInvestigation,updateInvestigationFromMessage} from './investigation-dialogue.js';
+import {routeInvestigation,selectActiveInvestigation,updateInvestigationFromMessage} from './investigation-dialogue.js';
 import {recordTurnTelemetry} from './telemetry.js';
 
 const inaccessibleContext=`EXISTS (
@@ -191,7 +191,7 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
     WHERE m.conversation_id=$1 AND m.auth_revision=$2
     ORDER BY m.created_at DESC,m.id DESC LIMIT 60`,[id,a.auth_revision,a.id]);
    const subjects=await listInvestigationSubjects(a,id);
-   const activeId=previous.rows[0]?.investigation_id??null;
+   const activeId=selectActiveInvestigation(previous.rows);
    const lastAssistant=previous.rows[0]?.role==='assistant'?previous.rows[0].content:undefined;
    const route=routeInvestigation(userMessage,subjects,activeId,lastAssistant);
    const investigation=route?.kind==='existing' ? await readInvestigationState(a,id,route.id) : null;

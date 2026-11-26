@@ -92,6 +92,37 @@ if(!process.env.TEST_DATABASE_URL){
     }
   });
 
+  test('phone episode keeps the persisted investigation through short and focused follow-ups',async()=>{
+    const {actor,headers}=await createSession();
+    const seen:(InvestigationDraft|undefined)[]=[];
+    const app=await buildApp({agentResponder:async(_a,_c,_m,_h,_p,_s,options)=>{
+      seen.push(options?.investigation);
+      return {answer:'Resposta sintética.',sources:[],pendingActions:[]};
+    }});
+    try{
+      const created=await app.inject({method:'POST',url:'/conversations',headers});
+      assert.equal(created.statusCode,200);
+      const {id}=created.json<{id:string}>();
+      const send=async(message:string)=>{
+        const r=await app.inject({method:'POST',url:`/conversations/${id}/messages`,headers,payload:{message}});
+        assert.equal(r.statusCode,200,r.body);
+      };
+      await send('Preciso configurar um telefone');
+      await send('Obrigado');
+      await send('sim');
+      await send('Não entendi a parte da senha');
+      await send('A senha pode ser admin');
+      await send('Me dê o passo a passo completo');
+      const records=await query('SELECT id,topic,support_preference FROM investigations WHERE conversation_id=$1',[id]);
+      assert.equal(records.rowCount,1);
+      assert.equal(records.rows[0].topic,'telefone');
+      assert.equal(records.rows[0].support_preference,'complete');
+      assert.equal(seen.at(-1)?.topic,'telefone');
+      await send('e depois?');
+      assert.equal(seen.at(-1)?.supportPreference,'complete');
+    }finally{await app.close();await query('DELETE FROM users WHERE id=$1',[actor.id]);}
+  });
+
   test('chat hides a reply derived from a source after that source is archived',async()=>{
     const {actor,headers}=await createSession();
     const document=randomUUID();

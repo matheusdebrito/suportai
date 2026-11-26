@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {isFocusedKnowledgeQuestion,supportPreference,supportContext,safeProgressQuestion,setupObjective,lastProgressQuestion,SUPPORT_POLICY} from './support-dialogue.js';
+import {isFocusedKnowledgeQuestion,structuredSupportQuery,supportPreference,supportContext,safeProgressQuestion,setupObjective,lastProgressQuestion,SUPPORT_POLICY} from './support-dialogue.js';
 import {routeInvestigation,updateInvestigationFromMessage} from './investigation-dialogue.js';
 test('guided setup and full procedure preference remain distinct',()=>{
  assert.equal(supportPreference('Preciso configurar um telefone',[]),'guided');
@@ -46,4 +46,15 @@ test('mode changes retain active subject and inline progress questions remain de
  assert.equal(lastProgressQuestion('Abra a interface web. [1] Apareceu a tela de login?'),'Apareceu a tela de login?');
  assert.deepEqual(routeInvestigation('Me passe o procedimento completo',[{id:'i',topic:'telefone'}],'i'),{kind:'existing',id:'i'});
  assert.equal(supportPreference('Mudando de assunto: qual o DNS?',[{role:'user',content:'Preciso configurar um telefone'}]),'adaptive');
+});
+
+test('persisted mode survives a long history and changes only by explicit request',()=>{
+ assert.equal(supportPreference('e depois?',[],'complete'),'complete');
+ assert.equal(supportPreference('me guie',[],'complete'),'guided');
+ assert.equal(supportPreference('me passe tudo',[],'guided'),'complete');
+});
+test('structured query retains topic without copying old sensitive discussion',()=>{
+ const state={topic:'telefone',supportPreference:'guided' as const,reportedFacts:[],hypotheses:[],openQuestions:[],tests:[],sourceVersionIds:[]};
+ const query=structuredSupportQuery('Me dê o passo a passo completo',[{role:'user',content:'Não entendi a senha antiga'}],state);
+ assert.match(query,/telefone/);assert.doesNotMatch(query,/senha antiga/);
 });
