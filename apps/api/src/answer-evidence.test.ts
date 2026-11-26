@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {unsupportedNetworkLiterals} from './answer-evidence.js';
+import {unsupportedNetworkLiterals,unsupportedConfigurationField} from './answer-evidence.js';
 
 test('only an exact IPv4 address from an authorized excerpt supports an answer',()=>{
  const source=[{content:'Laboratório: DNS 192.0.2.53. Gateway 198.51.100.12.'}];
@@ -21,4 +21,12 @@ test('punctuation and case around exact citations are normalized',()=>{
  const source=[{content:'Acesse HTTPS://EXAMPLE.TEST/KB; ou 203.0.113.5.'}];
  assert.deepEqual(unsupportedNetworkLiterals('Veja (https://example.test/kb), IP 203.0.113.5!',source),[]);
  assert.deepEqual(unsupportedNetworkLiterals('Sem endereço aqui',source),[]);
+});
+
+test('configuration field values cannot be invented or silently changed',()=>{
+ assert.equal(unsupportedConfigurationField('SIP Server: invented.example.test',['SIP Server: sip.example.test']),true);
+ assert.equal(unsupportedConfigurationField('SIP Server: sip.example.test',['SIP Server: sip.example.test']),false);
+ assert.equal(unsupportedConfigurationField('Account Active: NO',['Account Active: YES']),true);
+ assert.equal(unsupportedConfigurationField('Senha: fixture-device-only.',['Senha: fixture-device-only.']),false);
+ assert.equal(unsupportedConfigurationField('Senha: Fixture-device-only.',['Senha: fixture-device-only.']),true);
 });

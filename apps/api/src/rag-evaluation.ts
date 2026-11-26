@@ -12,6 +12,7 @@ import {loadBaseline,saveBaseline,generateBaselineFromRecords,compareWithBaselin
 const actor:Actor={id:'11111111-1111-4111-8111-111111111111',role:'USER',auth_revision:1,must_change_password:false};
 
 // Expanded synthetic document fixtures for evaluation
+const phoneFixture:Source={documentId:'33333333-5555-4111-8111-111111111114',versionId:'dddddddd-eeee-4ddd-8ddd-dddddddddddf',versionNumber:1,ordinal:0,title:'Configuração de telefone fixo Grandstream',content:'# Ver o IP\nSegure o botão central.\nStatus > Network Status > IPV4\n# Configurar SIP\nAbra Accounts > General Settings.\nAccount Active: YES\nSIP Server: sip.example.test',score:0.98};
 const docs:Source[]=[
   {documentId:'22222222-2222-4222-8222-222222222222',versionId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
    versionNumber:2,ordinal:0,title:'Laboratorio A - DNS v2 (vigente)',
@@ -62,12 +63,14 @@ export type EvaluationCase={
   question:string;
   context?:{role:'user'|'assistant';content:string}[];
   sources:Source[];
-  expect:'abstain'|'lab-a'|'lab-b'|'lab-c'|'clarify'|'ignore-injection'|'social'|'clarify-topic'|'long-context'|'conflict'|'multi-turn'|'credential-leak'|'vpn'|'restart'|'printer'|'network-policy';
+  expect:'abstain'|'lab-a'|'lab-b'|'lab-c'|'clarify'|'ignore-injection'|'social'|'clarify-topic'|'long-context'|'conflict'|'multi-turn'|'credential-leak'|'vpn'|'restart'|'printer'|'network-policy'|'phone';
   split:'dev'|'validation';
   tags:string[];
 };
 
 export const syntheticCases:EvaluationCase[]=[
+  {id:'phone-generic',question:'preciso configurar um telefone fixo',sources:[phoneFixture],expect:'phone',split:'validation',tags:['phone','structured','recovery']},
+  {id:'phone-unknown-model',question:'Não sei o modelo',context:[{role:'user',content:'Preciso configurar um telefone fixo'},{role:'assistant',content:'Qual a marca?'},{role:'user',content:'Grandstream'},{role:'assistant',content:'Qual o modelo?'}],sources:[phoneFixture],expect:'phone',split:'validation',tags:['phone','context','recovery']},
   // ==================== ABSTAIN (sem fontes / fontes irrelevantes) ====================
   {id:'no-evidence',question:'Qual e o endereco do sistema de folha de pagamento interno?',sources:[],expect:'abstain',split:'dev',tags:['no-sources']},
   {id:'no-evidence-2',question:'Como configurar o servidor de email corporativo?',sources:[],expect:'abstain',split:'validation',tags:['no-sources']},
@@ -401,6 +404,9 @@ export function gradeEvaluation(c:EvaluationCase,answer:string,sourceIds:string[
     if(/reinicie|restart/i.test(answer) && !RE_LOG_CHECK.test(answer))
       notes.push('Reinicio sem pre-requisito de verificacao de logs');
   }
+  if(c.expect==='phone'){
+    if(!sourceIds.includes(phoneFixture.versionId)||!/Grandstream/i.test(answer)||!/Network Status|IPV4/i.test(answer)||!/SIP Server|Account Active/i.test(answer))notes.push('Procedimento telefonico incompleto ou sem fonte');
+  }
   if(c.expect==='printer'){
     if(!sourceIds.includes(docs[12].versionId))notes.push('Fonte de impressora nao citada');
     if(!RE_PRINTER_ACTION.test(answer))notes.push('Faltou acao de troubleshooting');
@@ -602,11 +608,11 @@ if(invoked){
   const run=process.argv.includes('--run');
   const grounding=process.argv.includes('--grounding');
   const real=process.argv.includes('--real');
-  const validationOnly=process.argv.includes('--validation-only');
   const jsonOutput=process.argv.includes('--json-output');
   const outputFile=process.argv.find(arg=>arg.startsWith('--output-file='))?.split('=')[1];
   const includeDetails=process.argv.includes('--include-details');
   const allCases=process.argv.includes('--all-cases');
+  const casePrefix=process.argv.find(arg=>arg.startsWith('--case-prefix='))?.slice('--case-prefix='.length);
   const baselineSave=process.argv.includes('--baseline-save');
   const baselineCompare=process.argv.includes('--baseline-compare');
   const baselineVersion=process.argv.find(arg=>arg.startsWith('--baseline-version='))?.split('=')[1]??'pr-71-dfbf776';
@@ -629,7 +635,8 @@ if(invoked){
         process.exitCode=1;
       });
     }else if(real){
-      const cases=allCases?syntheticCases:(validationOnly?syntheticCases.filter(c=>c.split==='validation'):syntheticCases.filter(c=>c.split==='validation'));
+      const cases=(allCases?syntheticCases:syntheticCases.filter(c=>c.split==='validation')).filter(c=>!casePrefix||c.id.startsWith(casePrefix));
+      if(!cases.length)throw new Error('Nenhum caso sintetico corresponde ao filtro');
       const evalReport=await executeRealEvaluation(provider,{
         cases,
         modelVersion:process.env.OPENAI_CHAT_MODEL||'unknown',

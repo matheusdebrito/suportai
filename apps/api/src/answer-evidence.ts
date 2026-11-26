@@ -26,3 +26,18 @@ export function unsupportedNumbers(statement:string,quotes:string[]):boolean{
  const supported=new Set(quotes.flatMap(numeric));
  return numeric(statement).some(value=>!supported.has(value));
 }
+
+
+/** Recognized single-line configuration assignments must retain the exact value
+ * from a cited passage, including case-sensitive passwords and hostnames. */
+const configurationField=/^\s*(?:(?:[-*+]|\d+[.)])\s+)?(?:\*\*)?(senha(?: operacional)?|password|sip server|account active|sip user id|authenticate password|authenticate id|proxy server|servidor sip)(?:\*\*)?\s*[:=]\s*(?:\*\*)?(.+)$/i;
+export function unsupportedConfigurationField(statement:string,quotes:string[]):boolean{
+ const field=configurationField.exec(statement);
+ if(!field)return false;
+ const label=field[1].toLowerCase();
+ const value=field[2].trim().replace(/\*\*$/,'').replace(/^\x60|\x60$/g,'').replace(/\.$/,'');
+ return !quotes.some(quote=>quote.split(/\r?\n/).some(line=>{
+   const candidate=configurationField.exec(line);
+   return candidate&&candidate[1].toLowerCase()===label&&candidate[2].trim().replace(/\*\*$/,'').replace(/^\x60|\x60$/g,'').replace(/\.$/,'')===value;
+ }));
+}

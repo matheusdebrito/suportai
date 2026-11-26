@@ -32,6 +32,13 @@ test('grounding benchmarks separate false acceptance and false blocking on ficti
  };
  const supported=(...claims:unknown[])=>({verdict:'supported',claims});
  const reports:Record<string,unknown>={
+  'phone-fields':supported(
+    {unit:1,kind:'omitted',refs:[]},
+    checks.current('Para telefone Grandstream, consulte Status > Network Status > IPV4.',1,2),
+    checks.current('Abra Accounts > General Settings.',1,3),
+    checks.current('Account Active: YES',1,4),
+    checks.current('SIP Server: sip.example.test',1,5)),
+  'phone-invented-field':supported(checks.current('SIP Server: sip.example.test')),
   'current-condition':supported(checks.current('No ambiente Azul, aguarde 15 segundos.')),
   'current-negation':supported(checks.current('Não religue antes de conferir o visor.')),
   'historical-comparison':supported(checks.historical('No ambiente Azul, aguarde 10 segundos.'),
@@ -44,20 +51,23 @@ test('grounding benchmarks separate false acceptance and false blocking on ficti
  };
  const provider={chat:{completions:{create:async(request:OpenAI.Chat.Completions.ChatCompletionCreateParams)=>{
   const parsed=JSON.parse(String(request.messages[1].content)) as {units:{text:string}[];evidence:unknown[]};
+  const normalize=(value:string)=>value.replace(/\s+/g,' ').trim();
   const answer=parsed.units.map(unit=>unit.text).join(' ');
-  const item=groundingCases.find(fixture=>fixture.answer===answer&&fixture.sources.length===parsed.evidence.length);
+  const item=groundingCases.find(fixture=>normalize(fixture.answer)===normalize(answer)&&fixture.sources.length===parsed.evidence.length);
   assert.ok(item,answer);
   return {choices:[{message:{content:JSON.stringify(reports[item.id]??{verdict:'unsupported'})}}]};
  }}}} as unknown as OpenAI;
  const benchmark=await benchmarkGrounding(provider);
- assert.deepEqual(benchmark.metrics,{supported:3,unsupported:10,falseBlocked:0,falseAccepted:0,falseBlockRate:0,falseAcceptRate:0});
+ assert.deepEqual(benchmark.metrics,{supported:4,unsupported:11,falseBlocked:0,falseAccepted:0,falseBlockRate:0,falseAcceptRate:0});
  assert.equal(benchmark.rows.find(row=>row.id==='unresolved-conflict')?.verdict,'conflict');
+ assert.equal(benchmark.rows.find(row=>row.id==='phone-fields')?.verdict,'supported');
+ assert.equal(benchmark.rows.find(row=>row.id==='phone-invented-field')?.reason,'unsupported_literal');
  assert.deepEqual(measureGroundingErrors([{shouldAccept:true,accepted:false},{shouldAccept:false,accepted:true}]),
   {supported:1,unsupported:1,falseBlocked:1,falseAccepted:1,falseBlockRate:1,falseAcceptRate:1});
 });
 
 test('grounding rejects a fabricated evidence ID and a quote absent from the cited excerpt',async()=>{
- const item=groundingCases[0];
+ const item=groundingCases.find(item=>item.id==='current-condition')!;
  for(const ref of [{evidence:2,quote:'No ambiente Azul, aguarde 15 segundos.'},{evidence:1,quote:'Um trecho que não existe.'}]){
   const provider=mockedProvider(JSON.stringify({verdict:'supported',claims:[{unit:1,kind:'current',refs:[ref]}]}),[]);
   assert.equal((await verifyGroundedAnswer(provider,'Qual procedimento?',item.answer,item.sources)).verdict,'unsupported');
