@@ -1,13 +1,25 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {supportPreference,supportContext,safeProgressQuestion,setupObjective,lastProgressQuestion} from './support-dialogue.js';
+import {isFocusedKnowledgeQuestion,supportPreference,supportContext,safeProgressQuestion,setupObjective,lastProgressQuestion,SUPPORT_POLICY} from './support-dialogue.js';
 import {routeInvestigation,updateInvestigationFromMessage} from './investigation-dialogue.js';
 test('guided setup and full procedure preference remain distinct',()=>{
  assert.equal(supportPreference('Preciso configurar um telefone',[]),'guided');
  assert.equal(supportPreference('Me passe o procedimento completo',[]),'complete');
+ assert.equal(supportPreference('Sim. Pode me passar o passo a psso completo',[]),'complete');
+ assert.equal(supportPreference('Sim. Me dê o passo a passo completo',[]),'complete');
  assert.equal(supportPreference('Consegui',[{role:'user',content:'Preciso instalar uma impressora'}]),'guided');
  assert.equal(supportPreference('Me envie todos os passos',[{role:'user',content:'Preciso instalar uma impressora'}]),'complete');
  assert.equal(setupObjective('Preciso configurar um telefone fixo'),'telefone fixo');
+});
+test('focused knowledge questions request a concise human answer instead of an article recap',()=>{
+ assert.equal(isFocusedKnowledgeQuestion('Qual a senha para acessar a interface do telefone?'),true);
+ assert.equal(isFocusedKnowledgeQuestion('Em qual menu eu configuro o SIP?'),true);
+ assert.equal(isFocusedKnowledgeQuestion('Não entendi a parte da senha'),true);
+ assert.equal(isFocusedKnowledgeQuestion('A senha pode ser admin'),true);
+ assert.equal(isFocusedKnowledgeQuestion('Preciso configurar um telefone'),false);
+ assert.match(SUPPORT_POLICY,/matéria-prima factual, nunca um texto pronto/i);
+ assert.match(SUPPORT_POLICY,/uma ou duas frases curtas/i);
+ assert.match(SUPPORT_POLICY,/sem recapitular o procedimento/i);
 });
 test('progress questions ask observations, not secrets or unverified operational actions',()=>{
  assert.ok(safeProgressQuestion('Conseguiu identificar o endereço?'));

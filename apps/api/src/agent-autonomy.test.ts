@@ -197,7 +197,7 @@ test('generic phone setup after unknown model returns verified documented operat
  assert.equal(result.sources[0]?.versionId,phoneSource.versionId);
 });
 
-test('generic phone setup recovers a literal scoped procedure after two verifier rejections',async()=>{
+test('generic phone setup recovers a guided first stage after two verifier rejections',async()=>{
  const phone:Source={...source,title:'Configuração de telefone fixo Grandstream',content:'# Ver o IP\nSegure o botão central.\nStatus > Network Status > IPV4\n# Configurar SIP\nAbra Accounts > General Settings.\nAccount Active: YES\nSIP Server: sip.example.test'};
  const queries:string[]=[];
  const model=scripted([
@@ -210,8 +210,9 @@ test('generic phone setup recovers a literal scoped procedure after two verifier
  const result=await respond(actor,randomUUID(),'Preciso configurar um telefone fixo',[],model,async(_actor,q)=>{queries.push(q);return [phone];},{verifyEvidence:true});
  assert.equal(result.metrics?.literalFallbacks,1);
  assert.equal(result.metrics?.verifierChecks,2);
- assert.match(result.answer,/Grandstream/);assert.match(result.answer,/Network Status/);
- assert.match(result.answer,/Account Active: YES/);assert.doesNotMatch(result.answer,/Reinicie o servidor|porta não documentada/);
+ assert.match(result.answer,/Vamos por etapas/);assert.match(result.answer,/Network Status/);
+ assert.match(result.answer,/Conseguiu concluir essa etapa/);
+ assert.doesNotMatch(result.answer,/Account Active: YES|trecho original|Reinicie o servidor|porta não documentada/);
  assert.equal(result.sources[0]?.versionId,phone.versionId);
 });
 test('recovery search can add a missing procedure before re-verification',async()=>{
@@ -257,4 +258,45 @@ test('guided request reformulates an oversized article dump before verification'
  assert.equal(result.metrics?.adaptiveRewrites,1);assert.equal(result.metrics?.stopReason,'answered');
  assert.match(result.answer,/Conseguiu identificar/);
  assert.doesNotMatch(result.answer,/Orientações do manual/);
+});
+test('focused password follow-up receives an explicit natural concise-answer policy',async()=>{
+ const phone:Source={...source,title:'Configurar telefone',content:'Na interface web, use o usuário admin. As senhas documentadas são fixture-primary ou admin.'};
+ const calls:any[]=[];
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'senha interface telefone'},'q')]},
+  {role:'assistant',content:'Tente primeiro fixture-primary; se não funcionar, use admin. O usuário é admin.'},
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[
+   {unit:1,kind:'current',refs:[{evidence:1,quote:'As senhas documentadas são fixture-primary ou admin.'}]},
+   {unit:2,kind:'current',refs:[{evidence:1,quote:'Na interface web, use o usuário admin.'}]}
+  ]})}
+ ],calls);
+ const result=await respond(actor,randomUUID(),'Qual a senha para acessar a interface do telefone?',[
+  {role:'user',content:'Preciso configurar um telefone.'},
+  {role:'assistant',content:'Conseguiu abrir a interface web?'}
+ ],model,async()=>[phone],{verifyEvidence:true});
+ const system=String(calls[0].messages[0].content);
+ assert.match(system,/PEDIDO PONTUAL/);
+ assert.match(system,/uma ou duas frases naturais/);
+ assert.match(system,/Não recapitule o artigo ou o procedimento/);
+ assert.match(result.answer,/fixture-primary/);
+ assert.doesNotMatch(result.answer,/procedimento|segundo a documentação|conforme a fonte/i);
+});
+test('complete follow-up ignores sensitive words from history when recovering the full procedure',async()=>{
+ const phone:Source={...source,title:'Configurar telefone',content:'# Ver o IP\n- Segurar o botão central.\n- Status > Network Status > IPV4\n# Configurar SIP\n- Acessar ACCOUNTS > GENERAL SETTINGS\n- Account Active: YES'};
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'passo a passo telefone'},'q')]},
+  {role:'assistant',content:'Orientação não confirmada.'},
+  {role:'assistant',content:'{"verdict":"unsupported"}'},
+  {role:'assistant',content:'Outra orientação não confirmada.'},
+  {role:'assistant',content:'{"verdict":"unsupported"}'}
+ ],[]);
+ const result=await respond(actor,randomUUID(),'Sim. Me dê o passo a passo completo',[
+  {role:'user',content:'Não entendi a parte da senha.'},
+  {role:'assistant',content:'A senha documentada pode ser admin.'}
+ ],model,async()=>[phone],{verifyEvidence:true});
+ assert.equal(result.metrics?.supportPreference,'complete');
+ assert.match(result.answer,/passo a passo completo/i);
+ assert.match(result.answer,/Segure o botão central/);
+ assert.match(result.answer,/Account Active: YES/);
+ assert.doesNotMatch(result.answer,/Informe o equipamento|trecho original/);
 });

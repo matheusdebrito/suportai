@@ -8,8 +8,8 @@ import {buildConversationMemory,memoryMessage} from './conversation-memory.js';
 import {getPublishedDocument,getVisibleDocumentVersions,documentToSource,validDocumentId} from './agent-knowledge-tools.js';
 import {reviewDraftIntent} from './agent-intent.js';
 import {verifyGroundedAnswer,type GroundingFailure} from './agent-verifier.js';
-import {literalGroundingFallback} from './grounding-fallback.js';
-import {supportPreference,supportContext,SUPPORT_POLICY} from './support-dialogue.js';
+import {completeGroundingFallback,guidedGroundingFallback,literalGroundingFallback} from './grounding-fallback.js';
+import {isFocusedKnowledgeQuestion,supportPreference,supportContext,SUPPORT_POLICY} from './support-dialogue.js';
 import {shouldForceKnowledgeLookup,groundedReply} from './llm-policy.js';
 import {unsupportedNetworkLiterals} from './answer-evidence.js';
 import {explicitlyTargetedSpace} from './space-targeting.js';
@@ -44,6 +44,9 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  const shouldVerify=Boolean(options.verifyEvidence||(provider===client&&client!==null));
  let verifierChecks=0,verifierRejections=0,recoverySearches=0,literalFallbacks=0,adaptiveRewrites=0;
  const preference=supportPreference(userMessage,history);
+ const focusedAnswerPolicy=isFocusedKnowledgeQuestion(userMessage)
+  ? '\nPEDIDO PONTUAL: responda apenas ao dado solicitado na mensagem mais recente, em uma ou duas frases naturais. Não recapitule o artigo ou o procedimento, não use títulos e não explique que consultou uma fonte.'
+  : '';
  let lastVerifierFailure:GroundingFailure|undefined;
  const done=(result:AgentOutput,reason:AgentStopReason):AgentOutput=>({
    ...result,metrics:{...budget.metrics(reason),...plan.metrics(),verifierChecks,verifierRejections,recoverySearches,literalFallbacks,adaptiveRewrites,supportPreference:preference,
@@ -61,7 +64,12 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  let synthesisRecoveryAttempted=false;
  const olderMemory=buildConversationMemory(history);
  const fallbackReply=():AgentOutput=>{
-   const fallback=!pendingActions.length&&literalGroundingFallback(contextualQuery,[...sources,...historicalSources]);
+   const available=[...sources,...historicalSources];
+   const fallback=!pendingActions.length&&(preference==='guided'
+     ? guidedGroundingFallback(userMessage,available)
+     : preference==='complete'
+       ? completeGroundingFallback(userMessage,available)
+       : literalGroundingFallback(userMessage,available));
    if(fallback){literalFallbacks++;return done({...fallback,pendingActions},'answered');}
    return done({answer:'Encontrei documentos, mas não consegui validar uma orientação aplicável. Informe o equipamento ou ambiente para refinar a consulta.',sources:[],pendingActions},'unsafe_answer');
  };
@@ -129,7 +137,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  // Tool selection no longer depends on a regex-based intention classifier.
  const availableTools=tools;
  const messages:OpenAI.Chat.Completions.ChatCompletionMessageParam[]=[
-  {role:'system',content:SYSTEM+'\n'+SUPPORT_POLICY},
+  {role:'system',content:SYSTEM+'\n'+SUPPORT_POLICY+focusedAnswerPolicy},
   {role:'user',content:supportContext(userMessage,history,options.investigation)},
   ...(options.investigation?[{role:'user' as const,content:investigationContextMessage(options.investigation)}]:[]),
   ...(olderMemory?[{role:'user' as const,content:memoryMessage(olderMemory)}]:[]),
@@ -469,7 +477,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
    }
    finalAnswerNext=plan.finishTools(budget.shouldFinishAfterTools()||
       (sources.length>0&&shouldVerify&&budget.steps>=budget.limits.maxSteps-2));
-   messages[0]={role:'system',content:`${SYSTEM}\n${SUPPORT_POLICY}\n${plan.instruction()}`};
+   messages[0]={role:'system',content:`${SYSTEM}\n${SUPPORT_POLICY}${focusedAnswerPolicy}\n${plan.instruction()}`};
  }
  return unresolvedReply()??budgetReply(budget.stopCause()??'step_budget');
 }
