@@ -17,21 +17,23 @@ Assistente interno com cérebro de conhecimento baseado em artigos e PDFs, recup
 
 ## Requisitos
 
-Node.js 22+, PostgreSQL 17 com extensão pgvector, e Docker/Compose opcional.
+Docker Desktop/Compose v2 para a execução completa em contêineres. Para execução direta no host: Node.js 22+ e PostgreSQL 17 com extensão pgvector.
 
 ## Subir toda a aplicação com Docker Compose (local)
 
 Use Docker Desktop/Compose v2. Na raiz do repositório:
 
-1. Copie `.env.compose.example` para `.env.compose` (PowerShell: `Copy-Item .env.compose.example .env.compose`).
+1. Se ainda não existir `.env`, copie `.env.example` (PowerShell: `Copy-Item .env.example .env`). Se já existir, acrescente as variáveis faltantes sem sobrescrever suas credenciais. O Compose lê `.env` automaticamente. Se você utilizava `.env.compose`, transfira os valores para `.env` antes de remover o arquivo antigo; preserve a senha do banco existente.
 2. Preencha `POSTGRES_PASSWORD`, `BOOTSTRAP_ADMIN_EMAIL` e `BOOTSTRAP_ADMIN_PASSWORD` (12–256 caracteres). Não use credenciais reais de produção.
-3. Execute `docker compose --env-file .env.compose up -d --build`.
-4. Confira `docker compose --env-file .env.compose ps -a` e abra **http://localhost:5173** com as credenciais de bootstrap.
-5. Se houver falha, use `docker compose --env-file .env.compose logs --tail=100 migrate bootstrap api worker web pdf-parser`.
+3. Execute `docker compose up -d --build`.
+4. Confira `docker compose ps -a` e abra **http://localhost:5173** com as credenciais de bootstrap.
+5. Se houver falha, use `docker compose logs --tail=100 migrate bootstrap api worker web pdf-parser`.
 
-O Compose sobe PostgreSQL/pgvector, migrações, criação inicial de administrador, API, worker, parser PDF isolado por socket Unix e frontend Caddy. Migração e bootstrap devem terminar com código 0. O bootstrap não altera senhas existentes. Use o mesmo `POSTGRES_PASSWORD` se reutilizar o volume antigo. Após o primeiro acesso, remova as credenciais de bootstrap de `.env.compose` e execute `docker compose --env-file .env.compose rm -f bootstrap` para remover o contêiner encerrado.
+O Compose sobe PostgreSQL/pgvector, migrações, criação inicial de administrador, API, worker, parser PDF isolado por socket Unix e frontend Caddy. Migração e bootstrap devem terminar com código 0. O bootstrap não altera senhas existentes. Use o mesmo `POSTGRES_PASSWORD` se reutilizar o volume antigo. Após o primeiro acesso, remova as credenciais de bootstrap de `.env` e execute `docker compose rm -f bootstrap` para remover o contêiner encerrado.
 
-O volume do banco é persistente: `docker compose --env-file .env.compose down` não apaga dados. **Não use `down -v` em um banco que deseja preservar.** Se alterar `SUPORTAI_WEB_PORT`, ajuste `SUPORTAI_LOCAL_ORIGIN` para a mesma origem e acesse exatamente esse endereço. A API não tem porta pública e o proxy fornece os endpoints na mesma origem.
+O `.env` é ignorado pelo Git e excluído do contexto de build Docker; somente `.env.example`, sem credenciais reais, é versionado. Não compartilhe a saída de `docker compose config` sem ocultar segredos.
+
+O volume do banco é persistente: `docker compose down` não apaga dados. **Não use `down -v` em um banco que deseja preservar.** Se alterar `SUPORTAI_WEB_PORT`, ajuste `SUPORTAI_LOCAL_ORIGIN` para a mesma origem e acesse exatamente esse endereço. A API não tem porta pública e o proxy fornece os endpoints na mesma origem.
 
 A IA externa permanece desabilitada por padrão; para testes com dados sintéticos autorizados, configure a chave e habilite explicitamente `ALLOW_EXTERNAL_AI_DATA_PROCESSING=true`. Sem isso, a busca local continua funcionando.
 
@@ -40,7 +42,7 @@ Este Compose é somente para acesso HTTP local (portas bindadas a 127.0.0.1). Pa
 ## Primeira execução local sem contêiner da aplicação
 
 1. Copie `.env.example` para `.env` e defina credenciais de banco, `APP_ORIGIN` e opcionalmente a chave de IA.
-2. Crie um segredo forte: `export POSTGRES_PASSWORD='uma-senha-forte'`; inicie `docker compose up -d db`.
+2. Preencha `POSTGRES_PASSWORD` no mesmo `.env`, ajuste `DATABASE_URL` para corresponder à senha e porta do banco local e inicie `docker compose up -d db`.
 3. `npm install`
 4. `npm run db:migrate` (as migrações são versionadas e podem ser executadas novamente com segurança).
 5. Configure `BOOTSTRAP_ADMIN_EMAIL` e `BOOTSTRAP_ADMIN_PASSWORD` temporariamente; `npm run admin:bootstrap`; remova esses valores do ambiente.
