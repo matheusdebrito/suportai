@@ -1,3 +1,30 @@
+# Local development / synthetic pilot only. Production: deploy/compose.production.yml.
+x-runtime: &runtime
+  image: suportai/app:local
+  build:
+    context: .
+    dockerfile: deploy/Dockerfile
+    target: runtime
+  user: "10001:10001"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  tmpfs: ["/tmp:rw,noexec,nosuid,size=16m"]
+  pids_limit: 128
+
+x-database: &database
+  PGHOST: db
+  PGPORT: "5432"
+  PGUSER: suportai
+  PGDATABASE: suportai
+  PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+
+x-ai: &ai
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  ALLOW_EXTERNAL_AI_DATA_PROCESSING: ${ALLOW_EXTERNAL_AI_DATA_PROCESSING:-false}
+  OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-gpt-4.1-mini}
+  OPENAI_EMBED_MODEL: ${OPENAI_EMBED_MODEL:-text-embedding-3-small}
+
 services:
   db:
     image: pgvector/pgvector:pg17
@@ -6,13 +33,116 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
       POSTGRES_DB: suportai
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${SUPORTAI_DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U suportai"]
+      test: ["CMD-SHELL", "pg_isready -U suportai -d suportai"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 15
+    restart: unless-stopped
+
+  migrate:
+    <<: *runtime
+    command: ["node", "apps/api/dist/migrate.js"]
+    environment: *database
+    depends_on:
+      db: {condition: service_healthy}
+    restart: "no"
+
+  bootstrap:
+    <<: *runtime
+    command: ["node", "apps/api/dist/bootstrap.js", "--if-empty"]
+    environment:
+      <<: *database
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    restart: "no"
+
+  socket-init:
+    <<: *runtime
+    user: "0:0"
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER]
+    network_mode: none
+    command: ["sh", "-c", "chmod 0770 /run/suportai && chown 10001:10001 /run/suportai"]
+    volumes:
+      - pdf_socket:/run/suportai
+    restart: "no"
+
+  pdf-parser:
+    <<: *runtime
+    command: ["node", "apps/api/dist/pdf-parser-server.js"]
+    network_mode: none
+    environment:
+      NODE_ENV: production
+      PDF_PARSER_SOCKET: /run/suportai/pdf-parser.sock
+    volumes:
+      - pdf_socket:/run/suportai
+    depends_on:
+      socket-init: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "node", "-e", "const c=require('node:net').createConnection('/run/suportai/pdf-parser.sock');c.setTimeout(1000);c.on('connect',()=>{c.destroy();process.exit(0)});c.on('error',()=>process.exit(1));c.on('timeout',()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    mem_limit: 384m
+    pids_limit: 64
+    restart: unless-stopped
+
+  api:
+    <<: *runtime
+    command: ["node", "apps/api/dist/server.js"]
+    environment:
+      <<: [*database, *ai]
+      # Local loopback HTTP only; production retains secure HTTPS cookies.
+      NODE_ENV: development
+      APP_ORIGIN: ${SUPORTAI_LOCAL_ORIGIN:-http://localhost:5173}
+      API_PORT: "4000"
+    expose: ["4000"]
+    depends_on:
+      bootstrap: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('node:http').get('http://127.0.0.1:4000/ready',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  worker:
+    <<: *runtime
+    command: ["node", "apps/api/dist/worker.js"]
+    environment:
+      <<: [*database, *ai]
+      NODE_ENV: production
+      PDF_PARSER_SOCKET: /run/suportai/pdf-parser.sock
+    volumes:
+      - pdf_socket:/run/suportai:ro
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      pdf-parser: {condition: service_healthy}
+    restart: unless-stopped
+
+  web:
+    image: suportai/web:local
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+      target: web-local
+    ports:
+      - "127.0.0.1:${SUPORTAI_WEB_PORT:-5173}:80"
+    depends_on:
+      api: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+  pdf_socket:
