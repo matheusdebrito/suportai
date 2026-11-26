@@ -88,3 +88,9 @@ Não há OCR de PDFs digitalizados. Não execute comandos ou acesso SSH com o ag
 - `npm run rag:evaluate -w @suportai/api`: lista cenários fictícios, sem chamadas externas.
 - `NODE_ENV=production npm run preflight -w @suportai/api`: verifica configuração sem expor segredos; **não é autorização de produção**.
 - A avaliação com modelo real requer `EVAL_SYNTHETIC_LLM_APPROVED=true`, chave própria e aprovação para custos. Nenhuma CI habilita essa configuração.
+
+### Credenciais operacionais (opcional)
+
+Configure `OPERATIONAL_CREDENTIAL_KEY` no ambiente da API com 32 bytes aleatórios em hexadecimal (64 caracteres). Gere localmente com `openssl rand -hex 32` e mantenha uma cópia protegida separada dos backups do banco. Não reutilize a chave do banco ou da IA. Em produção, forneça a chave por ambiente protegido ou `OPERATIONAL_CREDENTIAL_KEY_FILE` em configuração de implantação própria. A perda da chave impede a recuperação das credenciais. Não altere a chave sem migrar os valores; para rotacionar uma credencial, remova-a, cadastre o novo valor e conceda novamente os acessos.
+
+Publique o procedimento sem valores de senha e indique que a credencial está na seção Credenciais operacionais. Abra o artigo publicado como administrador, cadastre o valor separado e conceda acesso individual ao técnico. Até administradores precisam de concessão explícita para revelar. O acesso também exige leitura atual do documento e versão publicada; a revogação impede novas revelações. A interface exibe temporariamente o valor após ação explícita. Os valores não são pesquisados, citados, indexados ou enviados ao modelo. A auditoria registra identidade e identificador, não o valor. Não cole credenciais no chat ou em artigos; as proteções existentes permanecem. Senhas já publicadas devem ser removidas e rotacionadas, inclusive quando existirem em versões históricas ou backups.

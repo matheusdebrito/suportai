@@ -99,11 +99,13 @@ test('real-model evaluation mode fails closed when the independent verifier reje
  const model=scripted([
   {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'ZD230 calibração'},'q1')]},
   {role:'assistant',content:'Reinicie o serviço antes de qualquer verificação.'},
+  {role:'assistant',content:'{"verdict":"unsupported"}'},
+  {role:'assistant',content:'Reinicie o serviço antes de qualquer verificação.'},
   {role:'assistant',content:'{"verdict":"unsupported"}'}
  ],calls);
  const result=await respond(actor,randomUUID(),'Qual o procedimento da ZD230?',[],model,
   async()=>[source],{verifyEvidence:true});
- assert.equal(result.metrics?.steps,3);
+ assert.equal(result.metrics?.steps,5);
  assert.equal(result.metrics?.stopReason,'unsafe_answer');
  assert.deepEqual(result.sources,[]);
  assert.doesNotMatch(result.answer,/Reinicie o serviço antes/i);
@@ -151,4 +153,16 @@ test('verified partial response omits unsupported independent claim',async()=>{
  const result=await respond(actor,randomUUID(),'Qual o procedimento da ZD230?',[],model,async()=>[source],{verifyEvidence:true});
  assert.match(result.answer,/alinhamento/);assert.doesNotMatch(result.answer,/Reinicie o servidor/);assert.match(result.answer,/parte verificada/);
  assert.equal(result.sources.length,1);
+});
+
+test('independent verifier rejection triggers bounded grounded rewrite',async()=>{
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'calibração ZD230'},'q')]},
+  {role:'assistant',content:'Reinicie o servidor.'},
+  {role:'assistant',content:'{"verdict":"unsupported"}'},
+  {role:'assistant',content:'Verifique o alinhamento antes da calibração na ZD230.'},
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[{unit:1,kind:'current',refs:[{evidence:1,quote:source.content}]}]})}
+ ],[]);
+ const result=await respond(actor,randomUUID(),'Como configurar a ZD230?',[],model,async()=>[source],{verifyEvidence:true});
+ assert.equal(result.metrics?.steps,5);assert.equal(result.metrics?.stopReason,'answered');assert.match(result.answer,/alinhamento/);assert.doesNotMatch(result.answer,/Reinicie/);
 });
