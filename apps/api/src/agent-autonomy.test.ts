@@ -228,3 +228,33 @@ test('recovery search can add a missing procedure before re-verification',async(
  assert.equal(result.metrics?.recoverySearches,1);assert.equal(result.metrics?.literalFallbacks,0);
  assert.match(result.answer,/painel/);assert.equal(result.sources[0]?.ordinal,1);
 });
+
+test('verified guided response includes next action and a neutral progress question',async()=>{
+ const phone:Source={...source,title:'Configurar telefone',content:'Segure o botão central. Acesse Status > Network Status > IPV4. Abra a interface web pelo IP.'};
+ const calls:any[]=[];
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'configurar telefone'},'q')]},
+  {role:'assistant',content:'Segure o botão central. Acesse Status > Network Status > IPV4.\n\nConseguiu identificar o endereço?'},
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[{unit:1,kind:'current',refs:[{evidence:1,quote:'Segure o botão central.'}]},{unit:2,kind:'current',refs:[{evidence:1,quote:'Acesse Status > Network Status > IPV4.'}]},{unit:3,kind:'question',refs:[]}]})}
+ ],calls);
+ const result=await respond(actor,randomUUID(),'Preciso configurar um telefone',[],model,async()=>[phone],{verifyEvidence:true});
+ assert.equal(result.metrics?.stopReason,'answered');
+ assert.equal(result.metrics?.supportPreference,'guided');
+ assert.match(result.answer,/Conseguiu identificar o endereço\?$/);
+ assert.equal((result.answer.match(/\[1\]/g)??[]).length,1);
+ assert.doesNotMatch(result.answer,/Abra a interface web/);
+});
+test('guided request reformulates an oversized article dump before verification',async()=>{
+ const phone:Source={...source,title:'Configurar telefone',content:'Segure o botão central. Acesse Status > Network Status > IPV4.'};
+ const calls:any[]=[];
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'configurar telefone'},'q')]},
+  {role:'assistant',content:'Orientações do manual.\n'.repeat(10)},
+  {role:'assistant',content:'Segure o botão central. Conseguiu identificar o endereço?'},
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[{unit:1,kind:'current',refs:[{evidence:1,quote:'Segure o botão central.'}]},{unit:2,kind:'question',refs:[]}]})}
+ ],calls);
+ const result=await respond(actor,randomUUID(),'Preciso configurar um telefone',[],model,async()=>[phone],{verifyEvidence:true});
+ assert.equal(result.metrics?.adaptiveRewrites,1);assert.equal(result.metrics?.stopReason,'answered');
+ assert.match(result.answer,/Conseguiu identificar/);
+ assert.doesNotMatch(result.answer,/Orientações do manual/);
+});

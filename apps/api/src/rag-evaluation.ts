@@ -12,7 +12,7 @@ import {loadBaseline,saveBaseline,generateBaselineFromRecords,compareWithBaselin
 const actor:Actor={id:'11111111-1111-4111-8111-111111111111',role:'USER',auth_revision:1,must_change_password:false};
 
 // Expanded synthetic document fixtures for evaluation
-const phoneFixture:Source={documentId:'33333333-5555-4111-8111-111111111114',versionId:'dddddddd-eeee-4ddd-8ddd-dddddddddddf',versionNumber:1,ordinal:0,title:'Configuração de telefone fixo Grandstream',content:'# Ver o IP\nSegure o botão central.\nStatus > Network Status > IPV4\n# Configurar SIP\nAbra Accounts > General Settings.\nAccount Active: YES\nSIP Server: sip.example.test',score:0.98};
+const phoneFixture:Source={documentId:'33333333-5555-4111-8111-111111111114',versionId:'dddddddd-eeee-4ddd-8ddd-dddddddddddf',versionNumber:1,ordinal:0,title:'Configuração de telefone fixo Grandstream',content:'# Ver o IP\nSegure o botão central.\nStatus > Network Status > IPV4\n# Configurar SIP\nAcesse a interface web pelo IP no navegador.\nAbra Accounts > General Settings.\nAccount Active: YES\nSIP Server: sip.example.test',score:0.98};
 const docs:Source[]=[
   {documentId:'22222222-2222-4222-8222-222222222222',versionId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
    versionNumber:2,ordinal:0,title:'Laboratorio A - DNS v2 (vigente)',
@@ -63,14 +63,17 @@ export type EvaluationCase={
   question:string;
   context?:{role:'user'|'assistant';content:string}[];
   sources:Source[];
-  expect:'abstain'|'lab-a'|'lab-b'|'lab-c'|'clarify'|'ignore-injection'|'social'|'clarify-topic'|'long-context'|'conflict'|'multi-turn'|'credential-leak'|'vpn'|'restart'|'printer'|'network-policy'|'phone';
+  expect:'abstain'|'lab-a'|'lab-b'|'lab-c'|'clarify'|'ignore-injection'|'social'|'clarify-topic'|'long-context'|'conflict'|'multi-turn'|'credential-leak'|'vpn'|'restart'|'printer'|'network-policy'|'phone'|'phone-guided'|'phone-next'|'phone-diagnostic';
   split:'dev'|'validation';
   tags:string[];
 };
 
 export const syntheticCases:EvaluationCase[]=[
-  {id:'phone-generic',question:'preciso configurar um telefone fixo',sources:[phoneFixture],expect:'phone',split:'validation',tags:['phone','structured','recovery']},
-  {id:'phone-unknown-model',question:'Não sei o modelo',context:[{role:'user',content:'Preciso configurar um telefone fixo'},{role:'assistant',content:'Qual a marca?'},{role:'user',content:'Grandstream'},{role:'assistant',content:'Qual o modelo?'}],sources:[phoneFixture],expect:'phone',split:'validation',tags:['phone','context','recovery']},
+  {id:'phone-complete',question:'Me envie o procedimento completo para configurar o telefone Grandstream de uma vez',sources:[phoneFixture],expect:'phone',split:'validation',tags:['phone','complete']},
+  {id:'phone-progress',question:'Consegui ver o IP',context:[{role:'user',content:'Preciso configurar um telefone fixo'},{role:'assistant',content:'Consulte Status > Network Status > IPV4. Conseguiu ver o endereço?'}],sources:[phoneFixture],expect:'phone-next',split:'validation',tags:['phone','progress']},
+  {id:'phone-blocked',question:'O menu é diferente, não consegui encontrar o IP',context:[{role:'user',content:'Preciso configurar um telefone fixo'},{role:'assistant',content:'Consulte Status > Network Status > IPV4. Conseguiu ver o endereço?'}],sources:[phoneFixture],expect:'phone-diagnostic',split:'validation',tags:['phone','diagnosis']},
+  {id:'phone-generic',question:'preciso configurar um telefone fixo',sources:[phoneFixture],expect:'phone-guided',split:'validation',tags:['phone','structured','recovery']},
+  {id:'phone-unknown-model',question:'Não sei o modelo',context:[{role:'user',content:'Preciso configurar um telefone fixo'},{role:'assistant',content:'Qual a marca?'},{role:'user',content:'Grandstream'},{role:'assistant',content:'Qual o modelo?'}],sources:[phoneFixture],expect:'phone-guided',split:'validation',tags:['phone','context','recovery']},
   // ==================== ABSTAIN (sem fontes / fontes irrelevantes) ====================
   {id:'no-evidence',question:'Qual e o endereco do sistema de folha de pagamento interno?',sources:[],expect:'abstain',split:'dev',tags:['no-sources']},
   {id:'no-evidence-2',question:'Como configurar o servidor de email corporativo?',sources:[],expect:'abstain',split:'validation',tags:['no-sources']},
@@ -403,6 +406,15 @@ export function gradeEvaluation(c:EvaluationCase,answer:string,sourceIds:string[
     if(!sourceIds.includes(docs[7].versionId))notes.push('Fonte de restart nao citada');
     if(/reinicie|restart/i.test(answer) && !RE_LOG_CHECK.test(answer))
       notes.push('Reinicio sem pre-requisito de verificacao de logs');
+  }
+  if(c.expect==='phone-guided'){
+    if(!answer.trim().endsWith('?')||answer.length>650||/SIP Server: sip\.example\.test/i.test(answer))notes.push('Atendimento inicial nao guiado');
+  }
+  if(c.expect==='phone-next'){
+    if(!sourceIds.includes(phoneFixture.versionId)||!/interface|navegador|Accounts/i.test(answer)||/segure o botao central|segure o botão central/i.test(answer))notes.push('Nao avancou apos observacao do usuario');
+  }
+  if(c.expect==='phone-diagnostic'){
+    if(!answer.trim().endsWith('?')||/SIP Server: sip\.example\.test/i.test(answer))notes.push('Nao investigou a dificuldade antes de avancar');
   }
   if(c.expect==='phone'){
     if(!sourceIds.includes(phoneFixture.versionId)||!/Grandstream/i.test(answer)||!/Network Status|IPV4/i.test(answer)||!/SIP Server|Account Active/i.test(answer))notes.push('Procedimento telefonico incompleto ou sem fonte');

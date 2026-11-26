@@ -22,6 +22,7 @@ export type AgentMetrics={
  toolCalls:number;promptTokens:number;completionTokens:number;
  durationMs:number;stopReason:AgentStopReason;
  verifierChecks?:number;verifierRejections?:number;recoverySearches?:number;literalFallbacks?:number;lastVerifierFailure?:GroundingFailure;
+ adaptiveRewrites?:number;supportPreference?:'adaptive'|'guided'|'complete';
 };
 
 /** Limits are deliberately bounded; operators cannot configure unlimited agent calls. */
