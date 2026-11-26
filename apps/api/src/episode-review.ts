@@ -1,3 +1,5 @@
+import {readFileSync,writeFileSync} from 'node:fs';
+import {pathToFileURL} from 'node:url';
 /** Human-reviewed labels, independent of heuristic naturalness scores. */
 export type TurnReview={
  episodeId:string;turn:number;correct:boolean;accepted:boolean;fallback:boolean;
@@ -22,4 +24,9 @@ export function summarizeReviews(rows:TurnReview[]){
  degradedFallbacks:count(r=>r.fallback&&r.naturalBeforeFallback),unnecessaryWarnings:count(r=>r.unnecessaryWarning),
  repeatedQuestions:count(r=>r.repeatedQuestion),unauthorizedSources:count(r=>!r.authorizedSources),secretLeaks:count(r=>r.secretLeak),
  indirectAnswers:count(r=>!r.directAnswer),inappropriateSteps:count(r=>!r.appropriateNextStep),incompleteProcedures:count(r=>!r.completeWhenRequested)};
+}
+
+if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
+ if(!process.argv[2]||!process.argv[3])throw new Error('Usage: episode-review <reviewed-turns.json> <summary.json>');
+ writeFileSync(process.argv[3],JSON.stringify(summarizeReviews(JSON.parse(readFileSync(process.argv[2],'utf8'))),null,2));
 }

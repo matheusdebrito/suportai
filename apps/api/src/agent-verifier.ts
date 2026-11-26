@@ -13,7 +13,7 @@ const historicalWording=/\b(?:históric[oa]s?|anterior(?:es)?|antig[oa]s?|no pas
 const currentWording=/\b(?:vigente|atual)\b/i;
 const injectedDirective=/\b(?:ignore|desconsidere)\s+(?:(?:todas?\s+)?as\s+)?(?:regras|permissões|instruções)\b/i;
 
-function reviewClaims(answer:string,units:{text:string;end:number}[],passages:Passage[],claims:unknown):GroundingResult{
+function reviewClaims(question:string,answer:string,units:{text:string;end:number}[],passages:Passage[],claims:unknown):GroundingResult{
  if(!Array.isArray(claims)||claims.length!==units.length)return rejected('claim_shape','uncertain');
  const cited=new Map<number,{source:Source;number:number}>();
  let rendered='',start=0,unsupportedUnits=0,nonclaimsRemoved=0,pendingLabels='';
@@ -132,6 +132,6 @@ export async function verifyGroundedAnswer(
   if(parsed.verdict==='conflict')return rejected('conflicting_evidence','conflict');
   if(parsed.verdict==='unsupported')return rejected('model_rejected');
   if(parsed.verdict!=='supported')return rejected('model_uncertain','uncertain');
-  return reviewClaims(answer,units,passages,parsed.claims);
+  return reviewClaims(question,answer,units,passages,parsed.claims);
  }catch{return rejected('provider_error','uncertain');}
 }
