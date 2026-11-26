@@ -124,3 +124,31 @@ test('independent verifier accepts a grounded answer when supported',async()=>{
  assert.match(result.answer,/\[1\]$/);
  assert.match(result.answer,/alinhamento antes/i);
 });
+
+test('technical clarification recovers contextual evidence before asking for an unknown model',async()=>{
+ const queries:string[]=[];const requests:any[]=[];
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('ask_clarification',{question:'Qual é o modelo exato?'},'q')]},
+  {role:'assistant',content:'Verifique o alinhamento antes da calibração na ZD230.'},
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[{unit:1,kind:'current',refs:[{evidence:1,quote:source.content}]}]})}
+ ],requests);
+ const result=await respond(actor,randomUUID(),'Não sei o modelo.',[
+  {role:'user',content:'Preciso configurar uma impressora.'},
+  {role:'assistant',content:'Qual a marca?'},
+  {role:'user',content:'Zebra'},
+  {role:'assistant',content:'Qual o modelo?'}
+ ],model,async(_actor,q)=>{queries.push(q);return [source];},{verifyEvidence:true});
+ assert.match(queries[0],/configurar.*Zebra/i);
+ assert.equal(result.metrics?.stopReason,'answered');assert.match(result.answer,/alinhamento/);
+ assert.equal(result.sources[0]?.versionId,source.versionId);
+});
+test('verified partial response omits unsupported independent claim',async()=>{
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'ZD230 calibração'},'q')]},
+  {role:'assistant',content:'Verifique o alinhamento antes da calibração na ZD230. Reinicie o servidor.'},
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[{unit:1,kind:'current',refs:[{evidence:1,quote:source.content}]},{unit:2,kind:'omitted',refs:[]}]})}
+ ],[]);
+ const result=await respond(actor,randomUUID(),'Qual o procedimento da ZD230?',[],model,async()=>[source],{verifyEvidence:true});
+ assert.match(result.answer,/alinhamento/);assert.doesNotMatch(result.answer,/Reinicie o servidor/);assert.match(result.answer,/parte verificada/);
+ assert.equal(result.sources.length,1);
+});
