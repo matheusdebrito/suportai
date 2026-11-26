@@ -67,6 +67,7 @@ export function guidedGroundingFallback(question:string,sources:Source[]):{answe
  * documented stages in a readable structure instead of returning raw Markdown. */
 export function completeGroundingFallback(question:string,sources:Source[]):{answer:string;sources:Source[]}|null{
  const best=eligibleSource(question,sources,true);
+ if(!best?.completeDocument)return null;
  if(!best)return null;
  const lines=best.content.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
  const rendered:string[]=[];

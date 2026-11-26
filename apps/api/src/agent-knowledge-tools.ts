@@ -57,5 +57,5 @@ export async function getVisibleDocumentVersions(actor:Actor,documentId:string):
 export function documentToSource(document:DocumentDetail):Source{
  return {documentId:document.id,versionId:document.versionId,
   versionNumber:document.versionNumber,ordinal:-1,title:document.title,
-  content:document.content,score:1};
+  content:document.content,score:1,completeDocument:!document.truncated};
 }

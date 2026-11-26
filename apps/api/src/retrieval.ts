@@ -2,7 +2,7 @@ import { query } from './db.js';
 import { embedText } from './llm.js';
 import {hasSecrets,hasInfrastructureSecrets} from './knowledge.js';
 import type { Actor } from './security.js';
-export type Source={documentId:string;versionId:string;versionNumber:number;title:string;ordinal:number;content:string;score:number;historical?:true;excerpts?:string[]};
+export type Source={documentId:string;versionId:string;versionNumber:number;title:string;ordinal:number;content:string;score:number;historical?:true;completeDocument?:boolean;excerpts?:string[]};
 type Candidate=Source&{semantic:number};
 
 // PostgreSQL's plainto_tsquery requires every query word to be present. This
@@ -107,5 +107,27 @@ export async function searchKnowledge(actor:Actor,text:string,limit=5):Promise<S
  try{const embedding=await embedText(text.trim().slice(0,500));vector=embedding?JSON.stringify(embedding):null;}
  catch{ /* Textual fallback. */ }
  const candidates=await retrieveKnowledgeCandidates(actor,text,limit,vector);
- return rerankKnowledgeCandidates(text.trim().slice(0,500),candidates,Math.min(Math.max(1,limit),8));
+ const cap=Math.min(Math.max(1,limit),8);
+ const ranked=rerankKnowledgeCandidates(text.trim().slice(0,500),candidates,cap);
+ if(!ranked.length||cap<2)return ranked;
+ // Reserve at most two slots for adjacent evidence; never expand across versions.
+ const seeds=ranked.slice(0,Math.max(1,cap-2));
+ const anchor=seeds[0];
+ if(!/\n|procedimento|configur|etapa|passo/i.test(anchor.content+' '+text))return ranked;
+ const neighbors=await query(`SELECT d.id AS document_id,v.id AS version_id,v.version_number,d.title,c.ordinal,c.content
+ FROM knowledge_chunks c JOIN document_versions v ON v.id=c.version_id
+ JOIN documents d ON d.current_version_id=v.id AND d.id=v.document_id
+ JOIN spaces s ON s.id=d.space_id
+ JOIN users u ON u.id=$1 AND u.active AND NOT u.must_change_password AND u.auth_revision=$2 AND u.role=$3
+ LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$1
+ WHERE v.id=$4 AND c.ordinal IN ($5-1,$5+1) AND v.status='PUBLISHED' AND v.index_status='READY'
+ AND d.archived_at IS NULL AND (s.visibility='SHARED' OR COALESCE(g.can_read,false))
+ ORDER BY c.ordinal`,[actor.id,actor.auth_revision,actor.role,anchor.versionId,anchor.ordinal]);
+ const adjacent=safeRetrievedSources(neighbors.rows.map(x=>({documentId:x.document_id,versionId:x.version_id,versionNumber:Number(x.version_number),title:x.title,ordinal:Number(x.ordinal),content:x.content,score:0})),2);
+ const result:Source[]=[];
+ for(const source of [...seeds,...adjacent,...ranked]){
+  if(!result.some(x=>x.versionId===source.versionId&&x.ordinal===source.ordinal))result.push(source);
+  if(result.length===cap)break;
+ }
+ return result;
 }

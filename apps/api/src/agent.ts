@@ -342,6 +342,16 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
            throw new Error(readFailure(error,true)==='timeout'?'A consulta ao cérebro excedeu o prazo':'Falha temporária na consulta ao cérebro');
          }
          budget.recordSearch(args.query,results);
+         if(preference==='complete'&&!isFocusedKnowledgeQuestion(userMessage)&&results.length){
+           const anchor=results[0];
+           try{
+             const doc=await readDocument(anchor.documentId);
+             if(doc&&doc.versionId===anchor.versionId){
+               const full=documentToSource(doc);
+               results=[full,...results];
+             }
+           }catch(error){readFailure(error,true);}
+         }
          const added=collect(sources,results,budget.limits.maxSources);
          plan.recordRead(added?'evidence':results.length?'unchanged':'empty',added,true);
          output=results.map(x=>({title:x.title,versionId:x.versionId,documentId:x.documentId,content:x.content,ordinal:x.ordinal}));

@@ -20,8 +20,25 @@ async function readPdfBytes(file:{mimetype:string;filename:string;toBuffer:()=>P
  return bytes;
 }
 export function chunks(text:string,size=1100,overlap=150) {
+ if(!Number.isInteger(size)||size<1||overlap<0||overlap>=size)throw new Error('Invalid chunk limits');
  const out:string[]=[];
- for(let start=0;start<text.length;start+=size-overlap){out.push(text.slice(start,start+size)); if(start+size>=text.length)break;}
+ let start=0;
+ while(start<text.length){
+  let end=Math.min(start+size,text.length);
+  if(end<text.length){
+   const window=text.slice(start,end);
+   const paragraph=window.lastIndexOf('\n\n');
+   const line=window.lastIndexOf('\n');
+   const space=window.lastIndexOf(' ');
+   const boundary=[paragraph>=0?paragraph+2:0,line>=0?line+1:0,space>=0?space+1:0].find(n=>n>=size*0.55);
+   if(boundary)end=start+boundary;
+  }
+  out.push(text.slice(start,end));
+  if(end===text.length)break;
+  const next=Math.max(start+1,end-overlap);
+  const line=text.indexOf('\n',next);
+  start=line>=next&&line<end?line+1:next;
+ }
  return out;
 }
 async function createVersion(actor:Actor,spaceId:string,title:string,content:string,kind:'ARTICLE'|'PDF',pdfBytes?:Buffer,documentId?:string,baseVersionId?:string,duplicateReason?:string) {

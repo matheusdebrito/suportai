@@ -114,7 +114,7 @@ export async function verifyGroundedAnswer(
  const units=splitGroundingUnits(answer);
  if(!units.length||units.length>20)return rejected('unit_limit');
  const passages=[...sources.filter(source=>!source.historical).slice(0,8),...sources.filter(source=>source.historical).slice(0,4)]
-   .map(source=>({source,text:source.content.slice(0,1800)}));
+   .map(source=>({source,text:source.content.slice(0,source.completeDocument?10_000:1800)}));
  try{
   const result=await provider.chat.completions.create({
    model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',temperature:0,max_tokens:maxTokens,response_format:{type:'json_object'},

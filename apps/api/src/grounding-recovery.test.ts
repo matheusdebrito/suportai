@@ -38,7 +38,7 @@ test('guided fallback turns only the first documented stage into a short interac
 });
 test('complete fallback formats every documented stage without a raw-article preamble',()=>{
  const phone={...source,title:'Configurar telefone',content:'# Ver o IP\n- Segurar o botão central.\n- Status > Network Status > IPV4\n# Configurar SIP\n- Acessar ACCOUNTS > GENERAL SETTINGS\n- Account Active: YES'};
- const complete=completeGroundingFallback('me dê o passo a passo completo',[phone]);
+ const complete=completeGroundingFallback('me dê o passo a passo completo',[{...phone,ordinal:-1,completeDocument:true}]);
  assert.ok(complete);
  assert.match(complete.answer,/passo a passo completo/i);
  assert.match(complete.answer,/Ver o IP:/);
@@ -50,4 +50,9 @@ test('complete fallback formats every documented stage without a raw-article pre
 
 test('a prose paragraph with a colon is not mistaken for a single configuration field',()=>{
  assert.equal(splitGroundingUnits('Abra a interface web pelo IP. Senha: fixture-device-only. Configure a conta SIP.').length,3);
+});
+
+test('complete fallback rejects chunks and truncated documents',()=>{
+ assert.equal(completeGroundingFallback('procedimento completo',[source]),null);
+ assert.equal(completeGroundingFallback('procedimento completo',[{...source,ordinal:-1,completeDocument:false}]),null);
 });
