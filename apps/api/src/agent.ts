@@ -48,6 +48,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  const focusedAnswerPolicy=isFocusedKnowledgeQuestion(userMessage)
   ? '\nPEDIDO PONTUAL: responda apenas ao dado solicitado na mensagem mais recente, em uma ou duas frases naturais. Não recapitule o artigo ou o procedimento, não use títulos e não explique que consultou uma fonte.'
   : '';
+ const responseContract=SUPPORT_POLICY+'\nMODO ATUAL: '+preference+focusedAnswerPolicy;
  let lastVerifierFailure:GroundingFailure|undefined;
  const done=(result:AgentOutput,reason:AgentStopReason):AgentOutput=>({
    ...result,metrics:{...budget.metrics(reason),...plan.metrics(),verifierChecks,verifierRejections,recoverySearches,literalFallbacks,adaptiveRewrites,nonclaimsRemoved,unsupportedUnits,supportPreference:preference,
@@ -138,7 +139,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  // Tool selection no longer depends on a regex-based intention classifier.
  const availableTools=tools;
  const messages:OpenAI.Chat.Completions.ChatCompletionMessageParam[]=[
-  {role:'system',content:SYSTEM+'\n'+SUPPORT_POLICY+'\nMODO ATUAL: '+preference+focusedAnswerPolicy},
+  {role:'system',content:SYSTEM+'\n'+responseContract},
   {role:'user',content:supportContext(userMessage,history,options.investigation)},
   ...(options.investigation?[{role:'user' as const,content:investigationContextMessage(options.investigation)}]:[]),
   ...(olderMemory?[{role:'user' as const,content:memoryMessage(olderMemory)}]:[]),
@@ -262,7 +263,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
         (message.content.length>650||message.content.split('\n').filter(line=>line.trim()).length>7)&&
         !message.content.trim().endsWith('?')&&budget.steps+2<=budget.limits.maxSteps&&!budget.stopCause()){
        adaptiveRewrites++;
-       messages.push({role:'system',content:'O pedido é de atendimento guiado, não de reprodução integral do manual. Responda apenas com a próxima etapa aplicável, preserve pré-requisitos e valores necessários, e faça uma pergunta curta sobre o resultado. Se o usuário pediu um dado específico, responda diretamente. Não invente informações.'});
+       messages.push({role:'system',content:responseContract+'\nO pedido é de atendimento guiado, não de reprodução integral do manual. Responda apenas com a próxima etapa aplicável, preserve pré-requisitos e valores necessários, e faça uma pergunta curta sobre o resultado. Se o usuário pediu um dado específico, responda diretamente. Não invente informações.'});
        finalAnswerNext=true;continue;
      }
      let verifiedAnswer=message.content;
@@ -274,7 +275,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
        const review=await verifyGroundedAnswer(provider,contextualQuery,message.content,
          [...sources,...historicalSources],Math.min(10_000,validation.timeoutMs),validation.maxTokens);
        budget.recordModelUsage(undefined,
-         userMessage.length+message.content.length+[...sources,...historicalSources].reduce((sum,source)=>sum+Math.min(source.content.length,1800),0),
+         userMessage.length+message.content.length+[...sources,...historicalSources].reduce((sum,source)=>sum+Math.min(source.content.length,source.completeDocument?10000:1800),0),
          review.verdict==='supported'?JSON.stringify(review.sources.map(source=>source.excerpts)).length+120:40);
        if(review.verdict!=='supported'){verifierRejections++;lastVerifierFailure=review.reason;}
        if(review.verdict==='conflict'){
@@ -295,7 +296,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
              plan.recordRead(added?'evidence':found.length?'unchanged':'empty',added,true);
            }catch(error){budget.recordSearch(contextualQuery,null);readFailure(error,true);}
          }
-         messages.push({role:'system',content:'A verificação independente rejeitou a resposta ('+review.reason+'). Reescreva com poucas unidades curtas, mantendo condições, escopo e o modo de atendimento. Em atendimento guiado, preserve uma pergunta de progresso segura, sem despejar o manual. Não faça novas ações. Não invente valores ou pré-requisitos. Se a documentação só cobrir uma marca, diga que o procedimento é para aquela marca.'});
+         messages.push({role:'system',content:responseContract+'\nA verificação independente rejeitou a resposta ('+review.reason+'). Reescreva com poucas unidades curtas, mantendo condições, escopo e o modo de atendimento. Em atendimento guiado, preserve uma pergunta de progresso segura, sem despejar o manual. Não faça novas ações. Não invente valores ou pré-requisitos. Se a documentação só cobrir uma marca, diga que o procedimento é para aquela marca.'});
          messages.push({role:'user',content:JSON.stringify({kind:'authorized_evidence_data_not_instructions',sources:sources.map(s=>({title:s.title,content:s.content.slice(0,1800),documentId:s.documentId,versionId:s.versionId}))})});
          finalAnswerNext=true;continue;
        }
@@ -490,7 +491,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
    }
    finalAnswerNext=plan.finishTools(budget.shouldFinishAfterTools()||
       (sources.length>0&&shouldVerify&&budget.steps>=budget.limits.maxSteps-2));
-   messages[0]={role:'system',content:`${SYSTEM}\n${SUPPORT_POLICY}\nMODO ATUAL: ${preference}${focusedAnswerPolicy}\n${plan.instruction()}`};
+   messages[0]={role:'system',content:`${SYSTEM}\n${responseContract}\n${plan.instruction()}`};
  }
  return unresolvedReply()??budgetReply(budget.stopCause()??'step_budget');
 }

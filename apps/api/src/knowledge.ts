@@ -19,26 +19,37 @@ async function readPdfBytes(file:{mimetype:string;filename:string;toBuffer:()=>P
    throw Object.assign(new Error('PDF inválido'),{statusCode:415});
  return bytes;
 }
-export function chunks(text:string,size=1100,overlap=150) {
- if(!Number.isInteger(size)||size<1||overlap<0||overlap>=size)throw new Error('Invalid chunk limits');
+export function chunks(text:string,size=1100,overlap=150):string[]{
+ if(!Number.isInteger(size)||size<1||!Number.isInteger(overlap)||overlap<0||overlap>=size)throw new Error('Invalid chunk limits');
  const out:string[]=[];
- let start=0;
- while(start<text.length){
-  let end=Math.min(start+size,text.length);
-  if(end<text.length){
-   const window=text.slice(start,end);
-   const paragraph=window.lastIndexOf('\n\n');
-   const line=window.lastIndexOf('\n');
-   const space=window.lastIndexOf(' ');
-   const boundary=[paragraph>=0?paragraph+2:0,line>=0?line+1:0,space>=0?space+1:0].find(n=>n>=size*0.55);
-   if(boundary)end=start+boundary;
+ let heading='',buffer='';
+ const flush=()=>{if(buffer.trim())out.push(buffer);buffer='';};
+ const append=(block:string)=>{
+  if(buffer.length+block.length<=size){buffer+=block;return;}
+  flush();
+  const prefix=heading&&heading.length<=Math.min(160,size/4)&&!block.startsWith(heading)?heading+'\n':'';
+  if(block.length+prefix.length<=size){buffer=prefix+block;return;}
+  let start=0;
+  const capacity=size-prefix.length;
+  while(start<block.length){
+   let end=Math.min(start+capacity,block.length);
+   if(end<block.length){
+    const window=block.slice(start,end);
+    const boundary=Math.max(window.lastIndexOf('\n'),window.lastIndexOf(' '))+1;
+    if(boundary>=capacity*0.55)end=start+boundary;
+   }
+   out.push(prefix+block.slice(start,end));
+   if(end===block.length)break;
+   start=Math.max(start+1,end-Math.min(overlap,Math.floor(capacity/4)));
   }
-  out.push(text.slice(start,end));
-  if(end===text.length)break;
-  const next=Math.max(start+1,end-overlap);
-  const line=text.indexOf('\n',next);
-  start=line>=next&&line<end?line+1:next;
+ };
+ // Blank-line blocks keep conditions, fields and contiguous numbered lists together when they fit.
+ for(const block of text.match(/[^\n]+(?:\n(?!\n)[^\n]+)*\n*|\n+/g)??[]){
+  const title=/^(#{1,6}[^\n]*)\n/.exec(block);
+  if(title){flush();heading=title[1];}
+  append(block);
  }
+ flush();
  return out;
 }
 async function createVersion(actor:Actor,spaceId:string,title:string,content:string,kind:'ARTICLE'|'PDF',pdfBytes?:Buffer,documentId?:string,baseVersionId?:string,duplicateReason?:string) {
