@@ -52,8 +52,13 @@ test('cadastro, primeiro acesso, conhecimento, conversa e feedback sobrevivem ao
  const temporaryCode=(await code.innerText()).trim();
  expect(temporaryCode.length).toBeGreaterThan(20);
 
+ // Logout triggers a full navigation to clear sensitive client state.
+ const loggedOut=page.waitForResponse(r=>r.url().endsWith('/auth/logout')&&r.request().method()==='POST');
  await page.getByRole('button',{name:'Sair'}).click();
- // Logout must revoke the server-side cookie, not only clear React state.
+ expect((await loggedOut).ok()).toBeTruthy();
+ await expect(page.getByRole('button',{name:'Entrar'})).toBeVisible();
+ // Verify the server session is invalidated before explicitly reloading again.
+ expect((await page.request.get('/auth/me')).status()).toBe(401);
  await page.reload();
  await expect(page.getByRole('button',{name:'Entrar'})).toBeVisible();
  await page.getByRole('button',{name:'Tenho um código temporário'}).click();
