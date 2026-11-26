@@ -131,5 +131,8 @@ export async function searchKnowledge(actor:Actor,text:string,limit=5):Promise<S
   if(!result.some(x=>x.versionId===source.versionId&&x.ordinal===source.ordinal))result.push(source);
   if(result.length===cap)break;
  }
+ const positions=result.map((source,index)=>({source,index})).filter(x=>x.source.versionId===anchor.versionId);
+ const ordered=positions.map(x=>x.source).sort((a,b)=>a.ordinal-b.ordinal);
+ positions.forEach((position,index)=>{result[position.index]=ordered[index];});
  return result;
 }

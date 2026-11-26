@@ -23,3 +23,6 @@ Source of truth: melhorias.md. No merge authorized. Code first, execution of tes
 
 ## Resume point
 Next: inspect verifier function signature and procedure rejection, wire episode-review into a report CLI, capture verifier outcomes without exposing production data, complete calibration and baseline metadata. Review all previous commits for type and SQL errors before validation. No tests executed in this round. No production migration or reindex performed. Real model evaluation requires isolated database and explicit external processing authorization.
+
+## Latest checkpoint
+Episode reports now capture returned agent metrics, assert stable investigation identity and require evidence on the password and complete-procedure turns. Neighbor chunks are ordered within their version. Calibration CLI import side effects guarded and policy input validated. Next: inspect compile/schema compatibility, complete candidate capture and lexical calibration, add regression tests and baseline workflow. All changes remain unverified.

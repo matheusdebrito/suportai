@@ -148,15 +148,17 @@ if(!process.env.TEST_DATABASE_URL){
       for(const message of ['Preciso configurar um telefone de laboratório','sim','não entendi a parte da senha','a senha pode ser admin','me dê o passo a passo completo']){
         const response=await postTurn(app,headers,conversation,message);
         assert.equal(response.statusCode,200,response.body);
-        const result=response.json<{answer:string;sources:{versionId:string}[]}>();
+        const result=response.json<{answer:string;sources:{versionId:string}[];agentMetrics?:import('./agent-budget.js').AgentMetrics}>();
         assert.ok(result.sources.every(sourceRef=>sourceRef.versionId===source.version),'Unexpected source in isolated synthetic episode');
         const states=await query('SELECT id,topic,support_preference FROM investigations WHERE conversation_id=$1',[conversation]);
-        turns.push({message,answer:result.answer,sources:result.sources,states:states.rows,quality:episodeQuality(result.answer,article,previous)});
+        turns.push({message,answer:result.answer,sources:result.sources,states:states.rows,agentMetrics:result.agentMetrics,quality:episodeQuality(result.answer,article,previous)});
         previous.push(result.answer);
       }
       writeFileSync(process.env.EPISODE_REPORT_PATH||'episode-real-report.json',JSON.stringify({mode:'real-http',model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',embeddingModel:process.env.OPENAI_EMBED_MODEL||'text-embedding-3-small',temperature:AGENT_GENERATION_TEMPERATURE,limits:resolveAgentLimits(),corpusHash:createHash('sha256').update(article).digest('hex'),commit:process.env.EVALUATION_COMMIT||null,ranking,turns,humanReview:'pending'},null,2));
       assert.equal(ranking.recall,1);
-      assert.ok(turns.every(t=>t.states.length===1));
+      assert.ok(turns.every(t=>t.states.length===1&&t.states[0].id===turns[0].states[0].id));
+      assert.ok(turns[3].sources.length>0,'Password answer must cite evidence');
+      assert.ok(turns[4].sources.length>0,'Complete procedure must cite evidence');
       assert.equal(turns.at(-1)?.states[0].support_preference,'complete');
     }finally{await app.close();await query('DELETE FROM documents WHERE id=$1',[source.document]);await query('DELETE FROM users WHERE id=$1',[actor.id]);}
   });
