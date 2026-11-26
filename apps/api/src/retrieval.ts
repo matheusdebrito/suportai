@@ -1,6 +1,6 @@
 import { query } from './db.js';
 import { embedText } from './llm.js';
-import {hasSecrets} from './knowledge.js';
+import {hasSecrets,hasInfrastructureSecrets} from './knowledge.js';
 import type { Actor } from './security.js';
 export type Source={documentId:string;versionId:string;versionNumber:number;title:string;ordinal:number;content:string;score:number;historical?:true;excerpts?:string[]};
 type Candidate=Source&{semantic:number};
@@ -14,7 +14,7 @@ const STOP_WORDS=new Set((
  'porque porquê eu me meu minha meus minhas voce você voces vocês seu sua seus '+
  'suas isso isto esse essa esses essas este esta estes estas mais menos '+
  'pode podem posso poderia me explique diga quero gostaria saber sobre '+
- 'por favor favor devo deve devemos do seu da sua'
+ 'por favor favor devo deve devemos do seu da sua preciso saber realmente não nao sei'
 ).split(/\s+/));
 export function relaxedLexicalQuery(text:string):string{
  const words=text.toLowerCase().normalize('NFC').match(/[\p{L}\p{N}]{2,}/gu)??[];
@@ -28,7 +28,7 @@ export function relaxedLexicalQuery(text:string):string{
 }
 // Defense in depth for articles published before secret scanning was tightened.
 export function safeRetrievedSources<T extends Source>(sources:T[],limit:number):T[]{
- return sources.filter(x=>!hasSecrets(x.title)&&!hasSecrets(x.content)).slice(0,Math.max(0,limit));
+ return sources.filter(x=>!hasSecrets(x.title)&&!hasInfrastructureSecrets(x.content)).slice(0,Math.max(0,limit));
 }
 const genericTerms=new Set('procedimento procedimentos diagnostico diagnosticar problema problemas erro erros falha falhas ajuda corrigir verificar preciso saber empresa sistema sintoma informacao informacoes orientacao sobre consultar'.split(' '));
 function words(value:string):string[]{

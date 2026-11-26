@@ -88,3 +88,7 @@ Não há OCR de PDFs digitalizados. Não execute comandos ou acesso SSH com o ag
 - `npm run rag:evaluate -w @suportai/api`: lista cenários fictícios, sem chamadas externas.
 - `NODE_ENV=production npm run preflight -w @suportai/api`: verifica configuração sem expor segredos; **não é autorização de produção**.
 - A avaliação com modelo real requer `EVAL_SYNTHETIC_LLM_APPROVED=true`, chave própria e aprovação para custos. Nenhuma CI habilita essa configuração.
+
+### Conteúdo operacional e acesso
+
+Os artigos são texto livre. O procedimento autorizado pode ser apresentado integralmente no chat, inclusive valores operacionais documentados. O controle de acesso é o mesmo do conhecimento: autenticação, espaço compartilhado ou concessão de leitura do espaço restrito e fontes publicadas. Não há cofre, formato especial, nova variável de ambiente ou botão de revelação. O conteúdo autorizado e o histórico associado podem ser enviados ao provedor externo quando `ALLOW_EXTERNAL_AI_DATA_PROCESSING=true`; não cadastre senhas pessoais, chaves privadas, tokens de API ou segredos da infraestrutura. As verificações existentes para esses segredos, títulos e entradas de autenticação continuam aplicáveis. Use espaço restrito para procedimentos destinados apenas a um departamento.

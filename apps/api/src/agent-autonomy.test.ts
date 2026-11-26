@@ -99,11 +99,13 @@ test('real-model evaluation mode fails closed when the independent verifier reje
  const model=scripted([
   {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'ZD230 calibração'},'q1')]},
   {role:'assistant',content:'Reinicie o serviço antes de qualquer verificação.'},
+  {role:'assistant',content:'{"verdict":"unsupported"}'},
+  {role:'assistant',content:'Reinicie o serviço antes de qualquer verificação.'},
   {role:'assistant',content:'{"verdict":"unsupported"}'}
  ],calls);
  const result=await respond(actor,randomUUID(),'Qual o procedimento da ZD230?',[],model,
   async()=>[source],{verifyEvidence:true});
- assert.equal(result.metrics?.steps,3);
+ assert.equal(result.metrics?.steps,5);
  assert.equal(result.metrics?.stopReason,'unsafe_answer');
  assert.deepEqual(result.sources,[]);
  assert.doesNotMatch(result.answer,/Reinicie o serviço antes/i);
@@ -123,4 +125,70 @@ test('independent verifier accepts a grounded answer when supported',async()=>{
  assert.deepEqual(result.sources[0]?.excerpts,[source.content]);
  assert.match(result.answer,/\[1\]$/);
  assert.match(result.answer,/alinhamento antes/i);
+});
+
+test('technical clarification recovers contextual evidence before asking for an unknown model',async()=>{
+ const queries:string[]=[];const requests:any[]=[];
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('ask_clarification',{question:'Qual é o modelo exato?'},'q')]},
+  {role:'assistant',content:'Verifique o alinhamento antes da calibração na ZD230.'},
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[{unit:1,kind:'current',refs:[{evidence:1,quote:source.content}]}]})}
+ ],requests);
+ const result=await respond(actor,randomUUID(),'Não sei o modelo.',[
+  {role:'user',content:'Preciso configurar uma impressora.'},
+  {role:'assistant',content:'Qual a marca?'},
+  {role:'user',content:'Zebra'},
+  {role:'assistant',content:'Qual o modelo?'}
+ ],model,async(_actor,q)=>{queries.push(q);return [source];},{verifyEvidence:true});
+ assert.match(queries[0],/configurar.*Zebra/i);
+ assert.equal(result.metrics?.stopReason,'answered');assert.match(result.answer,/alinhamento/);
+ assert.equal(result.sources[0]?.versionId,source.versionId);
+});
+test('verified partial response omits unsupported independent claim',async()=>{
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'ZD230 calibração'},'q')]},
+  {role:'assistant',content:'Verifique o alinhamento antes da calibração na ZD230. Reinicie o servidor.'},
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[{unit:1,kind:'current',refs:[{evidence:1,quote:source.content}]},{unit:2,kind:'omitted',refs:[]}]})}
+ ],[]);
+ const result=await respond(actor,randomUUID(),'Qual o procedimento da ZD230?',[],model,async()=>[source],{verifyEvidence:true});
+ assert.match(result.answer,/alinhamento/);assert.doesNotMatch(result.answer,/Reinicie o servidor/);assert.match(result.answer,/parte verificada/);
+ assert.equal(result.sources.length,1);
+});
+
+test('independent verifier rejection triggers bounded grounded rewrite',async()=>{
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'calibração ZD230'},'q')]},
+  {role:'assistant',content:'Reinicie o servidor.'},
+  {role:'assistant',content:'{"verdict":"unsupported"}'},
+  {role:'assistant',content:'Verifique o alinhamento antes da calibração na ZD230.'},
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[{unit:1,kind:'current',refs:[{evidence:1,quote:source.content}]}]})}
+ ],[]);
+ const result=await respond(actor,randomUUID(),'Como configurar a ZD230?',[],model,async()=>[source],{verifyEvidence:true});
+ assert.equal(result.metrics?.steps,5);assert.equal(result.metrics?.stopReason,'answered');assert.match(result.answer,/alinhamento/);assert.doesNotMatch(result.answer,/Reinicie/);
+});
+
+test('generic phone setup after unknown model returns verified documented operational values',async()=>{
+ const phoneSource:Source={...source,title:'Manual de telefone Grandstream',content:'Abra a interface web pelo IP. Senha: fixture-device-only. Configure a conta SIP.'};
+ const answer='Abra a interface web pelo IP. Senha: fixture-device-only. Configure a conta SIP.';
+ const queries:string[]=[];
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('ask_clarification',{question:'Qual é o modelo exato?'},'q')]},
+  {role:'assistant',content:answer},
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[
+   {unit:1,kind:'current',refs:[{evidence:1,quote:'Abra a interface web pelo IP.'}]},
+   {unit:2,kind:'current',refs:[{evidence:1,quote:'Senha: fixture-device-only.'}]},
+   {unit:3,kind:'current',refs:[{evidence:1,quote:'Configure a conta SIP.'}]}
+  ]})}
+ ],[]);
+ const result=await respond(actor,randomUUID(),'Não sei o modelo.',[
+  {role:'user',content:'Preciso configurar um telefone.'},
+  {role:'assistant',content:'Qual a marca?'},
+  {role:'user',content:'Grandstream'},
+  {role:'assistant',content:'Qual o modelo?'}
+ ],model,async(_actor,q)=>{queries.push(q);return [phoneSource];},{verifyEvidence:true});
+ assert.match(queries[0],/telefone.*Grandstream/i);
+ assert.equal(result.metrics?.stopReason,'answered');
+ assert.match(result.answer,/fixture-device-only/);
+ assert.match(result.answer,/Configure a conta SIP/);
+ assert.equal(result.sources[0]?.versionId,phoneSource.versionId);
 });

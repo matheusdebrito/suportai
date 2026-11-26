@@ -6,6 +6,10 @@ import {findSimilarPublished, validDuplicateReason, SimilarArticlesError} from '
 export function hasSecrets(text:string) {
  return /-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----|(?:api[_-]?key|secret|senha|password|token|authorization)\s*[:=]\s*(?:bearer\s+)?(?:["'][^"'\r\n]{12,}["']|[^\s"']{12,})|(?:ghp|gho|ghu|ghs|ghr)_[a-z0-9]{30,}|github_pat_[a-z0-9_]{25,}|sk-[a-z0-9_-]{20,}|AKIA[0-9A-Z]{16}/i.test(text);
 }
+// Operational equipment passwords are knowledge, not application authentication secrets.
+export function hasInfrastructureSecrets(text:string){
+ return /-----BEGIN [^\r\n]*PRIVATE KEY-----|(?:api[_-]?key|secret|token|authorization)\s*[:=]\s*(?:bearer\s+)?(?:["'][^"'\r\n]{12,}["']|[^\s"']{12,})|(?:ghp|gho|ghu|ghs|ghr)_[a-z0-9]{30,}|github_pat_[a-z0-9_]{25,}|sk-[a-z0-9_-]{20,}|AKIA[0-9A-Z]{16}/i.test(text);
+}
 async function readPdfBytes(file:{mimetype:string;filename:string;toBuffer:()=>Promise<Buffer>}|undefined):Promise<Buffer>{
  if(!file) throw Object.assign(new Error('PDF obrigatório'),{statusCode:400});
  if(file.mimetype!=='application/pdf'||!file.filename.toLowerCase().endsWith('.pdf'))
@@ -23,7 +27,7 @@ export function chunks(text:string,size=1100,overlap=150) {
 async function createVersion(actor:Actor,spaceId:string,title:string,content:string,kind:'ARTICLE'|'PDF',pdfBytes?:Buffer,documentId?:string,baseVersionId?:string,duplicateReason?:string) {
  const p=await spacePermission(actor,spaceId);
  if(!p?.edit) throw Object.assign(new Error('Sem permissão para escrever neste espaço'),{statusCode:403});
- if(hasSecrets(title)||hasSecrets(content)) throw Object.assign(new Error('Possível credencial no título ou conteúdo. Remova-a antes de enviar'),{statusCode:422});
+ if(hasSecrets(title)||hasInfrastructureSecrets(content)) throw Object.assign(new Error('Possível credencial no título ou conteúdo. Remova-a antes de enviar'),{statusCode:422});
  if(duplicateReason && hasSecrets(duplicateReason)) throw Object.assign(new Error('Remova credenciais da justificativa'),{statusCode:422});
  if(kind==='ARTICLE' && !p.read)throw Object.assign(new Error('Permissão de leitura obrigatória para verificar artigos existentes'),{statusCode:403});
  const result=await transaction(async c=>{
@@ -348,7 +352,7 @@ export function registerKnowledge(app:FastifyInstance) {
    const id=(req.params as {id:string}).id;
    const b=req.body as {content?:unknown}|undefined;
    const content=typeof b?.content==='string'?b.content.trim():'';
-   if(content.length<20||content.length>100000||hasSecrets(content))
+   if(content.length<20||content.length>100000||hasInfrastructureSecrets(content))
      return reply.code(400).send({error:'Artigo corrigido inválido ou contém possível credencial'});
    const result=await transaction(async c=>{
      await requireCurrentActor(c,actor);
@@ -472,7 +476,7 @@ export function registerKnowledge(app:FastifyInstance) {
      if(pending.expires_at<=new Date()) return {error:'EXPIRED'};
      const p=await spacePermission(a,pending.space_id);
      if(!p?.edit) return {error:'FORBIDDEN'};
-     if(hasSecrets(pending.title)||hasSecrets(pending.content)) return {error:'SECRETS'};
+     if(hasSecrets(pending.title)||hasInfrastructureSecrets(pending.content)) return {error:'SECRETS'};
      let docId=pending.document_id;let version=1;
      let similarCount=0;
      if(docId){

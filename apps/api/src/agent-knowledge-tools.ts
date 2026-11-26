@@ -1,7 +1,7 @@
 import {query} from './db.js';
 import type {Actor} from './security.js';
 import type {Source} from './retrieval.js';
-import {hasSecrets} from './knowledge.js';
+import {hasSecrets,hasInfrastructureSecrets} from './knowledge.js';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function validDocumentId(value:unknown):value is string{
@@ -30,7 +30,7 @@ export async function getPublishedDocument(actor:Actor,documentId:string):
  AND (s.visibility='SHARED' OR COALESCE(g.can_read,false)) LIMIT 1`,
  [documentId,actor.id,actor.auth_revision,actor.role]);
  const x=r.rows[0];
- if(!x||hasSecrets(x.title)||hasSecrets(x.content))return null;
+ if(!x||hasSecrets(x.title)||hasInfrastructureSecrets(x.content))return null;
  return {id:x.id,title:x.title,kind:x.kind,versionId:x.version_id,
   versionNumber:Number(x.version_number),
   content:x.content.slice(0,10_000),truncated:x.content.length>10_000};
@@ -49,7 +49,7 @@ export async function getVisibleDocumentVersions(actor:Actor,documentId:string):
  AND v.status IN ('PUBLISHED','ARCHIVED') AND v.index_status='READY'
  AND (s.visibility='SHARED' OR COALESCE(g.can_read,false))
  ORDER BY (v.id=d.current_version_id) DESC,v.version_number DESC LIMIT 6`,[documentId,actor.id,actor.auth_revision,actor.role]);
- return r.rows.filter(x=>!hasSecrets(x.content)&&!hasSecrets(x.title)).map(x=>({
+ return r.rows.filter(x=>!hasInfrastructureSecrets(x.content)&&!hasSecrets(x.title)).map(x=>({
   id:x.id,number:Number(x.version_number),status:x.status,
   isCurrent:Boolean(x.is_current),title:x.title,excerpt:x.content.slice(0,2400)
  }));

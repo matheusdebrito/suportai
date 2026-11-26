@@ -1,7 +1,7 @@
 import './env.js';
 import {extractPdfText} from './pdf-extract.js';
 import {pool,query} from './db.js';
-import {chunks,hasSecrets} from './knowledge.js';
+import {chunks,hasInfrastructureSecrets} from './knowledge.js';
 import {embedText} from './llm.js';
 import {safeErrorType,safeWorkerFailure} from './safe-errors.js';
 import {claimJob,renewLease,storeClaimedResult,failClaimedJob,expireStaleJobs} from './worker-jobs.js';
@@ -23,7 +23,7 @@ async function processNext():Promise<boolean>{
      // PDF bytes are untrusted. Parse in a subprocess with no inherited secrets.
      text=await extractPdfText(bytes);
    }
-   if(hasSecrets(text))throw new Error('Possível credencial detectada; revisão necessária');
+   if(hasInfrastructureSecrets(text))throw new Error('Possível credencial detectada; revisão necessária');
    if(!text.trim())throw new Error('Documento vazio');
    if(text.length>450000)throw new Error('Documento muito extenso; divida-o em arquivos menores');
    const parts=chunks(text);
