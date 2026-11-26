@@ -18,7 +18,7 @@ export function canEdit(visibility: string, grant?:{can_edit?:boolean;can_read?:
   return canRead(visibility,grant) && Boolean(grant?.can_edit);
 }
 export function canApprove(role:string,visibility:string, grant?:{can_approve?:boolean;can_read?:boolean}|null) {
-  return role === 'APPROVER' && canRead(visibility,grant) && Boolean(grant?.can_approve);
+  return (role === 'ADMIN' && visibility === 'SHARED') || ((role === 'ADMIN' || role === 'APPROVER') && canRead(visibility,grant) && Boolean(grant?.can_approve));
 }
 export async function spacePermission(actor:Actor, spaceId:string) {
  const r=await query(`SELECT s.visibility,g.can_read,g.can_edit,g.can_approve FROM spaces s

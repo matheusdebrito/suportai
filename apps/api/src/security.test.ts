@@ -12,7 +12,11 @@ test('shared content is readable but restricted content requires grant',()=>{
  assert.equal(canEdit('RESTRICTED',{can_edit:true,can_read:true}),true);
 });
 test('approval requires reviewer role and space approval grant',()=>{
- assert.equal(canApprove('ADMIN','SHARED'),false);
+ assert.equal(canApprove('ADMIN','SHARED'),true);
+ assert.equal(canApprove('ADMIN','RESTRICTED'),false);
+ assert.equal(canApprove('ADMIN','RESTRICTED',{can_read:true}),false);
+ assert.equal(canApprove('ADMIN','RESTRICTED',{can_approve:true}),false);
+ assert.equal(canApprove('ADMIN','RESTRICTED',{can_read:true,can_approve:true}),true);
  assert.equal(canApprove('USER','SHARED'),false);
  assert.equal(canApprove('APPROVER','SHARED'),false);
  assert.equal(canApprove('APPROVER','SHARED',{can_approve:true}),true);

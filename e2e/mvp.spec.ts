@@ -22,12 +22,14 @@ test('cadastro, primeiro acesso, conhecimento, conversa e feedback sobrevivem ao
 
  await page.getByRole('button',{name:'Usuários',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Cadastrar colaborador'})).toBeVisible();
+ await page.getByRole('button',{name:'Configurações',exact:true}).click();
  const deptName='Suporte E2E '+Date.now();
  await page.getByLabel('Nome do departamento').fill(deptName);
  await page.getByRole('button',{name:'Criar departamento'}).click();
  await expect(page.locator('section.panel').filter({has:page.getByRole('heading',{name:'Departamentos'})})
    .locator('.item').filter({hasText:deptName})).toBeVisible();
  await expect(page.getByRole('heading',{name:'Operação do SuportAI'})).toBeVisible();
+ await page.getByRole('button',{name:'Usuários',exact:true}).click();
  await page.getByLabel('E-mail').fill(memberEmail);
  // O formulário inicia com perfil Colaborador; não depender do nome acessível das opções.
  await page.getByRole('button',{name:'Criar usuário'}).click();
@@ -67,6 +69,7 @@ test('cadastro, primeiro acesso, conhecimento, conversa e feedback sobrevivem ao
  await page.getByRole('button',{name:'Ativar minha conta / trocar senha'}).click();
  await expect(page.getByRole('button',{name:'Conhecimento',exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:'Usuários',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Revisão',exact:true})).toHaveCount(0);
 
  await page.getByRole('button',{name:'Conhecimento',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Adicionar conhecimento'})).toBeVisible();
@@ -326,4 +329,26 @@ test.describe('fluxo editorial com worker real',()=>{
    await page.getByRole('button',{name:'Conhecimento',exact:true}).click();
    await expect(page.locator('button.item',{hasText:pdfName})).toBeVisible();
  });
+});
+
+test('navegação responsiva e revisão administrativa',async({page})=>{
+ await page.setViewportSize({width:390,height:844});
+ await page.goto('/');
+ await page.getByLabel('E-mail').fill(process.env.E2E_ADMIN_EMAIL||'e2e-admin@example.test');
+ await page.getByLabel('Senha').fill(process.env.E2E_ADMIN_PASSWORD||'E2e-Secure-Password-Example-123!');
+ await page.getByRole('button',{name:'Entrar'}).click();
+ const menu=page.getByRole('button',{name:'Abrir menu'});
+ await expect(menu).toBeVisible();await menu.click();
+ await expect(page.getByRole('button',{name:'Revisão',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Usuários',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Cadastrar colaborador'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Departamentos',exact:true})).toHaveCount(0);
+ await page.getByRole('searchbox').fill('usuario-inexistente@example.test');
+ await expect(page.getByText('Nenhum usuário encontrado.')).toBeVisible();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBeTruthy();
+ await menu.click();await page.getByRole('button',{name:'Revisão',exact:true}).click();
+ await expect(menu).toHaveAttribute('aria-expanded','false');
+ await menu.click();await page.getByRole('button',{name:'Assistente',exact:true}).click();
+ await expect(page.getByPlaceholder('Digite sua pergunta...')).toBeVisible();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBeTruthy();
 });

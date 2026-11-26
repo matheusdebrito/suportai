@@ -283,8 +283,12 @@ if(!process.env.TEST_DATABASE_URL){
    const earlyPublish=await app.inject({method:'POST',url:`/knowledge/versions/${sharedDoc.versionId}/publish`,headers:auth(reviewer.cookie),payload:{confirm:true}});
    assert.equal(earlyPublish.statusCode,409);
 
-   const unauthorizedPublish=await app.inject({method:'POST',url:`/knowledge/versions/${sharedDoc.versionId}/publish`,headers:auth(admin.cookie),payload:{confirm:true}});
+   const unauthorizedPublish=await app.inject({method:'POST',url:`/knowledge/versions/${sharedDoc.versionId}/publish`,headers:auth(reader.cookie),payload:{confirm:true}});
    assert.equal(unauthorizedPublish.statusCode,403);
+   const adminReviews=await app.inject({method:'GET',url:'/knowledge/reviews',headers:auth(admin.cookie)});
+   assert.ok(adminReviews.json().reviews.some((x:any)=>x.version_id===sharedDoc.versionId));
+   assert.equal(adminSpaces.json().spaces.find((x:any)=>x.id===shared).can_approve,true);
+   assert.equal(adminSpaces.json().spaces.find((x:any)=>x.id===restricted).can_approve,false);
 
 
    // The worker lease is a concurrency token: a crashed/old worker must never
@@ -325,7 +329,7 @@ if(!process.env.TEST_DATABASE_URL){
     await new Promise(resolve=>setTimeout(resolve,400));
    }
    assert.equal(indexStatus,'READY','Worker must index article before publication');
-   const published=await app.inject({method:'POST',url:`/knowledge/versions/${sharedDoc.versionId}/publish`,headers:auth(reviewer.cookie),payload:{confirm:true}});
+   const published=await app.inject({method:'POST',url:`/knowledge/versions/${sharedDoc.versionId}/publish`,headers:auth(admin.cookie),payload:{confirm:true}});
    assert.equal(published.statusCode,200,published.body);
    const allowedRead=await app.inject({method:'GET',url:`/knowledge/documents/${sharedDoc.documentId}`,headers:auth(reader.cookie)});
    assert.equal(allowedRead.statusCode,200,allowedRead.body);
@@ -1005,7 +1009,7 @@ if(!process.env.TEST_DATABASE_URL){
    const unauthorizedArchive=await app.inject({method:'POST',url:'/knowledge/documents/'+archiveId+'/archive',
      headers:auth(reader.cookie),payload:{confirm:true}});
    assert.equal(unauthorizedArchive.statusCode,404);
-   const adminArchive=await app.inject({method:'POST',url:'/knowledge/documents/'+archiveId+'/archive',
+   const adminArchive=await app.inject({method:'POST',url:'/knowledge/documents/'+privateDoc.documentId+'/archive',
      headers:auth(admin.cookie),payload:{confirm:true}});
    assert.equal(adminArchive.statusCode,404);
    const archivedDoc=await app.inject({method:'POST',url:'/knowledge/documents/'+archiveId+'/archive',

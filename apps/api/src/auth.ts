@@ -268,7 +268,7 @@ export function registerAuth(app:FastifyInstance) {
    const r=await query(`SELECT s.id,s.name,s.visibility,
    (s.visibility='SHARED' OR COALESCE(g.can_read,false)) AS can_read,
    ((s.visibility='SHARED' OR COALESCE(g.can_read,false)) AND COALESCE(g.can_edit,false)) AS can_edit,
-   ($2='APPROVER' AND (s.visibility='SHARED' OR COALESCE(g.can_read,false)) AND COALESCE(g.can_approve,false)) AS can_approve
+   (($2='ADMIN' AND s.visibility='SHARED') OR ($2 IN ('ADMIN','APPROVER') AND (s.visibility='SHARED' OR COALESCE(g.can_read,false)) AND COALESCE(g.can_approve,false))) AS can_approve
    FROM spaces s LEFT JOIN space_grants g ON g.space_id=s.id AND g.user_id=$1
    WHERE s.visibility='SHARED' OR COALESCE(g.can_read,false) OR $2='ADMIN'
    ORDER BY name`,[a.id,a.role]);
