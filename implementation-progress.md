@@ -29,3 +29,6 @@ Episode reports now capture returned agent metrics, assert stable investigation 
 
 ## Latest checkpoint: calibration and baseline
 Added lexical coverage threshold to offline reranking (default zero preserves existing behavior), isolated synthetic lexical candidate capture, and reviewed real-episode baseline generator. Semantic candidate capture and end-to-end SQL threshold calibration remain pending; no experimental baseline has been generated. Next: wire capture into fixture runner, add regression tests, review compile/schema compatibility, then execute validation.
+
+## Latest checkpoint
+Semantic capture integrated into the opt-in real HTTP fixture, with real fixture embeddings and explicit authorization. Added regression tests for reviewed metrics and baseline. The two queries share a single synthetic document: smoke coverage only, not an independent reviewed pilot/holdout corpus. Next: review full diff for compile and schema compatibility, expand independent corpus and execute validation. No tests run yet.

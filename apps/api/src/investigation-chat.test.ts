@@ -1,3 +1,5 @@
+import {captureCalibrationCase} from './calibration-capture.js';
+import {embedText} from './llm.js';
 import {after,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -139,7 +141,11 @@ if(!process.env.TEST_DATABASE_URL){
     try{
       await query('UPDATE documents SET title=$2 WHERE id=$1',[source.document,'Telefone de laboratório']);
       await query('UPDATE document_versions SET content=$2 WHERE id=$1',[source.version,article]);
-      await query('INSERT INTO knowledge_chunks(version_id,ordinal,content) VALUES($1,0,$2)',[source.version,article]);
+      const embedding=await embedText(article);
+      assert.ok(embedding,'Real evaluation requires fixture embedding');
+      await query('INSERT INTO knowledge_chunks(version_id,ordinal,content,embedding) VALUES($1,0,$2,$3::vector)',[source.version,article,JSON.stringify(embedding)]);
+      const calibrationCases=await Promise.all([{id:'phone-pilot',query:'configurar telefone de laboratório',split:'pilot' as const},{id:'phone-holdout',query:'ativar conta do aparelho de laboratório',split:'holdout' as const}].map(item=>captureCalibrationCase(actor,{...item,expected:[source.version]},new Set([source.version]),true)));
+      if(process.env.CALIBRATION_REPORT_PATH)writeFileSync(process.env.CALIBRATION_REPORT_PATH,JSON.stringify(calibrationCases,null,2));
       const conversation=await openConversation(app,headers);
       const retrieved=await searchKnowledge(actor,'configurar telefone de laboratório');
       const ranking=retrievalMetrics([source.version],retrieved.map(x=>x.versionId));
