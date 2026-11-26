@@ -1,9 +1,9 @@
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
-COPY package.json ./package.json
+COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/package.json
 COPY apps/web/package.json ./apps/web/package.json
-RUN npm install --no-audit --no-fund
+RUN npm ci --no-audit --no-fund
 COPY apps/api ./apps/api
 COPY apps/web ./apps/web
 RUN npm run build && npm prune --omit=dev
@@ -25,3 +25,6 @@ CMD ["node","apps/api/dist/server.js"]
 FROM caddy:2-alpine AS web
 COPY --from=build /app/apps/web/dist /srv
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
+
+FROM web AS web-local
+COPY deploy/Caddyfile.local /etc/caddy/Caddyfile

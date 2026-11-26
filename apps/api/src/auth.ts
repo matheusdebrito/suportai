@@ -10,7 +10,7 @@ const departmentName=(name:unknown):string|null=>{
  const value=name.trim().replace(/\s+/g,' ');
  return value.length>=3&&value.length<=80?value:null;
 };
-function setCookie(reply:any,raw:string) { reply.setCookie(COOKIE,raw,{httpOnly:true,secure:isProd,sameSite:isProd?'strict':'lax',path:'/',maxAge:60*60*8}); }
+function setCookie(reply:any,raw:string) { reply.setCookie(COOKIE,raw,{httpOnly:true,secure:isProd,sameSite:'strict',path:'/',maxAge:60*60*8}); }
 export async function requireActor(req:FastifyRequest):Promise<Actor> {
  const a=await actorForSession(req.cookies?.[COOKIE]);
  if(!a) throw Object.assign(new Error('Não autenticado'),{statusCode:401});
@@ -48,7 +48,7 @@ export function registerAuth(app:FastifyInstance) {
    let rate=attempts.get(ip);
    if(rate && rate.until>Date.now() && rate.count>=8) return reply.code(429).send({error:'Muitas tentativas; tente mais tarde'});
    const body=req.body as {email?:unknown;password?:unknown}|undefined;
-   if(!validEmail(body?.email)||typeof body?.password!=='string') return reply.code(400).send({error:'Credenciais inválidas'});
+   if(!validEmail(body?.email)||typeof body?.password!=='string'||body.password.length>256) return reply.code(400).send({error:'Credenciais inválidas'});
    const r=await query('SELECT id,email,password_hash,active,must_change_password,role FROM users WHERE email=$1',[body.email.toLowerCase()]);
    const user=r.rows[0];
    const ok=user?.active && !user.must_change_password &&
@@ -62,9 +62,9 @@ export function registerAuth(app:FastifyInstance) {
    // Recheck after hashing while holding the account lock, so an admin reset
    // cannot race with session creation using the previous password.
    const current=await transaction(async c=>{
-     const locked=await c.query('SELECT active,must_change_password,email,role FROM users WHERE id=$1 FOR SHARE',[user.id]);
+     const locked=await c.query('SELECT active,must_change_password,email,role,password_hash FROM users WHERE id=$1 FOR SHARE',[user.id]);
      const account=locked.rows[0];
-     if(!account?.active||account.must_change_password)return null;
+     if(!account?.active||account.must_change_password||account.password_hash!==user.password_hash)return null;
      await c.query("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '8 hours')",[hashToken(raw),user.id]);
      return account;
    });

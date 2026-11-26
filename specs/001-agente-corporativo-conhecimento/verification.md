@@ -325,3 +325,8 @@ npm run db:migrate && npm run typecheck && npm test
 **NÃO LIBERADO PARA DADOS INTERNOS REAIS** até: autorização do fornecedor LLM, avaliação adversarial autorizada com modelo real, isolamento PDF no SO validado, operação/recuperação em ambiente de destino, piloto humano TI concluído.  
 **T025 do MVP permanece aberta** aguardando piloto humano autorizado com modelo real.  
 **Não houve deploy nem migração de produção como parte desta homologação.**
+
+
+## Revisão de evidências — 26/11/2026
+
+A homologação H-T020 acima é um registro histórico de resultados declarados, **não uma validação reproduzida**. A execução do CI [45698223549](https://github.com/matheusdebrito/suportai/actions/runs/45698223549) falhou nos testes de idempotência e [45870361813](https://github.com/matheusdebrito/suportai/actions/runs/45870361813) falhou no typecheck. O relatório lista 14 falhas e anexos não disponíveis na árvore Git. Não foi comprovada a avaliação real nem a assinatura humana. A fase 5 está reaberta para nova execução. Não use `db:migrate -- --down`: o migrador é exclusivamente progressivo. Restauração exige backup validado e procedimento de `deploy/verify-restore.sh` em ambiente descartável, seguido de plano específico de recuperação; não execute revert/destruição automática de banco. Nenhuma liberação para dados reais decorre da revisão.

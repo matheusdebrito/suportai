@@ -1,6 +1,7 @@
 import type {FastifyInstance,FastifyRequest,FastifyReply} from 'fastify';
 import {randomUUID} from 'node:crypto';
 import {pool} from './db.js';
+import {safeErrorType} from './safe-errors.js';
 import type {AgentMetrics,AgentStopReason} from './agent-budget.js';
 import type {InvestigationMetrics} from './agent-investigation-plan.js';
 
@@ -20,7 +21,7 @@ export type TurnTelemetry={
 };
 
 export function getOrCreateRequestId(req:FastifyRequest):string{
-  return (req.headers['x-request-id'] as string)||req.id||randomUUID();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.id)?req.id:randomUUID();
 }
 
 export function logTurnTelemetry(req:FastifyRequest,telemetry:TurnTelemetry){
@@ -129,16 +130,9 @@ export async function computeAggregatedTelemetry(
 }
 
 export function registerTelemetryHooks(app:FastifyInstance){
-  app.addHook('onRequest',async(req:FastifyRequest)=>{
+  app.addHook('onRequest',async(req:FastifyRequest,reply:FastifyReply)=>{
     req.id=getOrCreateRequestId(req);
-    req.headers['x-request-id']=req.id;
     (req as any).telemetryStart=Date.now();
-  });
-
-  app.addHook('onResponse',async(req:FastifyRequest,reply:FastifyReply)=>{
-    const start=(req as any).telemetryStart as number|undefined;
-    if(!start)return;
-    const latencyMs=Date.now()-start;
     reply.header('X-Request-Id',req.id);
   });
 }
@@ -180,6 +174,6 @@ export async function recordTurnTelemetry(data:{
       completionTokens
     ]
   ).catch(err=>{
-    console.error('Failed to record telemetry:',err);
+    console.error('Failed to record telemetry:',safeErrorType(err));
   });
 }

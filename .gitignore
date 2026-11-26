@@ -3,6 +3,12 @@ dist/
 .env
 .env.*
 !.env.example
+!.env.compose.example
+.evaluation-baseline.json
+homologation-results.json
+regression-report.txt
+playwright-report/
+test-results/
 coverage/
 *.log
 .DS_Store

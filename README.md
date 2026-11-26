@@ -19,7 +19,25 @@ Assistente interno com cérebro de conhecimento baseado em artigos e PDFs, recup
 
 Node.js 22+, PostgreSQL 17 com extensão pgvector, e Docker/Compose opcional.
 
-## Primeira execução local
+## Subir toda a aplicação com Docker Compose (local)
+
+Use Docker Desktop/Compose v2. Na raiz do repositório:
+
+1. Copie `.env.compose.example` para `.env.compose` (PowerShell: `Copy-Item .env.compose.example .env.compose`).
+2. Preencha `POSTGRES_PASSWORD`, `BOOTSTRAP_ADMIN_EMAIL` e `BOOTSTRAP_ADMIN_PASSWORD` (12–256 caracteres). Não use credenciais reais de produção.
+3. Execute `docker compose --env-file .env.compose up -d --build`.
+4. Confira `docker compose --env-file .env.compose ps -a` e abra **http://localhost:5173** com as credenciais de bootstrap.
+5. Se houver falha, use `docker compose --env-file .env.compose logs --tail=100 migrate bootstrap api worker web pdf-parser`.
+
+O Compose sobe PostgreSQL/pgvector, migrações, criação inicial de administrador, API, worker, parser PDF isolado por socket Unix e frontend Caddy. Migração e bootstrap devem terminar com código 0. O bootstrap não altera senhas existentes. Use o mesmo `POSTGRES_PASSWORD` se reutilizar o volume antigo. Após o primeiro acesso, remova as credenciais de bootstrap de `.env.compose` e execute `docker compose --env-file .env.compose rm -f bootstrap` para remover o contêiner encerrado.
+
+O volume do banco é persistente: `docker compose --env-file .env.compose down` não apaga dados. **Não use `down -v` em um banco que deseja preservar.** Se alterar `SUPORTAI_WEB_PORT`, ajuste `SUPORTAI_LOCAL_ORIGIN` para a mesma origem e acesse exatamente esse endereço. A API não tem porta pública e o proxy fornece os endpoints na mesma origem.
+
+A IA externa permanece desabilitada por padrão; para testes com dados sintéticos autorizados, configure a chave e habilite explicitamente `ALLOW_EXTERNAL_AI_DATA_PROCESSING=true`. Sem isso, a busca local continua funcionando.
+
+Este Compose é somente para acesso HTTP local (portas bindadas a 127.0.0.1). Para produção HTTPS, use o procedimento separado em [implantação](docs/implantacao-container.md); não exponha o Compose local à rede.
+
+## Primeira execução local sem contêiner da aplicação
 
 1. Copie `.env.example` para `.env` e defina credenciais de banco, `APP_ORIGIN` e opcionalmente a chave de IA.
 2. Crie um segredo forte: `export POSTGRES_PASSWORD='uma-senha-forte'`; inicie `docker compose up -d db`.

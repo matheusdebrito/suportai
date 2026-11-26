@@ -17,6 +17,8 @@ test('cadastro, primeiro acesso, conhecimento, conversa e feedback sobrevivem ao
  await page.getByLabel('Senha').fill(adminPassword);
  await page.getByRole('button',{name:'Entrar'}).click();
  await expect(page.getByRole('button',{name:'Usuários',exact:true})).toBeVisible();
+ await page.reload();
+ await expect(page.getByRole('button',{name:'Usuários',exact:true})).toBeVisible();
 
  await page.getByRole('button',{name:'Usuários',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Cadastrar colaborador'})).toBeVisible();

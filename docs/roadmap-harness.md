@@ -277,3 +277,8 @@ Prefixos `H-REQ`, `H-AC` e `H-T` são específicos deste roadmap; não alteram n
 - [Runbook de operação](operacao.md)
 
 **Próximo marco:** **Fase 5 CONCLUÍDA**. Próximos passos fora do roadmap harness: autorização do fornecedor LLM, piloto humano TI com modelo real, isolamento PDF no SO de produção validado, backup off-site testado. T025 do MVP aguarda piloto humano autorizado.
+
+
+## Revisão de estabilização — 26/11/2026
+
+Fase 5 **reaberta para validação**: resultados históricos declarados não equivalem a evidência reproduzível. Bloqueios: falhas de CI em typecheck e idempotência, anexos de avaliação ausentes e rollback não demonstrado. A correção de estabilização deve restaurar os contratos de frontend/API, comprovar a execução do Compose local, validar replay por mensagem/autorizações e executar CI completo. A fase 5 só poderá ser encerrada com evidências reais rastreáveis e homologação humana. Não autoriza produção.
