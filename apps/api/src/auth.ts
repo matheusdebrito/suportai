@@ -10,7 +10,7 @@ const departmentName=(name:unknown):string|null=>{
  const value=name.trim().replace(/\s+/g,' ');
  return value.length>=3&&value.length<=80?value:null;
 };
-function setCookie(reply:any,raw:string) { reply.setCookie(COOKIE,raw,{httpOnly:true,secure:isProd,sameSite:'strict',path:'/',maxAge:60*60*8}); }
+function setCookie(reply:any,raw:string) { reply.setCookie(COOKIE,raw,{httpOnly:true,secure:isProd,sameSite:isProd?'strict':'lax',path:'/',maxAge:60*60*8}); }
 export async function requireActor(req:FastifyRequest):Promise<Actor> {
  const a=await actorForSession(req.cookies?.[COOKIE]);
  if(!a) throw Object.assign(new Error('Não autenticado'),{statusCode:401});
