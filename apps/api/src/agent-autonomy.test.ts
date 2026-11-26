@@ -94,7 +94,7 @@ test('an invalid or inaccessible document id never reaches a knowledge reader',a
  assert.deepEqual(result.sources,[]);
 });
 
-test('real-model evaluation mode fails closed when the independent verifier rejects the answer',async()=>{
+test('rejected synthesis never leaks invented instructions and falls back to an attributed relevant passage',async()=>{
  const calls:any[]=[];
  const model=scripted([
   {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'ZD230 calibração'},'q1')]},
@@ -106,8 +106,12 @@ test('real-model evaluation mode fails closed when the independent verifier reje
  const result=await respond(actor,randomUUID(),'Qual o procedimento da ZD230?',[],model,
   async()=>[source],{verifyEvidence:true});
  assert.equal(result.metrics?.steps,5);
- assert.equal(result.metrics?.stopReason,'unsafe_answer');
- assert.deepEqual(result.sources,[]);
+ assert.equal(result.metrics?.stopReason,'answered');
+ assert.equal(result.metrics?.verifierRejections,2);
+ assert.equal(result.metrics?.lastVerifierFailure,'model_rejected');
+ assert.equal(result.metrics?.literalFallbacks,1);
+ assert.equal(result.sources[0]?.versionId,source.versionId);
+ assert.match(result.answer,/trecho original/);
  assert.doesNotMatch(result.answer,/Reinicie o serviço antes/i);
  assert.equal(calls[2].response_format.type,'json_object');
 });
@@ -191,4 +195,36 @@ test('generic phone setup after unknown model returns verified documented operat
  assert.match(result.answer,/fixture-device-only/);
  assert.match(result.answer,/Configure a conta SIP/);
  assert.equal(result.sources[0]?.versionId,phoneSource.versionId);
+});
+
+test('generic phone setup recovers a literal scoped procedure after two verifier rejections',async()=>{
+ const phone:Source={...source,title:'Configuração de telefone fixo Grandstream',content:'# Ver o IP\nSegure o botão central.\nStatus > Network Status > IPV4\n# Configurar SIP\nAbra Accounts > General Settings.\nAccount Active: YES\nSIP Server: sip.example.test'};
+ const queries:string[]=[];
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('ask_clarification',{question:'Qual a marca do telefone?'},'q')]},
+  {role:'assistant',content:'Reinicie o servidor.'},
+  {role:'assistant',content:'{"verdict":"unsupported"}'},
+  {role:'assistant',content:'Configure uma porta não documentada.'},
+  {role:'assistant',content:'{"verdict":"unsupported"}'}
+ ],[]);
+ const result=await respond(actor,randomUUID(),'Preciso configurar um telefone fixo',[],model,async(_actor,q)=>{queries.push(q);return [phone];},{verifyEvidence:true});
+ assert.equal(result.metrics?.literalFallbacks,1);
+ assert.equal(result.metrics?.verifierChecks,2);
+ assert.match(result.answer,/Grandstream/);assert.match(result.answer,/Network Status/);
+ assert.match(result.answer,/Account Active: YES/);assert.doesNotMatch(result.answer,/Reinicie o servidor|porta não documentada/);
+ assert.equal(result.sources[0]?.versionId,phone.versionId);
+});
+test('recovery search can add a missing procedure before re-verification',async()=>{
+ const extra:Source={...source,ordinal:1,content:'A calibração deve ser feita pelo painel.'};
+ const queries:string[]=[];
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'calibração'},'q')]},
+  {role:'assistant',content:'Use o painel.'},
+  {role:'assistant',content:'{"verdict":"unsupported"}'},
+  {role:'assistant',content:'A calibração deve ser feita pelo painel.'},
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[{unit:1,kind:'current',refs:[{evidence:2,quote:extra.content}]}]})}
+ ],[]);
+ const result=await respond(actor,randomUUID(),'Como calibrar a ZD230?',[],model,async(_actor,q)=>{queries.push(q);return queries.length===1?[source]:[extra];},{verifyEvidence:true});
+ assert.equal(result.metrics?.recoverySearches,1);assert.equal(result.metrics?.literalFallbacks,0);
+ assert.match(result.answer,/painel/);assert.equal(result.sources[0]?.ordinal,1);
 });

@@ -1,4 +1,5 @@
 import type {Source} from './retrieval.js';
+import type {GroundingFailure} from './agent-verifier.js';
 
 export type AgentLimits={
  maxSteps:number;
@@ -20,6 +21,7 @@ export type AgentMetrics={
  steps:number;searches:number;repeatedSearches:number;searchFailures:number;
  toolCalls:number;promptTokens:number;completionTokens:number;
  durationMs:number;stopReason:AgentStopReason;
+ verifierChecks?:number;verifierRejections?:number;recoverySearches?:number;literalFallbacks?:number;lastVerifierFailure?:GroundingFailure;
 };
 
 /** Limits are deliberately bounded; operators cannot configure unlimited agent calls. */
