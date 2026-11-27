@@ -8,7 +8,7 @@ import {AgentBudget,DEFAULT_AGENT_LIMITS} from './agent-budget.js';
 import {applySemanticMemory,interpretSemanticTurn,parseSemanticTurn,SEMANTIC_TURN_FORMAT,type SemanticTurn,type SemanticTurnInput} from './semantic-turn.js';
 import {neutralQuestionCandidate,reviewDialogueReply} from './dialogue-review.js';
 import {respond} from './agent.js';
-import {verifyGroundedAnswer} from './agent-verifier.js';
+import {verifyGroundedAnswer,verifySourceAlignedProcedure} from './agent-verifier.js';
 import {indexEvidenceSpans,indexedGroundingResponseFormat,parseIndexedGroundingReview,INDEXED_GROUNDING_SCHEMA_VERSION,COMPLETE_GROUNDING_SCHEMA_VERSION} from './grounding-contract.js';
 
 const actor:Actor={id:randomUUID(),role:'USER',auth_revision:1,must_change_password:false};
@@ -303,7 +303,7 @@ test('complete mode rewrites a partial answer instead of accepting a full-docume
  const result=await respond(actor,randomUUID(),'Me dê o procedimento completo',[],scripted([
   tool('search_knowledge',{query:'emitir acesso verde'}),assistant('Abra o painel.'),
   indexed('partial',{u1:{kind:'current',refs:['e1s1']}}),
-  indexed('complete',{u1:{kind:'current',refs:['e1s1']},u2:{kind:'current',refs:['e1s2']}})
+  assistant(JSON.stringify({verdict:'supported',issue:'none'}))
  ],calls),async()=>[doc],{semantic:semantic({mode:'complete'}),budget:plannedBudget(),verifyEvidence:true});
  assert.equal(result.metrics?.completeProcedureVerified,true);
  assert.equal(result.metrics?.verifierFailures?.incomplete_procedure,1);
@@ -318,12 +318,54 @@ test('a replacement candidate still requires independent approval and never bypa
  const result=await respond(actor,randomUUID(),'Me dê o procedimento completo',[],scripted([
   tool('search_knowledge',{query:'emitir acesso verde'}),assistant('Abra o painel.'),
   assistant(JSON.stringify({verdict:'unsupported',coverage:'not_applicable',issue:'unsupported_content',claims:null})),
-  assistant(JSON.stringify({verdict:'conflict',coverage:'not_applicable',issue:'unresolved_conflict',claims:null}))
+  assistant(JSON.stringify({verdict:'conflict',issue:'unresolved_conflict'}))
  ],calls),async()=>[doc],{semantic:semantic({mode:'complete'}),budget:new AgentBudget({...DEFAULT_AGENT_LIMITS,maxSteps:5}),verifyEvidence:true});
  assert.equal(result.metrics?.sourceAlignedReviews,1);
  assert.notEqual(result.metrics?.completeProcedureVerified,true);
  assert.deepEqual(result.sources,[]);
  assert.equal(result.metrics?.stopReason,'source_conflict');
  const review=JSON.parse(calls.at(-1).messages[1].content);
- assert.deepEqual(review.units.map((u:any)=>u.text),['Abra o painel.','Confirme a emissão.']);
+ assert.equal(review.candidate,doc.content);
+ assert.equal(calls.at(-1).response_format.json_schema.name,'source_aligned_review_v1');
+});
+
+test('exact-document review preserves the published procedure and rejects altered text before calling the model',async()=>{
+ const doc={...green,ordinal:-1,completeDocument:true,content:'Abra o painel.\n2. Use a senha padrão demo-default.\nConfirme a emissão.'};
+ const calls:any[]=[];
+ const provider=scripted([assistant(JSON.stringify({verdict:'supported',issue:'none'}))],calls);
+ const result=await verifySourceAlignedProcedure(provider,'Me dê o procedimento completo',doc.content,[doc],1000,1000,()=>{});
+ assert.equal(result.verdict,'supported');
+ if(result.verdict==='supported'){
+  assert.equal(result.answer,doc.content+' [1]');
+  assert.deepEqual(result.sources[0].excerpts,[doc.content]);
+  assert.equal(result.completeProcedureVerified,true);
+ }
+ assert.equal(calls.length,1);
+ const altered=await verifySourceAlignedProcedure(provider,'Me dê o procedimento completo',doc.content.replace('demo-default','other-value'),[doc],1000,1000,()=>{});
+ assert.deepEqual(altered,{verdict:'unsupported',reason:'invalid_reference'});
+ assert.equal(calls.length,1);
+});
+test('exact-document review independently rejects unsafe and inapplicable sources',async()=>{
+ const doc={...green,ordinal:-1,completeDocument:true,content:'Abra o painel.\nConfirme a emissão.'};
+ const decision={versionIds:[doc.versionId],sufficiency:'sufficient'} as const;
+ const calls:any[]=[];
+ const result=await verifySourceAlignedProcedure(scripted([assistant(JSON.stringify({verdict:'unsupported',issue:'wrong_scope'}))],calls),
+  'Procedimento de outro ambiente',doc.content,[doc,blue],1000,1000,()=>{},
+  {versionIds:[...decision.versionIds],sufficiency:decision.sufficiency});
+ assert.deepEqual(result,{verdict:'unsupported',reason:'model_rejected',issue:'wrong_scope'});
+ assert.deepEqual(new Set(JSON.parse(calls[0].messages[1].content).evidence.map((s:any)=>s.versionId)),new Set([doc.versionId,blue.versionId]));
+ const blocked=await verifySourceAlignedProcedure(scripted([]),'procedimento',doc.content,[{...doc,content:'Abra o painel.\nSenha: pessoal-privada'}],1000,1000,()=>{});
+ assert.equal(blocked.verdict,'unsupported');
+});
+test('a partial source selection cannot mark unrelated or incomplete guidance as complete',async()=>{
+ const doc={...green,ordinal:-1,completeDocument:true,content:'Abra o painel.\nConfirme a emissão.'};
+ const partialSelection={versionIds:[doc.versionId],sufficiency:'partial'} as const;
+ const selection={versionIds:[...partialSelection.versionIds],sufficiency:partialSelection.sufficiency};
+ const supported=assistant(JSON.stringify({verdict:'supported',coverage:'partial',issue:'missing_coverage',claims:{u1:{kind:'current',refs:['e1s1']}}}));
+ const result=await verifyGroundedAnswer(scripted([supported]),'Me dê o procedimento completo','Abra o painel.',[doc],1000,1000,undefined,selection,undefined,undefined,true);
+ assert.equal(result.verdict,'supported');
+ if(result.verdict==='supported')assert.notEqual(result.completeProcedureVerified,true);
+ const wrongScope=assistant(JSON.stringify({verdict:'unsupported',coverage:'not_applicable',issue:'wrong_scope',claims:null}));
+ assert.deepEqual(await verifyGroundedAnswer(scripted([wrongScope]),'Me dê o procedimento completo','Abra o painel.',[doc],1000,1000,undefined,selection,undefined,undefined,true),
+  {verdict:'unsupported',reason:'model_rejected',issue:'wrong_scope'});
 });

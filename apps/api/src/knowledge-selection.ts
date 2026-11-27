@@ -9,7 +9,7 @@ export const knowledgeSelectionTool={
   name:'select_knowledge',strict:true,
   description:'Selecione as versões vigentes recuperadas que realmente se aplicam ao objetivo e contexto do usuário. Compare o conteúdo, finalidade, sistema e ambiente, não apenas a pontuação ou palavras. Use partial quando a fonte só confirmar parte do pedido. Se faltar uma condição para escolher com segurança, pesquise mais, abra um documento ou faça ask_clarification; não chute uma versão. Não concede acesso nem dispensa a verificação independente.',
   parameters:{type:'object',additionalProperties:false,required:['versionIds','sufficiency'],properties:{
-   versionIds:{type:'array',items:{type:'string'},description:'IDs exatos de uma a quatro versões vigentes recuperadas neste turno. Use mais de uma somente se complementares e aplicáveis.'},
+   versionIds:{type:'array',items:{type:'string'},description:'IDs exatos de uma a quatro versões vigentes recuperadas neste turno. Use mais de uma somente se complementares e necessárias para a operação pedida agora. Documento de outra investigação ou de uma operação diferente não complementa automaticamente este pedido, mesmo no mesmo ambiente. Não use uma seleção parcial para acrescentar procedimentos de outro assunto.'},
    sufficiency:{type:'string',enum:['sufficient','partial']}
   }}
  }

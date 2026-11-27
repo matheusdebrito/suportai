@@ -116,3 +116,19 @@ export function parseIndexedGroundingReview(value:unknown,count:number,spans:rea
  }
  return {verdict,claims,...(coverage?{coverage}:{}),...(issue?{issue}:{})};
 }
+
+/** Exact-document review has no generated quotations or arbitrary claim IDs.
+ * The backend proves identity independently; the model must still judge
+ * applicability, safety and coverage of the entire requested procedure. */
+export const SOURCE_ALIGNED_REVIEW_FORMAT={type:'json_schema' as const,json_schema:{
+ name:'source_aligned_review_v1',strict:true,schema:{
+  type:'object',additionalProperties:false,required:['verdict','issue'],
+  properties:{verdict:{type:'string',enum:[...verdicts]},issue:{type:'string',enum:[...reviewIssues]}}
+ }
+}};
+export function parseSourceAlignedReview(value:unknown):{verdict:GroundingReview['verdict'];issue:GroundingReviewIssue}|null{
+ if(!exact(value,['verdict','issue'])||!verdicts.includes(value.verdict as GroundingReview['verdict'])||
+    !reviewIssues.includes(value.issue as GroundingReviewIssue)||
+    (value.verdict==='supported')!==(value.issue==='none'))return null;
+ return {verdict:value.verdict as GroundingReview['verdict'],issue:value.issue as GroundingReviewIssue};
+}

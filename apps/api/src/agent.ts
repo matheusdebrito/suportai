@@ -7,7 +7,7 @@ import type OpenAI from 'openai';
 import {buildConversationMemory,memoryMessage} from './conversation-memory.js';
 import {getPublishedDocument,getVisibleDocumentVersions,documentToSource,validDocumentId} from './agent-knowledge-tools.js';
 import {reviewDraftIntent} from './agent-intent.js';
-import {splitGroundingUnits,verifyGroundedAnswer,type GroundingFailure} from './agent-verifier.js';
+import {splitGroundingUnits,verifyGroundedAnswer,verifySourceAlignedProcedure,type GroundingFailure,type VerificationTrace,type GroundingResult} from './agent-verifier.js';
 import type {GroundingReviewIssue} from './grounding-contract.js';
 import {accessNoteGroundingFallback,completeGroundingFallback,confirmedGuidance,focusedGroundingFallback,guidedGroundingFallback,literalGroundingFallback,semanticEvidenceFallback,sourceAlignedProcedureCandidate} from './grounding-fallback.js';
 import {isFocusedKnowledgeQuestion,lastProgressQuestion,requestsSupportMode,supportPreference,supportContext,structuredSupportQuery,SUPPORT_POLICY} from './support-dialogue.js';
@@ -40,7 +40,7 @@ const tools:OpenAI.Chat.Completions.ChatCompletionTool[]=[
  {type:'function',function:{name:'prepare_article',description:'Prepara prévia de artigo solicitado explicitamente pelo usuário; requer confirmação humana posterior antes de criar rascunho.',parameters:{type:'object',properties:{spaceId:{type:'string'},title:{type:'string'},content:{type:'string'},documentId:{type:'string',description:'Documento a atualizar se aplicável'}},required:['spaceId','title','content'],additionalProperties:false}}}
 ];
 export type AgentOutput={answer:string;sources:Source[];pendingActions:{id:string;title:string;content:string;spaceName:string;documentId?:string;beforeContent?:string}[];metrics?:AgentMetrics&InvestigationMetrics};
-export type EvaluationReview={candidate:string;verdict:'supported'|'unsupported'|'uncertain'|'conflict';reason?:GroundingFailure;issue?:GroundingReviewIssue;durationMs:number;promptTokens:number;completionTokens:number;usageObserved:boolean};
+export type EvaluationReview={candidate:string;verdict:'supported'|'unsupported'|'uncertain'|'conflict';reason?:GroundingFailure;issue?:GroundingReviewIssue;diagnostic?:VerificationTrace;durationMs:number;promptTokens:number;completionTokens:number;usageObserved:boolean};
 export type AgentOptions={verifyEvidence?:boolean;investigation?:InvestigationDraft;semantic?:SemanticTurn;semanticTurnStatus?:SemanticTurnResult['status'];budget?:AgentBudget;subjectCandidates?:string[];evaluationObserver?:(event:EvaluationReview)=>void};
 export async function respond(actor:Actor,conversationId:string,userMessage:string,history:{role:'user'|'assistant';content:string}[],provider:OpenAI|null=client,knowledgeSearch:typeof searchKnowledge=searchKnowledge,options:AgentOptions={}):Promise<AgentOutput>{
  const sources:Source[]=[];
@@ -60,7 +60,8 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  let verifierChecks=0,verifierRejections=0,verifierRepairs=0,sourceAlignedReviews=0,recoverySearches=0,literalFallbacks=0,adaptiveRewrites=0,nonclaimsRemoved=0,unsupportedUnits=0;
  const localPreference=supportPreference(userMessage,history,options.investigation?.supportPreference);
  const preference=semantic?(requestsSupportMode(userMessage)?localPreference:semanticPreference(semantic,options.investigation)):localPreference;
- const focused=semantic?semantic.focused||isFocusedKnowledgeQuestion(userMessage):isFocusedKnowledgeQuestion(userMessage);
+ const explicitComplete=requestsSupportMode(userMessage)&&localPreference==='complete'||semantic?.mode==='complete'&&!isFocusedKnowledgeQuestion(userMessage);
+ const focused=!explicitComplete&&(semantic?semantic.focused||isFocusedKnowledgeQuestion(userMessage):isFocusedKnowledgeQuestion(userMessage));
  const focusedAnswerPolicy=focused
   ? '\nPEDIDO PONTUAL: responda apenas ao dado solicitado na mensagem mais recente, em uma ou duas frases naturais. Não recapitule o artigo ou o procedimento, não use títulos, não acrescente ofertas genéricas de ajuda ou perguntas de progresso e não explique que consultou uma fonte.'
   : '';
@@ -410,20 +411,33 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
        // than spending the remaining budget on a potentially worse rewrite.
        // Keep the evidence, selection and all local validation unchanged.
        const candidate=message.content;
-       const requireComplete=Boolean(semantic&&preference==='complete'&&!focused&&selection?.sufficiency!=='partial');
-       const runVerifier=async (repairReason?:GroundingFailure,reviewCandidate=candidate)=>{
+       const requireComplete=Boolean(semantic&&preference==='complete'&&!focused);
+       const runVerifier=async (repairReason?:GroundingFailure,reviewCandidate=candidate,sourceAligned=false)=>{
          const validation=budget.startModelTurn(true);
          if(!validation)return null;
          verifierChecks++;
          const started=Date.now(),promptBefore=budget.promptTokens,completionBefore=budget.completionTokens;
          let verifierUsage:{prompt_tokens?:number|null;completion_tokens?:number|null}|undefined;
-         const result=await verifyGroundedAnswer(provider,semantic?userMessage:contextualQuery,reviewCandidate,
-           [...sources,...historicalSources],Math.min(10_000,validation.timeoutMs),validation.maxTokens,usage=>{verifierUsage=usage;},selection,verificationContext,repairReason,requireComplete);
+         let diagnostic:VerificationTrace={};
+         const observeUsage=(usage:typeof verifierUsage)=>{verifierUsage=usage;};
+         const observeTrace=(trace:VerificationTrace)=>{diagnostic={...diagnostic,...trace};};
+         let result:GroundingResult=sourceAligned
+           ? await verifySourceAlignedProcedure(provider,userMessage,reviewCandidate,[...sources,...historicalSources],
+             Math.min(10_000,validation.timeoutMs),validation.maxTokens,observeUsage,selection,verificationContext,observeTrace)
+           : await verifyGroundedAnswer(provider,semantic?userMessage:contextualQuery,reviewCandidate,
+             [...sources,...historicalSources],Math.min(10_000,validation.timeoutMs),validation.maxTokens,observeUsage,selection,verificationContext,repairReason,requireComplete,observeTrace);
+         // A partially supported guided/complete response must enter the
+         // existing correction branch, not be rejected after recovery closes.
+         if(semantic&&result.verdict==='supported'&&(preference==='guided'||preference==='complete')&&(result.unsupportedUnits??0)>0){
+           unsupportedUnits+=result.unsupportedUnits??0;
+           diagnostic.localFailure='model_rejected';
+           result={verdict:'unsupported',reason:'model_rejected',issue:'unsupported_content'};
+         }
          budget.recordModelUsage(verifierUsage,
            userMessage.length+reviewCandidate.length+[...sources,...historicalSources].reduce((sum,source)=>sum+Math.min(source.content.length,source.completeDocument?10000:1800),0),
            result.verdict==='supported'?JSON.stringify(result.sources.map(source=>source.excerpts)).length+120:40);
          if(process.env.NODE_ENV==='test')options.evaluationObserver?.({candidate:reviewCandidate,verdict:result.verdict,
-           ...(result.verdict!=='supported'?{reason:result.reason,...(result.issue?{issue:result.issue}:{})}:{}),durationMs:Date.now()-started,
+           ...(result.verdict!=='supported'?{reason:result.reason,...(result.issue?{issue:result.issue}:{})}:{}),diagnostic,durationMs:Date.now()-started,
            promptTokens:budget.promptTokens-promptBefore,completionTokens:budget.completionTokens-completionBefore,
            usageObserved:verifierUsage!==undefined});
          if(result.verdict!=='supported')recordVerifierFailure(result.reason);
@@ -446,8 +460,8 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
           !plan.metrics().conflicts&&!pendingActions.length&&sourceAlignedReviews===0&&
           (!selection||selection.sufficiency==='sufficient'&&selection.versionIds.length===1)&&!budget.stopCause()){
          const aligned=sourceAlignedProcedureCandidate([...sources,...historicalSources],selection?.versionIds[0]);
-         if(aligned&&aligned.trim()!==candidate.trim()&&splitGroundingUnits(aligned).length<=20){
-           const revised=await runVerifier(undefined,aligned);
+         if(aligned&&splitGroundingUnits(aligned).length<=20){
+           const revised=await runVerifier(undefined,aligned,true);
            if(revised){sourceAlignedReviews++;review=revised;}
          }
        }
@@ -469,7 +483,8 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          // rejects it, the next synthesis may use a different authorized
          // candidate; the independent verifier must still confirm that answer.
          if(selection&&(['selection_mismatch','model_uncertain','no_supported_claim'].includes(review.reason)||
-            (review.reason==='model_rejected'&&preference!=='complete'))){
+            (review.reason==='model_rejected'&&(preference!=='complete'||selection.sufficiency==='partial'||selection.versionIds.length>1))||
+            review.issue==='wrong_scope'||(review.reason==='incomplete_procedure'&&selection.sufficiency==='partial'))){
            selection=undefined;knowledgeSelectionInvalidations++;
          }
          // Re-search only on a potentially missing-evidence failure, once, using user context.

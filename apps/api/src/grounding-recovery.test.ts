@@ -206,3 +206,14 @@ test('source-aligned recovery requires a full authorized version and excludes cr
   'Abra o painel.\napi_key: synthetic-credential-12345678'
  ])assert.equal(sourceAlignedProcedureCandidate([{...doc,content}]),null);
 });
+
+test('source-aligned recovery admits only one explicitly documented equipment-default step for review',()=>{
+ const doc:Source={...source,ordinal:-1,completeDocument:true,content:'1. Abra o painel.\n2. Use a senha padrão demo-default.\n3. Confirme a opção.'};
+ assert.equal(sourceAlignedProcedureCandidate([doc]),doc.content);
+ for(const content of [
+  '1. Abra o painel.\n2. Use a senha demo-default.',
+  '1. Abra o painel.\n2. Use a senha padrão demo-default.\n3. Informe seu login.',
+  '1. Use a senha padrão demo-default.\n2. Use a senha padrão another-value.',
+  '1. Abra o painel.\n2. Use a senha padrão do usuário demo-default.'
+ ])assert.equal(sourceAlignedProcedureCandidate([{...doc,content}]),null);
+});

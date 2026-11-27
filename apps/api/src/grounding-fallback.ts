@@ -298,14 +298,25 @@ export function semanticEvidenceFallback(query:string,sources:Source[],complete=
 /** Internal candidate for independent review, never a user-facing fallback.
  * Preserve the document's literal content and all conditions. The independent
  * verifier must still judge relevance, authorization, coverage and conflicts. */
-export function sourceAlignedProcedureCandidate(sources:readonly Source[],selectedVersion?:string):string|null{
+export function sourceAlignedProcedureSource(sources:readonly Source[],selectedVersion?:string):Source|null{
  if(sources.some(s=>s.historical))return null;
  const current=selectedVersion?sources.filter(s=>s.versionId===selectedVersion):sources;
  if(new Set(current.map(s=>s.versionId)).size!==1)return null;
  const doc=current.find(s=>s.ordinal===-1&&s.completeDocument===true);
  if(!doc||doc.content.trim().length<20||doc.content.length>3500||
     hostile.test(doc.title)||hostile.test(doc.content)||hasSecrets(doc.title)||hasSecrets(doc.content)||
-    hasInfrastructureSecrets(doc.content)||personalCredential.test(doc.content)||parseAccessNote(doc.content)||
-    /\b(?:senha|password|login|usu[aá]rio|credencia(?:l|is)|tokens?|segredo|secret|chave)\b/i.test(doc.content))return null;
- return readableChecklist(doc.content).trim();
+    hasInfrastructureSecrets(doc.content)||personalCredential.test(doc.content)||parseAccessNote(doc.content))return null;
+ if(current.some(s=>s.completeDocument&&s.content!==doc.content))return null;
+ // The published policy permits an explicitly documented equipment default
+ // when necessary. Only one simple default-password instruction in a listed
+ // step may enter this independently reviewed path. No unqualified access
+ // fields, personal credentials, tokens, logins or raw fallback are allowed.
+ const credentialLines=contentLines(doc.content).filter(line=>/\b(?:senha|password|login|usu[aá]rio|credencia(?:l|is)|tokens?|segredo|secret|chave)\b/i.test(line));
+ const documentedDefault=/^(?:\d+[.)]|[-*+])\s+(?:use|utilize|digite|informe)\s+(?:a\s+)?senha\s+padr[aã]o(?:\s+do\s+equipamento)?\s*:?\s+["']?[\p{L}\p{N}_.-]{1,40}["']?\.?$/iu;
+ if(credentialLines.length>1||credentialLines.some(line=>!documentedDefault.test(line)))return null;
+ return doc;
+}
+export function sourceAlignedProcedureCandidate(sources:readonly Source[],selectedVersion?:string):string|null{
+ const doc=sourceAlignedProcedureSource(sources,selectedVersion);
+ return doc?readableChecklist(doc.content).trim():null;
 }
