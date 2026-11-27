@@ -146,3 +146,45 @@ test('fallback rejects explicitly personal credentials even if the document is p
  assert.equal(literalGroundingFallback('configurar telefone',[personal]),null);
  assert.equal(focusedGroundingFallback('Qual a senha do telefone?',[personal]),null);
 });
+
+
+test('short Portuguese verb inflections match the operation without relaxing its domain or confusing a different action',()=>{
+ const voucher={...source,title:'Gerar voucher Wi-Fi de laboratório',content:'1. Abra o painel de testes.\n2. Selecione o menu de vouchers.'};
+ const generated=literalGroundingFallback('como eu gero um voucher wifi?', [voucher]);
+ assert.ok(generated);
+ assert.match(generated.answer,/Selecione o menu de vouchers/);
+ for(const question of ['como revogo um voucher wifi?','como gerencio um voucher wifi?','como gero um voucher ERP?','como gero um voucher wifi de outro ambiente Vermelho?']){
+  assert.equal(literalGroundingFallback(question,[voucher]),null,question);
+ }
+ const create={...source,title:'Criar cadastro fictício',content:'Abra o formulário de cadastro.\nPreencha o campo de teste.'};
+ assert.ok(literalGroundingFallback('como crio um cadastro fictício?', [create]));
+ const emit={...source,title:'Emitir certificado fictício',content:'Abra o painel de testes e selecione o certificado fictício.'};
+ assert.ok(literalGroundingFallback('como emito um certificado fictício?', [emit]));
+});
+test('access-only article returns a cited partial answer rather than a fabricated procedure or raw credentials',()=>{
+ const voucher={...source,title:'Gerar voucher Wi-Fi',content:'IP: 192.0.2.40  login: conta-fixture ou alternativa-fixture  senha: valor-fixture',ordinal:-1,completeDocument:true};
+ const question='como eu gero um voucher wifi?';
+ for(const fallback of [literalGroundingFallback,guidedGroundingFallback,completeGroundingFallback]){
+  const result=fallback(question,[voucher]);
+  assert.ok(result);
+  assert.match(result.answer,/192\.0\.2\.40 \[1\]/);
+  assert.match(result.answer,/não descreve as etapas/);
+  assert.doesNotMatch(result.answer,/conta-fixture|alternativa-fixture|valor-fixture|1\. |aqui está o passo a passo completo/i);
+  assert.deepEqual(result.sources[0].excerpts,['IP: 192.0.2.40']);
+ }
+ assert.equal(literalGroundingFallback('como eu revogo um voucher wifi?',[voucher]),null);
+ assert.equal(literalGroundingFallback(question,[voucher,{...voucher,versionId:'other'}]),null);
+ assert.equal(literalGroundingFallback(question,[{...voucher,historical:true}]),null);
+ const focus=focusedGroundingFallback('qual o IP do voucher wifi?',[voucher]);
+ assert.ok(focus);assert.equal(focus.answer,'IP: 192.0.2.40 [1]');
+ assert.equal(focusedGroundingFallback('qual a senha do voucher wifi?',[voucher]),null);
+});
+test('access record parser accepts multiline fields but preserves a real documented procedure',()=>{
+ const voucher={...source,title:'Gerar voucher wifi',content:'IP: 192.0.2.40\nLogin: conta-fixture\nSenha: valor-fixture'};
+ const result=literalGroundingFallback('como gero voucher wifi?',[voucher]);assert.ok(result);
+ assert.deepEqual(result.sources[0].excerpts,['IP: 192.0.2.40']);
+ const documented={...voucher,content:'IP: 192.0.2.40\n1. Abra o painel.\n2. Consulte a lista de vouchers.',ordinal:-1,completeDocument:true};
+ const complete=completeGroundingFallback('como gero voucher wifi?',[documented]);assert.ok(complete);
+ assert.match(complete.answer,/passo a passo completo/);
+ assert.match(complete.answer,/Consulte a lista de vouchers/);
+});

@@ -3,13 +3,32 @@ import {hasInfrastructureSecrets,hasSecrets} from './knowledge.js';
 import {lastProgressQuestion} from './support-dialogue.js';
 const common=new Set('preciso quero saber como qual quais configurar configuracao configuro fazer instalar instalacao procedimento procedimentos passo passos completo completa inteiro inteira tutorial instrucoes roteiro todos todas etapas manual ajuda preciso necessario tenho pode poderia passe passar envie enviar mostre mostrar forneca sim claro beleza certo agora orientacao tecnica por favor para sobre meu minha um uma do da de dos das no na o a os as em com e ou que isso esse essa modelo marca nao sei fixo problema sistema ambiente'.split(' '));
 const normal=(s:string)=>s.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase();
-const words=(s:string)=>s.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().match(/[\p{L}\p{N}]{3,}/gu)??[];
-// Keep fallback relevance strict while accepting ordinary Portuguese inflection
-// such as habilito/habilitar and alteração/alterar. Seven shared characters
-// avoid turning a short, generic prefix into evidence of applicability.
+const words=(s:string)=>normal(s).replace(/\bwi[-\s]fi\b/g,'wifi').match(/[\p{L}\p{N}]{3,}/gu)??[];
+// Short stems must not be matched by a relaxed prefix: "gerar" and
+// "gerenciar" are different operations. Explicit morphological families
+// permit ordinary Portuguese inflections without conflating actions.
+const actionFamilies=[
+ 'gerar gero gera gere geram gerem gerando gerado gerada geracao',
+ 'criar crio cria crie criam criem criando criado criada criacao',
+ 'emitir emito emite emita emitem emitam emitindo emitido emitida emissao',
+ 'habilitar habilito habilita habilite habilitando habilitado habilitacao',
+ 'desabilitar desabilito desabilita desabilite desabilitando desabilitado desabilitacao',
+ 'revogar revogo revoga revogue revogando revogado revogada revogacao',
+ 'alterar altero altera altere alterando alterado alterada alteracao',
+ 'cadastrar cadastro cadastra cadastre cadastrando cadastrado cadastro cadastramento',
+ 'excluir excluo exclui exclua excluindo excluido exclusao',
+ 'cancelar cancelo cancela cancele cancelando cancelado cancelamento',
+ 'renovar renovo renova renove renovando renovado renovacao'
+];
+const actionByWord=new Map(actionFamilies.flatMap(family=>{
+ const [action,...variants]=family.split(' ');
+ return [action,...variants].map(word=>[word,action] as const);
+}));
 const suffixes=new Set(['o','a','as','os','ar','er','ir','am','em','ando','endo','indo','ado','ada','ados','adas']);
 const sameLexeme=(left:string,right:string)=>{
  if(left===right)return true;
+ const leftAction=actionByWord.get(left),rightAction=actionByWord.get(right);
+ if(leftAction||rightAction)return Boolean(leftAction&&rightAction&&leftAction===rightAction);
  if(!/^[a-z]+$/.test(left)||!/^[a-z]+$/.test(right))return false;
  let shared=0;while(shared<Math.min(left.length,right.length)&&left[shared]===right[shared])shared++;
  return shared>=7&&suffixes.has(left.slice(shared))&&suffixes.has(right.slice(shared));
@@ -39,12 +58,58 @@ function eligibleSource(question:string,sources:Source[],allowGeneric=false):Sou
  // Never rely on a different chunk to justify applicability of this passage.
  return best;
 }
+type FallbackResult={answer:string;sources:Source[]};
+type AccessNote={ip?:string;quote?:string};
+/** A short record consisting entirely of access fields is not a procedure.
+ * Parse only unambiguous key/value notes; never infer a menu or an operation
+ * from a title. In particular, an unqualified password is not evidence that
+ * the value is a public equipment default. */
+function parseAccessNote(content:string):AccessNote|null{
+ const text=content.trim();
+ if(!text||text.length>1100)return null;
+ const matches=[...text.matchAll(/(?:^|\s)(IP|endere[cç]o\s+IP|login|usu[aá]rio|senha|password)\s*:\s*/giu)];
+ if(!matches.length||matches[0].index!==0)return null;
+ const note:AccessNote={};
+ const seen=new Set<string>();
+ for(const [index,match] of matches.entries()){
+  const rawLabel=normal(match[1]).replace(/\s+/g,' ');
+  const label=rawLabel==='endereco ip'?'ip':rawLabel==='usuario'?'login':rawLabel==='password'?'senha':rawLabel;
+  const start=match.index!+match[0].length;
+  const end=matches[index+1]?.index??text.length;
+  const value=text.slice(start,end).trim();
+  // Non-field prose, embedded line breaks or instructions make this no
+  // longer a pure access note. Do not discard conditions from such a source.
+  if(!value||value.length>160||!/^[^\s:<>]{1,80}(?:[ \t]+ou[ \t]+[^\s:<>]{1,80}){0,2}$/iu.test(value))return null;
+  if(seen.has(label))return null;
+  seen.add(label);
+  if(label==='ip'){
+   if(!/^(?:\d{1,3}\.){3}\d{1,3}$/.test(value)||value.split('.').some(part=>Number(part)>255))return null;
+   note.ip=value;
+   note.quote=text.slice(match.index!,end).trim();
+  }
+ }
+ return note;
+}
+/** undefined: not an access-only record; null: unsafe/insufficient match.
+ * A partial reply is allowed only for a specifically applicable record, and
+ * the citation excerpt contains the address alone, never the login/password. */
+function accessNoteFallback(question:string,source:Source,complete=false):FallbackResult|null|undefined{
+ const note=parseAccessNote(source.content);
+ if(!note)return undefined;
+ const terms=words(question).filter(term=>!common.has(term));
+ if(!terms.some(term=>!actionByWord.has(term)&&hasLexeme(words(source.title),term))||!note.ip||!note.quote)return null;
+ return {answer:`O endereço de acesso registrado é ${note.ip} [1]. O trecho disponível contém dados de acesso, mas não descreve as etapas do procedimento solicitado.${complete?' Não consigo confirmar o procedimento completo.':' Qual é o sistema ou equipamento utilizado?'}`,
+  sources:[{...source,excerpts:[note.quote]}]};
+}
+
 /** Not a synthesized answer. Return one complete retrieved passage, explicitly
  * attributed and scoped. No selection of a winner across different documents,
  * historical comparisons, unknown relevance, or suspicious instructions. */
 export function literalGroundingFallback(question:string,sources:Source[]):{answer:string;sources:Source[]}|null{
  const best=eligibleSource(question,sources);
  if(!best)return null;
+ const access=accessNoteFallback(question,best);
+ if(access!==undefined)return access;
  return {answer:'Encontrei um procedimento publicado que pode ajudar. Não consegui validar a síntese da IA, então segue o trecho original da documentação. Confirme se o equipamento ou ambiente corresponde ao artigo antes de aplicar. Consulte a fonte para o procedimento completo.\n\n'+best.title+' [1]\n\n'+readableChecklist(best.content),
   sources:[{...best,excerpts:[best.content]}]};
 }
@@ -65,6 +130,16 @@ export function focusedGroundingFallback(question:string,sources:Source[],contex
  const contextTerms=words(contextualQuery).filter(term=>!common.has(term)&&!['dado','configuracao','senha','usuario','login','endereco','porta','servidor','url','link','valor','codigo','caminho','menu','interface','acessar','acesso','parte','entendi','ser'].includes(term)&&term!==normal(proposed??''));
  const availableWords=words(current.map(source=>source.title+' '+source.content).join(' '));
  if(contextTerms.some(term=>!hasLexeme(availableWords,term)))return null;
+ // Inline metadata can contain an IP, account and password on the same
+ // line. A focused address lookup must not echo unrelated credentials.
+ const accessRecords=current.map(source=>({source,note:parseAccessNote(source.content)}));
+ if(accessRecords.some(record=>record.note)){
+  if(!accessRecords.every(record=>record.note)||!['ip','endereco'].includes(focus))return null;
+  const addresses=accessRecords.map(record=>record.note?.ip);
+  const selected=accessRecords.find(record=>record.note?.ip&&record.note?.quote);
+  if(!selected||new Set(addresses).size!==1||!selected.note?.quote)return null;
+  return {answer:`${selected.note.quote} [1]`,sources:[{...selected.source,excerpts:[selected.note.quote]}]};
+ }
  const candidates=current.flatMap(source=>source.content.split(/\r?\n|(?<=[.!?])\s+/).map(text=>({source,text:text.trim()})))
   .filter(({text})=>text.length>=4&&text.length<=240&&new RegExp(`\\b${focus}\\b`,'i').test(text)&&proposalMatches(text)&&(!['senha','usuario','login'].includes(focus)||/\b(?:padr[aã]o|operacional|equipamento)\b/i.test(text))&&!/\b(?:pessoal|individual|privad[ao]|de outro usu[aá]rio)\b/i.test(text));
  const distinct=new Set(candidates.map(({text})=>text.replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/,'').trim()));
@@ -145,6 +220,8 @@ function guidedStages(content:string):Stage[]{
 export function guidedGroundingFallback(question:string,sources:Source[],confirmedAnswers:string[]=[]):{answer:string;sources:Source[]}|null{
  const best=eligibleSource(question,sources);
  if(!best)return null;
+ const access=accessNoteFallback(question,best);
+ if(access!==undefined)return access;
  const stages=guidedStages(best.content);
  const seen=confirmedAnswers.map(answer=>normal(answer).replace(/\s+/g,' '));
  let index=0;
@@ -169,7 +246,10 @@ export function guidedGroundingFallback(question:string,sources:Source[],confirm
  * documented stages in a readable structure instead of returning raw Markdown. */
 export function completeGroundingFallback(question:string,sources:Source[]):{answer:string;sources:Source[]}|null{
  const best=eligibleSource(question,sources,true);
- if(!best?.completeDocument)return null;
+ if(!best)return null;
+ const access=accessNoteFallback(question,best,true);
+ if(access!==undefined)return access;
+ if(!best.completeDocument)return null;
  const normalize=(value:string)=>value.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
  const lines=contentLines(best.content);
  if(lines.length&&!/^(?:#{1,6}\s|[-*+]\s|\d+[.)]\s)/.test(lines[0])){

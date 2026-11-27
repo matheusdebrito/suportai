@@ -362,3 +362,23 @@ test('provider transport failure after retrieval uses only deterministic authori
  assert.equal(result.sources[0]?.versionId,source.versionId);
  assert.match(result.answer,/alinhamento/i);
 });
+
+
+test('an authorized access-only note remains useful after both synthesis attempts are rejected',async()=>{
+ const voucher:Source={...source,title:'Gerar voucher Wi-Fi',content:'IP: 192.0.2.40  login: conta-fixture  senha: valor-fixture'};
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'gerar voucher wifi'},'q')]},
+  {role:'assistant',content:'Abra o menu de geração automática.'},
+  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'},
+  {role:'assistant',content:'Selecione o botão criar voucher.'},
+  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'}
+ ],[]);
+ const result=await respond(actor,randomUUID(),'como eu gero um voucher wifi?',[],model,async()=>[voucher],{verifyEvidence:true});
+ assert.equal(result.metrics?.verifierRejections,2);
+ assert.equal(result.metrics?.literalFallbacks,1);
+ assert.equal(result.sources[0]?.versionId,voucher.versionId);
+ assert.deepEqual(result.sources[0]?.excerpts,['IP: 192.0.2.40']);
+ assert.match(result.answer,/192\.0\.2\.40/);
+ assert.match(result.answer,/não descreve as etapas/);
+ assert.doesNotMatch(result.answer,/geração automática|botão criar|conta-fixture|valor-fixture/);
+});
