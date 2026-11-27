@@ -20,3 +20,13 @@ test('comparison refuses equally truncated episodes and incomplete declared cove
  assert.ok(result.mismatches.includes('incomplete_episode'));
  assert.equal(result.delta.repeatedLines,null);
 });
+
+test('comparison preserves unknown question counts in historical reports',()=>{
+ const current={...report,commit:'current',turns:[{message:'consulta',quality:{...quality,repeatedQuestions:2}}]};
+ const result=compareEpisodeReports(report,current);
+ assert.equal(result.comparable,true);
+ assert.equal(result.baseline.repeatedQuestions,null);
+ assert.equal(result.current.repeatedQuestions,2);
+ assert.equal(result.delta.repeatedQuestions,null);
+ assert.equal(compareEpisodeReports({...current,commit:'baseline'},current).delta.repeatedQuestions,0);
+});

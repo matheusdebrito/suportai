@@ -4,7 +4,9 @@ import {isDeepStrictEqual} from 'node:util';
 import type {TurnCapture} from './episode-harness.js';
 import type {episodeQuality} from './episode-quality.js';
 import {summarizeReviews,type TurnReview} from './episode-review.js';
-type Turn={message:string;quality:ReturnType<typeof episodeQuality>;capture?:TurnCapture|null};
+// Historical reports predate the repeated-question metric.
+type Quality=Omit<ReturnType<typeof episodeQuality>,'repeatedQuestions'>&{repeatedQuestions?:number};
+type Turn={message:string;quality:Quality;capture?:TurnCapture|null};
 type Report={mode:string;model:string;embeddingModel:string;temperature:number;limits:unknown;corpusHash:string;commit:string;complete?:boolean;expectedTurnCount?:number;turns:Turn[];ranking?:{recall:number|null;precision:number;mrr:number}};
 type Labels={origin:'ai'|'human';rows:TurnReview[]};
 function sumKnown(values:(number|undefined|null)[]):number|null{
@@ -19,12 +21,15 @@ function summarize(report:Report){
   turns:turns.length,
   literalOverlap:turns.length?turns.reduce((s,t)=>s+t.quality.literalOverlap,0)/turns.length:null,
   repeatedLines:sumKnown(turns.map(t=>t.quality.repeatedLines)),
+  repeatedQuestions:sumKnown(turns.map(t=>t.quality.repeatedQuestions)),
   boilerplate:sumKnown(turns.map(t=>Number(t.quality.boilerplate))),
   escapedMarkdown:sumKnown(turns.map(t=>Number(t.quality.escapedMarkdown))),
   partialWarnings:sumKnown(turns.map(t=>Number(t.quality.partialWarning))),
   recall:report.ranking?.recall??null,precision:report.ranking?.precision??null,mrr:report.ranking?.mrr??null,
   verifierChecks:allCaptured?sumKnown(captures.map(c=>c?.agentMetrics.verifierChecks)):null,
   verifierRejections:allCaptured?sumKnown(captures.map(c=>c?.agentMetrics.verifierRejections)):null,
+  entailmentChecks:allCaptured?sumKnown(captures.map(c=>c?.agentMetrics.entailmentChecks)):null,
+  entailmentRejections:allCaptured?sumKnown(captures.map(c=>c?.agentMetrics.entailmentRejections)):null,
   claimShape:allCaptured&&captures.every(c=>c?.agentMetrics.verifierFailures!==undefined)?sumKnown(captures.map(c=>c?.agentMetrics.verifierFailures?.claim_shape??0)):null,
   schemaInvalid:allCaptured&&captures.every(c=>c?.agentMetrics.verifierFailures!==undefined)?sumKnown(captures.map(c=>c?.agentMetrics.verifierFailures?.schema_invalid??0)):null,
   fallbacks:allCaptured?sumKnown(captures.map(c=>c?.agentMetrics.literalFallbacks)):null,
