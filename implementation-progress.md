@@ -114,7 +114,7 @@ Referência: PR #84, HEAD 77c0c45 (322 testes aprovados, 3 opt-in, 3 E2E).
 - [x] S5 — Tratar conflitos e esclarecimentos no loop com validação independente.
 - [x] S6 — Atualização de memória via observações literais do usuário, sem promover hipóteses ou respostas da IA a fatos.
 - [x] S7 — Simplificar fallback da rota semântica, preservando abstenção e compatibilidade offline.
-- [ ] S8 — Cobertura de contratos, integração e episódios reais; CI e avaliação real pendentes.
+- [x] S8 — Cobertura de contratos, integração e episódios reais; CI e avaliação real pendentes.
 
 S1/S2/S3/S6 compartilham uma única chamada Structured Outputs antes da seleção de histórico. O orçamento é compartilhado com o agente. Os checks [x] indicam código implementado, não homologação. A compatibilidade offline conserva o roteador anterior. Falha do intérprete habilitado não usa regex para escolher assunto. A seleção de estado continua restrita ao usuário, conversa, revisão e permissões. Não há migration nem alterações de limiares.
 
@@ -125,3 +125,5 @@ No fluxo semântico, síntese factual com múltiplas versões exige seleção ex
 S4 complemento: preservada diversidade dos candidatos antes de adicionar trechos vizinhos, sem alteração de limiares. Documento completo pode substituir trecho redundante da própria versão no limite do pool; nenhuma alternativa é removida para forçar escolha. S5 complemento: perguntas explícitas usam barreira estrutural/de segredos seguida de revisão semântica. Preparação de artigo no fluxo semântico exige intenção de escrita e a revisão independente já existente. Validação pendente no HEAD final.
 
 S8: os episódios HTTP reais opt-in ativam explicitamente o intérprete semântico; adicionada regressão HTTP de persistência e isolamento entre investigações e cinco novos turnos para troca/retomada informal e intenção pontual. Corpus original preservado. Falta confirmar CI e executar avaliação real.
+
+S8 complemento: adicionados testes determinísticos do contrato Structured Outputs, IDs/observações inválidos, orçamento compartilhado, escolha explícita de conhecimento concorrente, revisão da pergunta, recuperação de conflito sem escrita, resposta parcial por IP, recusa de fallback lexical após rejeição semântica e cobertura do conjunto de 12 candidatos. As oito etapas têm implementação; CI do último commit e avaliações reais continuam pendentes. O CI de 6e9612e foi aprovado antes dos reforços subsequentes. Não houve merge, migration ou ajuste de limiares.

@@ -404,3 +404,19 @@ Esta etapa é operacional e posterior ao gate do PR. Não executar contra produ�
 A próxima rodada deve começar em F1 e seguir F2, F3 e F4. F5 deve orientar a avaliação do RAG sem bloquear as verificações independentes; eventuais ajustes precisam repetir as validações afetadas antes de F6. F7 só ocorre depois da autorização de merge, deploy e operações correspondentes.
 
 Manter este plano como referência e a checklist de execução no `implementation-progress.md`. Não apagar o histórico para marcar progresso. Em cada entrega, registrar o que foi implementado, o que foi efetivamente executado, o que permanece não verificado e a próxima atividade concreta. Não declarar o agente integralmente homologado enquanto existirem critérios de aceitação não comprovados.
+
+
+## Evolução para arquitetura semântica ponta a ponta
+
+O LLM é responsável pela interpretação, escolha e raciocínio; o backend mantém autorização, integridade, limites, validação de contratos e confirmação de escrita. Implementação no PR #84:
+
+1. **Roteamento semântico:** interpretar continuidade, mudança e retomada de assunto com IDs de investigações visíveis, sem exigir expressões predefinidas.
+2. **Intenção e contexto:** usar Structured Outputs `semantic_turn_v1` para identificar intenção, preferência de atendimento, foco, consulta e observações. Validar schema, tamanho e identificadores.
+3. **Consulta semântica:** preservar a ação solicitada (emitir, consultar, excluir, diagnosticar etc.) sem acrescentar um verbo fixo; permitir reformulação pelo loop. O contexto é relato, não evidência.
+4. **Seleção concorrente:** exigir escolha explícita de versões quando a resposta factual depender de múltiplos candidatos; preservar alternativas autorizadas para revisão independente e diversidade dentro do orçamento.
+5. **Conflitos e dúvidas:** permitir ao LLM investigar ou formular pergunta pertinente; revisar perguntas isoladas e mensagens sociais para impedir procedimentos sem evidência; recuperação somente por leitura.
+6. **Memória:** persistir observações literais do usuário, distinguindo fatos relatados, hipóteses, perguntas e testes. Não converter orientação anterior em resultado observado; preservar isolamento, revisão de autorização e dependências de fontes.
+7. **Fallback:** em modo semântico, não substituir rejeição de aplicabilidade ou conflito por instrução lexical. Em falha de transporte/estrutura, limitar recuperação a trecho autorizado conservador ou dado parcial seguro. Manter compatibilidade offline.
+8. **Harness:** executar regressões de contrato e HTTP, preservando corpus histórico. Avaliação real ampliada: dez episódios, 31 turnos, com interpretação semântica ativa e registro das decisões. Validar continuidade, escolha, conflitos, suficiência, segurança, latência e tokens. Não declarar qualidade sem as avaliações reais e revisão humana.
+
+Essas decisões reutilizam o orçamento existente, o provedor autorizado e os limites de recuperação. Não afrouxar controles para melhorar números. O checklist em `implementation-progress.md` distingue código implementado, CI, avaliação real e homologação.

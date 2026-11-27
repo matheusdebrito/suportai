@@ -6,10 +6,11 @@ import {unsupportedNetworkLiterals,unsupportedNumbers} from './answer-evidence.j
 
 /** A shape/safety prefilter, not a semantic classifier. The separate model
  * review decides whether an otherwise valid question is necessary and neutral. */
+const sentenceSegmenter=new Intl.Segmenter('pt-BR',{granularity:'sentence'});
 export function neutralQuestionCandidate(answer:string):boolean{
  const value=answer.trim(),normal=value.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase();
  return value.length>=8&&value.length<=300&&!/[\r\n;!]/.test(value)&&value.endsWith('?')&&
-  (value.match(/\?/g)?.length===1)&&!hasSecrets(value)&&!hasInfrastructureSecrets(value)&&
+  (value.match(/\?/g)?.length===1)&&[...sentenceSegmenter.segment(value)].filter(s=>s.segment.trim()).length===1&&!hasSecrets(value)&&!hasInfrastructureSecrets(value)&&
   !unsupportedNetworkLiterals(value,[]).length&&!unsupportedNumbers(value,[])&&
   !/\b(?:senhas?|password|tokens?|credenciais?|segredos?|api[_ -]?key|execute|rode|reinicie|instale|desative|configure|altere|apague|exclua|acesse|use|ignore|desconsidere|envie|informe suas)\b/.test(normal);
 }
