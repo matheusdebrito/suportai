@@ -33,7 +33,7 @@ test('grounding benchmarks separate false acceptance and false blocking on ficti
  const supported=(...claims:unknown[])=>({verdict:'supported',claims});
  const reports:Record<string,unknown>={
   'phone-fields':supported(
-    {unit:1,kind:'omitted',refs:[]},
+    {unit:1,kind:'nonclaim',refs:[]},
     checks.current('Para telefone Grandstream, consulte Status > Network Status > IPV4.',1,2),
     checks.current('Abra Accounts > General Settings.',1,3),
     checks.current('Account Active: YES',1,4),

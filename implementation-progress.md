@@ -38,3 +38,6 @@ Separated calibration from phone episode; four independent synthetic documents a
 
 ## CI review
 CI run 45907280551 failed typecheck TS7034/TS7005 in episode turns; explicit report type added. Production dependency audit passed on 3482dc8. Await new CI; remaining integration review and real evaluation pending.
+
+## Regression fixes
+CI 45907703215 passed typecheck, failed five tests. Restore contextual technical lookup and bounded brand/model answers; retain independent supported prose while rejecting incomplete lists; benchmark uses explicit nonclaim; complete fallback fixture explicitly represents full document rather than a chunk. New CI required; real evaluation still pending.

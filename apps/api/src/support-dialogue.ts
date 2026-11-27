@@ -85,6 +85,8 @@ export function structuredSupportQuery(message:string,history:HistoryMessage[],s
  const mode=supportPreference(message,history,state?.supportPreference);
  const generic=/^\s*(?:sim|não|nao|ok|certo|beleza|obrigad[oa]|valeu|e depois|e agora)[.!?\s]*$/i.test(message);
  const intent=mode==='complete'&&requestsSupportMode(message)?'procedimento completo':isFocusedKnowledgeQuestion(message)?'dado de configuração':objective?'orientação técnica':'';
- const fields=[safe(objective,120),safe(state?.equipmentOrSystem,80),safe(state?.environment,80),intent,generic?'':safe(message,180)];
+ const recent=history.slice(-8);
+ const equipment=recent.flatMap((entry,index)=>entry.role==='user'&&recent[index-1]?.role==='assistant'&&/^(?:qual (?:a marca|o modelo)|qual (?:é|e) (?:a marca|o modelo))\??$/i.test(recent[index-1].content.trim())&&/^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,39}$/u.test(entry.content.trim())&&!/\b(?:senha|token|password|credencial|não|nao|sei)\b/i.test(entry.content)?[entry.content]:[]).at(-1);
+ const fields=[objective?'configurar '+safe(objective,120):'',safe(equipment,40),safe(state?.equipmentOrSystem,80),safe(state?.environment,80),intent,generic?'':safe(message,180)];
  return [...new Set(fields.filter(Boolean))].join(' ').slice(0,500);
 }

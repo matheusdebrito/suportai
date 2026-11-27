@@ -282,7 +282,7 @@ test('focused password follow-up receives an explicit natural concise-answer pol
  assert.doesNotMatch(result.answer,/procedimento|segundo a documentação|conforme a fonte/i);
 });
 test('complete follow-up ignores sensitive words from history when recovering the full procedure',async()=>{
- const phone:Source={...source,title:'Configurar telefone',content:'# Ver o IP\n- Segurar o botão central.\n- Status > Network Status > IPV4\n# Configurar SIP\n- Acessar ACCOUNTS > GENERAL SETTINGS\n- Account Active: YES'};
+ const phone:Source={...source,title:'Configurar telefone',ordinal:-1,completeDocument:true,content:'# Ver o IP\n- Segurar o botão central.\n- Status > Network Status > IPV4\n# Configurar SIP\n- Acessar ACCOUNTS > GENERAL SETTINGS\n- Account Active: YES'};
  const model=scripted([
   {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'passo a passo telefone'},'q')]},
   {role:'assistant',content:'Orientação não confirmada.'},

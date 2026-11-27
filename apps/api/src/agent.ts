@@ -41,7 +41,8 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  const historicalSources:Source[]=[];
  const pendingActions:AgentOutput['pendingActions']=[];
  const budget=new AgentBudget();
- const plan=new InvestigationPlan(userMessage,shouldForceKnowledgeLookup(userMessage),options.investigation?.hypotheses);
+ const contextualQuery=structuredSupportQuery(userMessage,history,options.investigation);
+ const plan=new InvestigationPlan(userMessage,shouldForceKnowledgeLookup(userMessage)||shouldForceKnowledgeLookup(contextualQuery),options.investigation?.hypotheses);
  const shouldVerify=Boolean(options.verifyEvidence||(provider===client&&client!==null));
  let verifierChecks=0,verifierRejections=0,recoverySearches=0,literalFallbacks=0,adaptiveRewrites=0,nonclaimsRemoved=0,unsupportedUnits=0;
  const preference=supportPreference(userMessage,history,options.investigation?.supportPreference);
@@ -60,7 +61,6 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  },reason);
  const forceLookup=plan.needsEvidence;
  // Only user-authored turns contribute to this bounded alternate query.
- const contextualQuery=structuredSupportQuery(userMessage,history,options.investigation);
  const technicalRequest=/\b(?:configur\w*|instal\w*|procediment\w*|manual|diagnostic\w*|acess\w*|conect\w*)\b/i.test(contextualQuery);
  let clarificationRecoveryAttempted=false;
  let synthesisRecoveryAttempted=false;
@@ -343,7 +343,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
            throw new Error(readFailure(error,true)==='timeout'?'A consulta ao cérebro excedeu o prazo':'Falha temporária na consulta ao cérebro');
          }
          budget.recordSearch(args.query,results);
-         if(preference==='complete'&&!isFocusedKnowledgeQuestion(userMessage)&&results.length){
+         if(preference==='complete'&&!isFocusedKnowledgeQuestion(userMessage)&&results.length&&!results.some(s=>s.completeDocument)){
            const anchor=results[0];
            try{
              const doc=await readDocument(anchor.documentId);
