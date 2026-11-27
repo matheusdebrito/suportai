@@ -33,7 +33,7 @@ test('grounding benchmarks separate false acceptance and false blocking on ficti
  const supported=(...claims:unknown[])=>({verdict:'supported',claims});
  const reports:Record<string,unknown>={
   'phone-fields':supported(
-    {unit:1,kind:'nonclaim',refs:[]},
+    checks.current('Para telefone Grandstream, consulte Status > Network Status > IPV4.',1,1),
     checks.current('Para telefone Grandstream, consulte Status > Network Status > IPV4.',1,2),
     checks.current('Abra Accounts > General Settings.',1,3),
     checks.current('Account Active: YES',1,4),
@@ -58,12 +58,32 @@ test('grounding benchmarks separate false acceptance and false blocking on ficti
   return {choices:[{message:{content:JSON.stringify(reports[item.id]??{verdict:'unsupported'})}}]};
  }}}} as unknown as OpenAI;
  const benchmark=await benchmarkGrounding(provider);
+ assert.deepEqual(benchmark.rows.filter(row=>row.accepted!==row.shouldAccept),[], 'Grounding classification mismatch (case and reason)');
  assert.deepEqual(benchmark.metrics,{supported:4,unsupported:11,falseBlocked:0,falseAccepted:0,falseBlockRate:0,falseAcceptRate:0});
  assert.equal(benchmark.rows.find(row=>row.id==='unresolved-conflict')?.verdict,'conflict');
  assert.equal(benchmark.rows.find(row=>row.id==='phone-fields')?.verdict,'supported');
  assert.equal(benchmark.rows.find(row=>row.id==='phone-invented-field')?.reason,'unsupported_literal');
  assert.deepEqual(measureGroundingErrors([{shouldAccept:true,accepted:false},{shouldAccept:false,accepted:true}]),
   {supported:1,unsupported:1,falseBlocked:1,falseAccepted:1,falseBlockRate:1,falseAcceptRate:1});
+});
+
+test('grounding preserves verified equipment scope and rejects dropping it from a procedure',async()=>{
+ const fixture=groundingCases.find(item=>item.id==='phone-fields')!;
+ const answer='Para telefone Grandstream:\n1. Consulte Status > Network Status > IPV4.';
+ const quote='Para telefone Grandstream, consulte Status > Network Status > IPV4.';
+ const claims=[{unit:1,kind:'current',refs:[{evidence:1,quote}]},{unit:2,kind:'current',refs:[{evidence:1,quote}]}];
+ const accepted=await verifyGroundedAnswer(mockedProvider(JSON.stringify({verdict:'supported',claims}),[]),fixture.question!,answer,fixture.sources);
+ assert.equal(accepted.verdict,'supported');
+ if(accepted.verdict==='supported'){
+  assert.match(accepted.answer,/Para telefone Grandstream:/);
+  assert.equal(accepted.unsupportedUnits,0);
+  assert.doesNotMatch(accepted.answer,/Não consegui confirmar/);
+ }
+ for(const kind of ['nonclaim','unsupported']){
+  const omitted=[{unit:1,kind,refs:[]},claims[1]];
+  const result=await verifyGroundedAnswer(mockedProvider(JSON.stringify({verdict:'supported',claims:omitted}),[]),fixture.question!,answer,fixture.sources);
+  assert.equal(result.verdict,'unsupported','Scope cannot be dropped from a procedural list');
+ }
 });
 
 test('grounding rejects a fabricated evidence ID and a quote absent from the cited excerpt',async()=>{

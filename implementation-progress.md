@@ -41,3 +41,6 @@ CI run 45907280551 failed typecheck TS7034/TS7005 in episode turns; explicit rep
 
 ## Regression fixes
 CI 45907703215 passed typecheck, failed five tests. Restore contextual technical lookup and bounded brand/model answers; retain independent supported prose while rejecting incomplete lists; benchmark uses explicit nonclaim; complete fallback fixture explicitly represents full document rather than a chunk. New CI required; real evaluation still pending.
+
+## CI regression checkpoint
+Run 45992856019 on f166740: 285 tests, 282 passed, one failed, two skipped. Typecheck and production dependency audit passed. Four of five previous regressions resolved. Remaining benchmark fixture `phone-fields` incorrectly classified its equipment applicability heading as nonclaim; server correctly treated it as unsupported and rejected removal from a numbered procedure. Corrected fixture to cite exact evidence for scope, clarified verifier prompt, added focused scope-preservation regression and per-case failure diagnostics. No expected benchmark rates lowered. Next: confirm new CI, inspect any remaining failures, run authorized real evaluation and review remaining checklist. No merge.
