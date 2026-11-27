@@ -265,3 +265,124 @@ Também é necessário:
 - respostas pontuais curtas e procedimentos completos entregues conforme o modo solicitado;
 - ausência de artigo bruto, Markdown escapado e boilerplate interno na interface;
 - baseline reproduzível por modelo, configuração e conjunto de casos.
+
+
+## Etapa final — Validação e homologação
+
+### Estado de referência
+
+Em 27/11/2026, o commit de código `12cd501d9a394a81b0767c8e427badae080999b4` do PR [#84](https://github.com/matheusdebrito/suportai/pull/84), branch `natural-support-responses`, teve o [CI aprovado](https://github.com/matheusdebrito/suportai/actions/runs/46005694304): 309 testes na suíte geral, 306 aprovados, zero falhas, três casos opt-in ignorados e três testes E2E aprovados. A [auditoria de dependências](https://github.com/matheusdebrito/suportai/actions/runs/46005694261) também foi aprovada.
+
+O código de continuidade, consulta contextual, modo de atendimento, Structured Outputs, fallback, chunking, captura de métricas, episódios ampliados e comparação de baseline está implementado e passou pelas verificações automatizadas do CI. Isso **não** equivale à homologação das respostas do modelo real. A avaliação real publicada anteriormente foi realizada no commit `036f2fa7f64ce1204ccdd5af0a3042d1d55554a6`, antes das últimas alterações.
+
+Fontes de acompanhamento:
+
+- este arquivo: requisitos, ordem de execução, critérios de aceitação e condições de encerramento;
+- [implementation-progress.md](implementation-progress.md): checklist persistente, resultados, decisões, regressões e pendências;
+- [docs/support-evaluation.md](docs/support-evaluation.md): protocolo técnico, comandos, configuração do ambiente e comparação dos relatórios;
+- [docs/validation-pr-84.md](docs/validation-pr-84.md) e [evidências anteriores](docs/validation-pr-84-evidence/): resultados históricos, que devem permanecer intactos.
+
+O estado de referência acima é histórico. Antes de cada rodada, verificar o HEAD atual e seus checks; não atribuir a um commit novo os resultados de um commit anterior.
+
+### F1 — Preparar o ambiente e preservar o baseline (obrigatório)
+
+- [ ] Sincronizar a branch do PR com o repositório remoto, preservando alterações locais não relacionadas. Usar `git fetch origin`, `git switch natural-support-responses` e `git pull --ff-only origin natural-support-responses`; confirmar o SHA com `git rev-parse HEAD`. Se a branch local não existir, criar uma branch de rastreamento da remota. Não usar reset destrutivo nem force push.
+- [ ] Instalar as dependências conforme o lockfile, preparar um PostgreSQL/pgvector descartável, aplicar as migrations e verificar que o ambiente contém somente fixtures sintéticas.
+- [ ] Configurar as variáveis descritas em [docs/support-evaluation.md](docs/support-evaluation.md): `NODE_ENV=test`, `RUN_REAL_EPISODES=1`, `DATABASE_URL` e `TEST_DATABASE_URL` iguais e referentes ao banco isolado, `ALLOW_EXTERNAL_AI_DATA_PROCESSING=true` exclusivamente para a avaliação sintética autorizada, e `EVALUATION_COMMIT` correspondente ao código avaliado.
+- [ ] Usar credenciais autorizadas do ambiente local, sem imprimi-las, incluí-las nos relatórios ou usar o banco de produção. Registrar o modelo de chat, embeddings, temperatura, limites e hash do corpus. Para a comparação principal, manter `gpt-4.1-mini`, `text-embedding-3-small`, temperatura 0,2 e os limites do baseline histórico.
+- [ ] Preservar a pasta `docs/validation-pr-84-evidence/`. Definir `EPISODE_REPORT_PATH`, `EXPANDED_EPISODE_REPORT_PATH` e `CALIBRATION_REPORT_PATH` como caminhos novos e distintos, sem sobrescrever as evidências anteriores.
+
+**Aceitação:** ambiente isolado comprovado, configuração efetiva registrada e baseline histórico intacto. Sem acesso autorizado ao provedor ou banco adequado, marcar a avaliação como bloqueada; não substituir uma execução real por resultados simulados.
+
+### F2 — Executar e revisar os episódios reais (obrigatório)
+
+Executar no diretório `apps/api`:
+
+```bash
+node --import tsx --test src/investigation-chat.test.ts
+```
+
+Os três testes opt-in devem executar de fato, sem skip:
+
+- `independent synthetic retrieval calibration corpus`;
+- `real model phone episode with actual retrieval`;
+- `expanded real HTTP support episode matrix`.
+
+O episódio histórico e a matriz ampliada somam seis episódios e 23 turnos:
+
+| Episódio | Turnos | Comportamento a validar |
+| --- | ---: | --- |
+| Telefone de laboratório | 5 | Continuidade, confirmação curta, senha operacional e procedimento completo |
+| Impressora de etiquetas | 4 | Confirmação negativa, pré-requisitos e progressão correta |
+| RIS / ERP | 6 | Troca de assunto, isolamento entre sistemas e retomada da investigação |
+| Digitalizador | 4 | Resposta pontual, preferência de atendimento e procedimento completo |
+| Procedimento revogado | 2 | Revalidação de publicação e não exposição da fonte arquivada |
+| Conhecimento restrito | 2 | Ausência de acesso e de conteúdo não autorizado |
+
+- [ ] Registrar respostas efetivas, identificação da investigação, modo, fontes e versões, ranking e cobertura dos chunks, resultado do verificador, códigos de falha, tentativas de recuperação, uso do fallback, latência e tokens por turno, distinguindo uso informado pelo provedor de estimativas.
+- [ ] Confirmar que os casos de segurança não apresentam fontes revogadas, segredos ou conteúdo fora da autorização. Uma abstenção correta diante de falta de evidência não é uma falha de compreensão.
+- [ ] Verificar a atuação do Structured Outputs com o modelo real: schema estrito, recusa/interrupção, rejeição de campos inválidos e distinção entre falha estrutural e semântica. Complementar os cenários de falha do provedor com testes determinísticos quando não for possível induzi-las de forma controlada no serviço real.
+- [ ] Verificar o fallback por modo, incluindo preservação de condições, resposta focada, confirmação explícita antes de avançar e ausência de mistura de versões ou documentos.
+- [ ] Revisar individualmente os 23 turnos. Avaliar clareza, naturalidade, resposta direta, completude, escopo, dependências, perguntas repetidas, avisos desnecessários, falsos bloqueios e falsas aceitações. Rotular separadamente a revisão por IA e a revisão humana; não tratar julgamento automatizado como aprovação humana.
+
+**Aceitação:** todos os testes opt-in executados; nenhum acesso indevido, procedimento inventado, vazamento, avanço incompatível com o resultado relatado ou procedimento incompleto apresentado como completo. Aplicar os critérios de sucesso deste documento aos episódios revisados. Em seis episódios, atingir pelo menos 95% de continuidade exige os seis corretos; não extrapolar esse resultado para a população de conversas reais. Proxies de texto, regex e status HTTP não substituem a revisão semântica.
+
+### F3 — Comparar os resultados com o baseline (obrigatório)
+
+- [ ] Executar o comparador `episode:compare` conforme [docs/support-evaluation.md](docs/support-evaluation.md), usando o relatório histórico do telefone como referência e o novo relatório do mesmo episódio como candidato.
+- [ ] Conferir a equivalência de modelo, embeddings, temperatura, limites, mensagens e corpus antes de interpretar deltas. Os cinco episódios adicionais constituem uma avaliação separada, com seu próprio hash e resultados.
+- [ ] Comparar qualidade revisada, continuidade, falsos bloqueios, falsas aceitações, repetição, avisos, completude, fallbacks, recall, precisão e MRR. Comparar métricas de verificação, duração e consumo de tokens quando existirem valores equivalentes nas duas execuções.
+- [ ] Não transformar valores ausentes em zero. O baseline anterior não contém a telemetria individual do verificador: `claim_shape`, latência e tokens históricos podem ser indisponíveis para comparação direta. Para demonstrar redução dessas métricas, obter um baseline histórico instrumentado em execução isolada, com mudanças apenas de observabilidade, sem alterar o comportamento avaliado; ou estabelecer um novo baseline instrumentado e medir uma rodada posterior. Registrar explicitamente qualquer limitação que permaneça.
+- [ ] Registrar a origem dos rótulos e utilizar rótulos comparáveis; relatórios revisados por IA não substituem a homologação humana.
+- [ ] Gerar um relatório de comparação versionado, preservando os resultados anteriores.
+
+**Aceitação:** comparação reproduzível, sem deltas fabricados ou alterações de configuração destinadas apenas a melhorar números. Não declarar redução de falsos bloqueios ou custos sem medições comparáveis. Se a evidência de redução exigida pelos critérios de sucesso não puder ser obtida, registrar a pendência e o impacto sobre o parecer final.
+
+### F4 — Corrigir regressões e consolidar o harness (obrigatório quando houver falhas)
+
+- [ ] Classificar cada falha conforme a causa: roteamento/contexto, recuperação, síntese, verificação estrutural ou semântica, fallback, autorização, telemetria, contrato HTTP, teste ou infraestrutura.
+- [ ] Reproduzir o problema, corrigir a causa-raiz com mudança mínima e adicionar um teste que reproduza a regressão.
+- [ ] Reexecutar os testes afetados; ao concluir a rodada, executar typecheck, testes unitários/de integração, avaliação do RAG, build e as avaliações reais afetadas. Confirmar o CI completo do HEAD que será avaliado para merge, inclusive E2E, migrations, segurança e auditoria de dependências.
+- [ ] Registrar no `implementation-progress.md` cada requisito, commit, evidência, resultado, bloqueio e ponto de retomada. Publicar um novo relatório de validação e resumo no PR, sem dados de produção nem credenciais.
+
+**Aceitação:** nenhuma regressão conhecida de segurança ou de comportamento crítico, nenhum teste válido removido ou enfraquecido e todos os resultados atribuídos ao SHA correto. O agente de desenvolvimento pode corrigir bugs pontuais dentro do escopo da rodada; não deve iniciar refatorações amplas, novas funcionalidades ou ciclos ilimitados por conta própria. Ao concluir a rodada solicitada, apresentar resultados e pendências e aguardar orientação para uma nova rodada.
+
+### F5 — Ampliar e calibrar o corpus do RAG (obrigatório para fundamentar a calibração; ajustes condicionais)
+
+O corpus inicial possui quatro casos sintéticos: dois piloto e dois holdout. Recall, precisão e MRR de 1,0 nesse conjunto pequeno não demonstram qualidade representativa.
+
+- [ ] Ampliar o corpus com consultas e documentos sintéticos representativos de equipamentos, sistemas, erros, variantes linguísticas, procedimentos longos, pré-requisitos, versões, fontes semelhantes porém incompatíveis, perguntas sem resposta e permissões restritas.
+- [ ] Revisar os documentos e chunks esperados, congelar a divisão entre piloto e holdout antes de medir e registrar a cobertura dos casos de risco. Manter casos sem fonte relevante em avaliação separada de abstenção/segurança, pois a calibração atual exige versões esperadas não vazias.
+- [ ] Executar `rag:calibrate` conforme o contrato do script e o protocolo de avaliação. Medir recall, precisão, MRR, cobertura dos chunks e distribuição dos scores quando disponível. Considerar também a qualidade conversacional, latência, tokens e limites do agente.
+- [ ] Selecionar alterações de parâmetros somente com evidência do piloto, confirmá-las no holdout não usado para ajuste e repetir as regressões de segurança. Se não houver ganho sustentado, manter os parâmetros atuais.
+- [ ] Documentar amostra, metodologia, parâmetros candidatos, política escolhida, métricas, limitações e decisão de aplicar ou não aplicar.
+
+**Aceitação:** corpus ampliado e revisado, metodologia reproduzível e decisão sustentada por evidência. Alterar ranking, limiares semânticos/lexicais ou orçamento não é obrigação quando os resultados não justificarem a mudança. Não ajustar parâmetros usando exclusivamente o holdout. Nunca reduzir autorização ou grounding para melhorar métricas de recuperação.
+
+### F6 — Gate de prontidão e autorização de merge
+
+- [ ] Confirmar que F1–F4 foram concluídas, que os critérios de sucesso estão sustentados por evidências e que F5 recebeu parecer explícito. Caso alguma medição não possa ser concluída, distinguir pendência crítica de limitação residual e apresentar o impacto para decisão humana; não marcar requisito não comprovado como aprovado.
+- [ ] Concluir a revisão humana e confirmar que não há falhas críticas de autorização, evidência, privacidade, continuidade, dependências procedurais ou integridade dos dados.
+- [ ] Verificar CI e auditoria verdes no HEAD final; anexar links dos checks e dos relatórios. Distinguir os testes opt-in executados localmente dos skips intencionais do CI.
+- [ ] Atualizar o checklist de progresso e emitir parecer de prontidão para merge, com limitações, riscos residuais e plano de deploy.
+
+**Aceitação:** código aprovado, avaliações reais documentadas, qualidade homologada e requisitos rastreáveis. O CI verde isoladamente não autoriza o merge. O merge do PR #84 depende de autorização explícita do responsável; este documento não concede essa autorização.
+
+### F7 — Deploy, reindexação controlada e homologação com usuários (após autorização)
+
+Esta etapa é operacional e posterior ao gate do PR. Não executar contra produção durante a avaliação local.
+
+- [ ] Planejar deploy e rollback, conferir configuração efetiva do modelo e do schema, migrations, health checks, backup verificável e observabilidade. Obter autorização específica para as operações de produção.
+- [ ] Inventariar documentos publicados e vigentes que foram indexados pelo chunking antigo. Validar reindexação em ambiente de teste/homologação antes de executar em lotes controlados.
+- [ ] Preservar conteúdo, versão, estado editorial, permissões e isolamento dos documentos. Não republicar, liberar acesso ou reindexar versões revogadas como efeito colateral. Evitar perda de disponibilidade durante a troca do índice; prever recuperação do índice anterior caso a estratégia falhe.
+- [ ] Medir cobertura e recuperação antes e depois da reindexação, verificando especialmente documentos longos, chunks vizinhos, pré-requisitos e fontes restritas. Registrar duração, falhas, custos e plano de interrupção/rollback. Não iniciar reindexação automática sem autorização.
+- [ ] Realizar piloto com usuários autorizados de TI, usando procedimentos reais somente no ambiente aprovado, sem copiar conteúdo restrito ou credenciais para relatórios de desenvolvimento. Verificar utilidade, naturalidade, correção factual, continuidade, feedback e latência; registrar problemas e critérios de expansão.
+- [ ] Monitorar erros estruturais, rejeições, fallback por motivo, duração, consumo e sinais de regressão com métricas agregadas. Abrir novas correções a partir de evidências, preservando os controles de segurança.
+
+**Aceitação:** deploy verificado, reindexação validada com plano de recuperação, ausência de regressões de autorização e homologação do piloto pelo responsável. Aprovação da implementação no PR e homologação operacional são marcos distintos.
+
+### Ordem de execução e retomada
+
+A próxima rodada deve começar em F1 e seguir F2, F3 e F4. F5 deve orientar a avaliação do RAG sem bloquear as verificações independentes; eventuais ajustes precisam repetir as validações afetadas antes de F6. F7 só ocorre depois da autorização de merge, deploy e operações correspondentes.
+
+Manter este plano como referência e a checklist de execução no `implementation-progress.md`. Não apagar o histórico para marcar progresso. Em cada entrega, registrar o que foi implementado, o que foi efetivamente executado, o que permanece não verificado e a próxima atividade concreta. Não declarar o agente integralmente homologado enquanto existirem critérios de aceitação não comprovados.
