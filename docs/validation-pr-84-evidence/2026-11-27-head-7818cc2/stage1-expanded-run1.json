@@ -1,0 +1,1401 @@
+{
+  "mode": "real-http-expanded",
+  "commit": "7818cc2ad93c06e957a4f99315518ac759c687d4",
+  "model": "gpt-4.1-mini",
+  "embeddingModel": "text-embedding-3-small",
+  "temperature": 0.2,
+  "limits": {
+    "maxSteps": 8,
+    "maxSearches": 5,
+    "maxToolsPerStep": 4,
+    "maxSources": 12,
+    "maxElapsedMs": 60000,
+    "maxTokensPerCall": 1800,
+    "maxCompletionTokens": 9000,
+    "maxTotalTokens": 40000,
+    "maxRepeatedSearches": 2,
+    "maxSearchFailures": 2
+  },
+  "corpusHash": "379ad8ab8512f5c6506583951029d3ec04ecad7b00c00596aebed16e86f07474",
+  "baseMatrixHash": "49c7d6ae2d240297c1ac8197dd3e25f4740619f2b7fa074fa0abeeac056ff728",
+  "architecture": "semantic_turn_v1",
+  "episodes": [
+    {
+      "id": "printer-negative-progress",
+      "turns": [
+        {
+          "message": "Preciso configurar uma impressora de etiquetas de laboratório",
+          "answer": "Primeiro, confirma se a impressora é mesmo do laboratório de testes, beleza? Depois, verifica se a etiqueta está alinhada direitinho e fecha a tampa da impressora. Feito isso, me fala se a etiqueta está no lugar certo e a tampa fechou bem. [1]",
+          "sources": [
+            {
+              "documentId": "a88e07b6-3694-435f-9162-f04c0ab28171",
+              "versionId": "108d6e35-4712-4123-a8ac-684aa1116b17",
+              "versionNumber": 1,
+              "title": "Impressora de etiquetas de laboratório",
+              "ordinal": 0,
+              "excerpts": [
+                "Antes da calibração, confirme que a impressora pertence ao laboratório de testes.",
+                "Confira o alinhamento da etiqueta.\n2. Feche a tampa.",
+                "Feche a tampa."
+              ]
+            }
+          ],
+          "investigationId": "11f92e1f-5263-4e99-9ae7-a8aa6058474e",
+          "capture": {
+            "agentMetrics": {
+              "steps": 5,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 1,
+              "promptTokens": 8447,
+              "completionTokens": 343,
+              "durationMs": 6729,
+              "stopReason": "answered",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 1,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 1,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 1,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "guided",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "new",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 0,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 0,
+              "knowledgeSelections": 0,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 0,
+              "verifierFailures": {}
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "108d6e35-4712-4123-a8ac-684aa1116b17",
+                    "ordinal": 0,
+                    "score": 1.451338906448154
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "Primeiro, confirma se a impressora é mesmo do laboratório de testes, beleza? Depois, verifica se a etiqueta está alinhada direitinho e fecha a tampa da impressora. Feito isso, me fala se a etiqueta está no lugar certo e a tampa fechou bem.",
+                "verdict": "supported",
+                "durationMs": 1567,
+                "promptTokens": 1292,
+                "completionTokens": 106,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 4
+          },
+          "checks": []
+        },
+        {
+          "message": "não consegui",
+          "answer": "Não consegui interpretar o contexto desta mensagem com segurança. Pode informar qual assunto deseja consultar?",
+          "sources": [],
+          "investigationId": null,
+          "capture": null,
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": [
+            "investigation_changed"
+          ]
+        },
+        {
+          "message": "agora a tampa está fechada",
+          "answer": "Não consegui interpretar o contexto desta mensagem com segurança. Pode informar qual assunto deseja consultar?",
+          "sources": [],
+          "investigationId": null,
+          "capture": null,
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 1,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": [
+            "missing_expected_source",
+            "missing_agent_capture",
+            "investigation_changed"
+          ]
+        },
+        {
+          "message": "me dê o passo a passo completo",
+          "answer": "Não consegui interpretar o contexto desta mensagem com segurança. Pode informar qual assunto deseja consultar?",
+          "sources": [],
+          "investigationId": null,
+          "capture": null,
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 1,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": [
+            "missing_expected_source",
+            "missing_complete_document",
+            "missing_agent_capture",
+            "investigation_changed"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ris-erp-switch-resume",
+      "turns": [
+        {
+          "message": "Preciso configurar o RIS de laboratório",
+          "answer": "Não consegui confirmar uma orientação aplicável com segurança. Podemos continuar se você informar o detalhe do ambiente ou do resultado observado que ainda falta.",
+          "sources": [],
+          "investigationId": "a24fcfe3-5f0a-42f4-9e2d-84b8a3faad3d",
+          "capture": {
+            "agentMetrics": {
+              "steps": 8,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 2,
+              "promptTokens": 12439,
+              "completionTokens": 355,
+              "durationMs": 8590,
+              "stopReason": "unsafe_answer",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 2,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 1,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 1,
+              "verifierRejections": 1,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "guided",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "new",
+              "semanticIntent": "clarify",
+              "semanticObservations": 1,
+              "selectionRequired": 1,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 1,
+              "knowledgeSelectionAttempts": 1,
+              "knowledgeSelections": 1,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 1,
+              "knowledgeSufficiency": "sufficient",
+              "verifierFailures": {
+                "invalid_question": 1
+              },
+              "lastVerifierFailure": "invalid_question"
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "542be7d4-fa23-454e-9ea1-8564d537f7bb",
+                    "ordinal": 0,
+                    "score": 1.1470364782163585
+                  },
+                  {
+                    "versionId": "2a886022-2236-485a-a12a-0b420cb5d01f",
+                    "ordinal": 0,
+                    "score": 0.7903606620406323
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "Para configurar o RIS de laboratório, um passo que consta é habilitar a alteração de guia, que envolve: pesquisar o paciente fictício, acessar a engrenagem, depois cadastros e convênio. Esse é o procedimento que você quer seguir ou precisa de outra configuração no RIS?",
+                "verdict": "unsupported",
+                "reason": "invalid_question",
+                "durationMs": 1335,
+                "promptTokens": 1345,
+                "completionTokens": 78,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": [
+            "missing_expected_source"
+          ]
+        },
+        {
+          "message": "me passe tudo",
+          "answer": "Não consegui interpretar o contexto desta mensagem com segurança. Pode informar qual assunto deseja consultar?",
+          "sources": [],
+          "investigationId": null,
+          "capture": null,
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": [
+            "missing_expected_source",
+            "missing_complete_document",
+            "missing_agent_capture",
+            "investigation_changed"
+          ]
+        },
+        {
+          "message": "Agora sobre ERP de laboratório",
+          "answer": "Não consegui confirmar uma orientação aplicável com segurança. Podemos continuar se você informar o detalhe do ambiente ou do resultado observado que ainda falta.",
+          "sources": [],
+          "investigationId": "6eec71ab-63b4-416b-8467-f9620dbca059",
+          "capture": {
+            "agentMetrics": {
+              "steps": 8,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 2,
+              "promptTokens": 14782,
+              "completionTokens": 433,
+              "durationMs": 9974,
+              "stopReason": "unsafe_answer",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 2,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 2,
+              "verifierRejections": 2,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "guided",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "new",
+              "semanticIntent": "clarify",
+              "semanticObservations": 1,
+              "selectionRequired": 1,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 1,
+              "knowledgeSelections": 1,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 1,
+              "knowledgeSufficiency": "sufficient",
+              "verifierFailures": {
+                "claim_shape": 1,
+                "invalid_reference": 1
+              },
+              "lastVerifierFailure": "invalid_reference"
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "2a886022-2236-485a-a12a-0b420cb5d01f",
+                    "ordinal": 0,
+                    "score": 2.3097031344473233
+                  },
+                  {
+                    "versionId": "542be7d4-fa23-454e-9ea1-8564d537f7bb",
+                    "ordinal": 0,
+                    "score": 0.8398535976832955
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "No ERP de laboratório, para consultar o inventário de teste, você deve abrir o menu Estoque e acessar a consulta do inventário de teste. Quer que eu te guie nesse passo a passo ou tem algo mais específico que você quer saber sobre o ERP de laboratório?",
+                "verdict": "uncertain",
+                "reason": "claim_shape",
+                "durationMs": 1183,
+                "promptTokens": 1333,
+                "completionTokens": 56,
+                "usageObserved": true
+              },
+              {
+                "candidate": "Quer focar no ERP de laboratório ou no RIS de laboratório? O procedimento para consultar inventário é só no ERP, já para alterar guia tem passos no RIS. Qual você quer detalhar?",
+                "verdict": "unsupported",
+                "reason": "invalid_reference",
+                "durationMs": 1846,
+                "promptTokens": 1324,
+                "completionTokens": 119,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 1,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": []
+        },
+        {
+          "message": "me dê o procedimento completo",
+          "answer": "Não consegui interpretar o contexto desta mensagem com segurança. Pode informar qual assunto deseja consultar?",
+          "sources": [],
+          "investigationId": null,
+          "capture": null,
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 1,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": [
+            "missing_expected_source",
+            "missing_complete_document",
+            "missing_agent_capture",
+            "investigation_changed"
+          ]
+        },
+        {
+          "message": "Voltando ao RIS de laboratório",
+          "answer": "Não consegui interpretar o contexto desta mensagem com segurança. Pode informar qual assunto deseja consultar?",
+          "sources": [],
+          "investigationId": null,
+          "capture": null,
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 1,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": [
+            "investigation_not_resumed"
+          ]
+        },
+        {
+          "message": "me dê o passo a passo completo",
+          "answer": "Não consegui interpretar o contexto desta mensagem com segurança. Pode informar qual assunto deseja consultar?",
+          "sources": [],
+          "investigationId": null,
+          "capture": null,
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 1,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": [
+            "missing_expected_source",
+            "missing_complete_document",
+            "missing_agent_capture",
+            "investigation_changed"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "focused-scanner-and-mode",
+      "turns": [
+        {
+          "message": "Preciso preparar um digitalizador de laboratório",
+          "answer": "Qual modelo do digitalizador de laboratório você precisa preparar?",
+          "sources": [],
+          "investigationId": "7ff8aafe-c73a-4a79-b094-393771027e74",
+          "capture": {
+            "agentMetrics": {
+              "steps": 3,
+              "searches": 0,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 0,
+              "promptTokens": 2715,
+              "completionTokens": 102,
+              "durationMs": 2650,
+              "stopReason": "clarified",
+              "readAttempts": 0,
+              "readsWithNewEvidence": 0,
+              "evidenceCount": 0,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 1,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 0,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "adaptive",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "new",
+              "semanticIntent": "clarify",
+              "semanticObservations": 1,
+              "selectionRequired": 0,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 1,
+              "knowledgeSelectionAttempts": 0,
+              "knowledgeSelections": 0,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 0,
+              "verifierFailures": {}
+            },
+            "retrieval": [],
+            "review": []
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 1
+          },
+          "checks": [
+            "missing_expected_source"
+          ]
+        },
+        {
+          "message": "em qual menu?",
+          "answer": "Não consegui interpretar o contexto desta mensagem com segurança. Pode informar qual assunto deseja consultar?",
+          "sources": [],
+          "investigationId": null,
+          "capture": null,
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": [
+            "missing_expected_source",
+            "missing_agent_capture",
+            "investigation_changed"
+          ]
+        },
+        {
+          "message": "me guie uma etapa por vez",
+          "answer": "Não consegui interpretar o contexto desta mensagem com segurança. Pode informar qual assunto deseja consultar?",
+          "sources": [],
+          "investigationId": null,
+          "capture": null,
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 1,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": [
+            "investigation_changed"
+          ]
+        },
+        {
+          "message": "me passe tudo",
+          "answer": "Não consegui interpretar o contexto desta mensagem com segurança. Pode informar qual assunto deseja consultar?",
+          "sources": [],
+          "investigationId": null,
+          "capture": null,
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 1,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": [
+            "missing_expected_source",
+            "missing_complete_document",
+            "missing_agent_capture",
+            "investigation_changed"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "revoked-procedure",
+      "turns": [
+        {
+          "message": "Preciso configurar o roteador de laboratório",
+          "answer": "Qual o modelo do roteador de laboratório que você precisa configurar?",
+          "sources": [],
+          "investigationId": "f8a01335-c27e-44b0-9088-e6ea28016fb5",
+          "capture": {
+            "agentMetrics": {
+              "steps": 3,
+              "searches": 0,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 0,
+              "promptTokens": 2728,
+              "completionTokens": 111,
+              "durationMs": 3103,
+              "stopReason": "clarified",
+              "readAttempts": 0,
+              "readsWithNewEvidence": 0,
+              "evidenceCount": 0,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 1,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 0,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "adaptive",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "new",
+              "semanticIntent": "clarify",
+              "semanticObservations": 1,
+              "selectionRequired": 0,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 1,
+              "knowledgeSelectionAttempts": 0,
+              "knowledgeSelections": 0,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 0,
+              "verifierFailures": {}
+            },
+            "retrieval": [],
+            "review": []
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 1
+          },
+          "checks": [
+            "missing_expected_source"
+          ]
+        },
+        {
+          "message": "me dê o passo a passo completo",
+          "answer": "Não consegui interpretar o contexto desta mensagem com segurança. Pode informar qual assunto deseja consultar?",
+          "sources": [],
+          "investigationId": null,
+          "capture": null,
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": []
+        }
+      ]
+    },
+    {
+      "id": "restricted-knowledge",
+      "turns": [
+        {
+          "message": "Preciso configurar o console restrito de laboratório",
+          "answer": "Não encontrei fontes publicadas e autorizadas para confirmar esse procedimento. Uma orientação sem essas fontes seria apenas uma hipótese da IA, não um procedimento interno validado. Informe o sistema, o ambiente ou mais detalhes para que eu possa tentar uma busca mais específica.",
+          "sources": [],
+          "investigationId": "7e63e6e5-96d3-4987-9fcc-0493585a8a1d",
+          "capture": {
+            "agentMetrics": {
+              "steps": 3,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 1,
+              "promptTokens": 4221,
+              "completionTokens": 130,
+              "durationMs": 3297,
+              "stopReason": "no_evidence",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 0,
+              "evidenceCount": 0,
+              "emptyReads": 1,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 0,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "guided",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "new",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 0,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 0,
+              "knowledgeSelections": 0,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 0,
+              "verifierFailures": {}
+            },
+            "retrieval": [
+              {
+                "ranked": [],
+                "metrics": {
+                  "recall": null,
+                  "precision": 0,
+                  "mrr": 0
+                },
+                "chunkMetrics": {
+                  "recall": null,
+                  "precision": 0,
+                  "mrr": 0
+                }
+              }
+            ],
+            "review": []
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 3
+          },
+          "checks": []
+        },
+        {
+          "message": "me dê o passo a passo completo",
+          "answer": "Não consegui interpretar o contexto desta mensagem com segurança. Pode informar qual assunto deseja consultar?",
+          "sources": [],
+          "investigationId": null,
+          "capture": null,
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": [
+            "investigation_changed"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "semantic-controller-disambiguation",
+      "turns": [
+        {
+          "message": "Preciso configurar o acesso temporário de visitantes",
+          "answer": "Ainda não consegui distinguir os conhecimentos aplicáveis. Qual é o contexto específico do procedimento que você precisa?",
+          "sources": [],
+          "investigationId": "4cc3eb53-bc4f-4e42-b383-68c4860d6bff",
+          "capture": {
+            "agentMetrics": {
+              "steps": 6,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 1,
+              "promptTokens": 9470,
+              "completionTokens": 226,
+              "durationMs": 7154,
+              "stopReason": "clarified",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 2,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 1,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 0,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "adaptive",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "new",
+              "semanticIntent": "clarify",
+              "semanticObservations": 1,
+              "selectionRequired": 2,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 1,
+              "knowledgeSelectionAttempts": 0,
+              "knowledgeSelections": 0,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 0,
+              "verifierFailures": {}
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "d3cd897a-a0bc-4f5f-9bcb-feb79d313481",
+                    "ordinal": 0,
+                    "score": 1.0935050333690122
+                  },
+                  {
+                    "versionId": "53bc0eb3-a80b-4761-8ada-061860347f41",
+                    "ordinal": 0,
+                    "score": 0.7290924214012351
+                  }
+                ],
+                "metrics": {
+                  "recall": null,
+                  "precision": 0,
+                  "mrr": 0
+                },
+                "chunkMetrics": {
+                  "recall": null,
+                  "precision": 0,
+                  "mrr": 0
+                }
+              }
+            ],
+            "review": []
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": []
+        },
+        {
+          "message": "Agora estou usando o controlador Verde.",
+          "answer": "Não consegui interpretar o contexto desta mensagem com segurança. Pode informar qual assunto deseja consultar?",
+          "sources": [],
+          "investigationId": null,
+          "capture": null,
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": [
+            "missing_expected_source",
+            "missing_required_value",
+            "missing_agent_capture",
+            "investigation_changed"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "access-note-incomplete",
+      "turns": [
+        {
+          "message": "Como eu gero um voucher Wi-Fi de laboratório?",
+          "answer": "O endereço de acesso registrado é 192.0.2.40 [1]. O trecho disponível contém dados de acesso, mas não descreve as etapas do procedimento solicitado. Qual é o sistema ou equipamento utilizado?",
+          "sources": [
+            {
+              "documentId": "77ce323d-c09c-4887-b5d2-fdd4a9482117",
+              "versionId": "ef708b7c-d57e-4c54-abd7-879f024103bf",
+              "versionNumber": 1,
+              "title": "Gerar voucher Wi-Fi de laboratório",
+              "ordinal": 0,
+              "excerpts": [
+                "IP: 192.0.2.40"
+              ]
+            }
+          ],
+          "investigationId": null,
+          "capture": {
+            "agentMetrics": {
+              "steps": 6,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 1,
+              "promptTokens": 9705,
+              "completionTokens": 286,
+              "durationMs": 6645,
+              "stopReason": "answered",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 1,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 2,
+              "verifierRejections": 2,
+              "recoverySearches": 0,
+              "literalFallbacks": 1,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "adaptive",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "standalone",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 0,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 0,
+              "knowledgeSelections": 0,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 0,
+              "verifierFailures": {
+                "claim_shape": 2
+              },
+              "lastVerifierFailure": "claim_shape",
+              "fallbackReason": "claim_shape"
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "ef708b7c-d57e-4c54-abd7-879f024103bf",
+                    "ordinal": 0,
+                    "score": 1.6948652139295013
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "Para gerar um voucher Wi-Fi de laboratório, use o IP 192.0.2.40 com login \"conta-fixture\" e senha \"valor-fixture\". Quer que eu te ajude com o passo a passo depois?",
+                "verdict": "uncertain",
+                "reason": "claim_shape",
+                "durationMs": 1210,
+                "promptTokens": 1227,
+                "completionTokens": 53,
+                "usageObserved": true
+              },
+              {
+                "candidate": "Você tem acesso ao IP 192.0.2.40 com login conta-fixture e senha valor-fixture para gerar o voucher Wi-Fi de laboratório. Quer ajuda para acessar esse sistema?",
+                "verdict": "uncertain",
+                "reason": "claim_shape",
+                "durationMs": 992,
+                "promptTokens": 1217,
+                "completionTokens": 52,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 6
+          },
+          "checks": []
+        }
+      ]
+    },
+    {
+      "id": "informal-intent-and-context-switch",
+      "turns": [
+        {
+          "message": "Tô precisando de ajuda pra tirar um crachá temporário no laboratório Nimbo",
+          "answer": "Não consegui confirmar uma orientação aplicável com segurança. Podemos continuar se você informar o detalhe do ambiente ou do resultado observado que ainda falta.",
+          "sources": [],
+          "investigationId": "0686ff7e-100d-4644-a160-3553ad62cd76",
+          "capture": {
+            "agentMetrics": {
+              "steps": 7,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 3,
+              "promptTokens": 13394,
+              "completionTokens": 327,
+              "durationMs": 7917,
+              "stopReason": "unsafe_answer",
+              "readAttempts": 2,
+              "readsWithNewEvidence": 2,
+              "evidenceCount": 3,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 1,
+              "verifierRejections": 1,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "adaptive",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "new",
+              "semanticIntent": "clarify",
+              "semanticObservations": 1,
+              "selectionRequired": 1,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 1,
+              "knowledgeSelections": 1,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 1,
+              "knowledgeSufficiency": "sufficient",
+              "verifierFailures": {
+                "claim_shape": 1
+              },
+              "lastVerifierFailure": "claim_shape"
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "fb080934-3460-4c2f-ad46-5221c95eeafc",
+                    "ordinal": 0,
+                    "score": 2.7777756674786542
+                  },
+                  {
+                    "versionId": "55ef83b8-00c7-41b3-9f8f-aefb874ec0f2",
+                    "ordinal": 0,
+                    "score": 1.1930672543516354
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "Pra tirar o crachá temporário no laboratório Nimbo, abre o sistema de Identificação de visitantes e escolhe a opção Novo crachá. Quer ajuda com mais algum detalhe?",
+                "verdict": "uncertain",
+                "reason": "claim_shape",
+                "durationMs": 1094,
+                "promptTokens": 1444,
+                "completionTokens": 54,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": [
+            "missing_expected_source",
+            "missing_required_value"
+          ]
+        },
+        {
+          "message": "A impressão aqui no Nimbo também saiu toda em branco, me ajuda?",
+          "answer": "Não consegui interpretar o contexto desta mensagem com segurança. Pode informar qual assunto deseja consultar?",
+          "sources": [],
+          "investigationId": null,
+          "capture": null,
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": [
+            "missing_expected_source",
+            "missing_required_value",
+            "missing_agent_capture",
+            "investigation_not_switched"
+          ]
+        },
+        {
+          "message": "Quero terminar aquele negócio do crachá, manda todas as instruções juntas",
+          "answer": "Não consegui interpretar o contexto desta mensagem com segurança. Pode informar qual assunto deseja consultar?",
+          "sources": [],
+          "investigationId": null,
+          "capture": null,
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 1,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": [
+            "missing_expected_source",
+            "missing_complete_document",
+            "missing_agent_capture",
+            "wrong_support_mode",
+            "wrong_semantic_route",
+            "investigation_not_resumed"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "semantic-specific-question",
+      "turns": [
+        {
+          "message": "Me ajuda a colocar o DNS pra funcionar no ambiente Íris",
+          "answer": "Não consegui concluir a análise automática. Segue somente um trecho autorizado da documentação, sem confirmar sua aplicação ou a completude do procedimento.\n\nResolução de nomes — ambiente Íris [1]\n\nPara o ambiente Íris, DNS de teste: 192.0.2.53. Para configurar, consulte o menu Rede.",
+          "sources": [
+            {
+              "documentId": "9587d7f6-691f-413c-be37-5f876f0e6ea4",
+              "versionId": "71f5edbe-bea1-421b-9387-540a25cf3e63",
+              "versionNumber": 1,
+              "title": "Resolução de nomes — ambiente Íris",
+              "ordinal": 0,
+              "excerpts": [
+                "Para o ambiente Íris, DNS de teste: 192.0.2.53. Para configurar, consulte o menu Rede."
+              ]
+            }
+          ],
+          "investigationId": "10e4809b-3582-416c-b24f-a6d56377de2b",
+          "capture": {
+            "agentMetrics": {
+              "steps": 6,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 1,
+              "promptTokens": 9766,
+              "completionTokens": 291,
+              "durationMs": 7880,
+              "stopReason": "answered",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 1,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 2,
+              "verifierRejections": 2,
+              "recoverySearches": 0,
+              "literalFallbacks": 1,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "adaptive",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "new",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 0,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 0,
+              "knowledgeSelections": 0,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 0,
+              "verifierFailures": {
+                "claim_shape": 2
+              },
+              "lastVerifierFailure": "claim_shape",
+              "fallbackReason": "claim_shape"
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "71f5edbe-bea1-421b-9387-540a25cf3e63",
+                    "ordinal": 0,
+                    "score": 1.6577855530886434
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "No ambiente Íris, para configurar o DNS, use o DNS de teste 192.0.2.53 e ajuste isso no menu Rede do sistema. Quer que eu te guie passo a passo?",
+                "verdict": "uncertain",
+                "reason": "claim_shape",
+                "durationMs": 1257,
+                "promptTokens": 1238,
+                "completionTokens": 57,
+                "usageObserved": true
+              },
+              {
+                "candidate": "No ambiente Íris, configure o DNS no menu Rede usando o endereço 192.0.2.53. Quer ajuda para encontrar esse menu?",
+                "verdict": "uncertain",
+                "reason": "claim_shape",
+                "durationMs": 1228,
+                "promptTokens": 1226,
+                "completionTokens": 57,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0.2631578947368421,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 7
+          },
+          "checks": []
+        },
+        {
+          "message": "só quero o endereço que vai nesse campo",
+          "answer": "Não consegui interpretar o contexto desta mensagem com segurança. Pode informar qual assunto deseja consultar?",
+          "sources": [],
+          "investigationId": null,
+          "capture": null,
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": [
+            "missing_expected_source",
+            "missing_required_value",
+            "missing_agent_capture",
+            "wrong_semantic_route",
+            "investigation_changed"
+          ]
+        }
+      ]
+    }
+  ],
+  "failures": [
+    "printer-negative-progress:2:investigation_changed",
+    "printer-negative-progress:3:missing_expected_source",
+    "printer-negative-progress:3:missing_agent_capture",
+    "printer-negative-progress:3:investigation_changed",
+    "printer-negative-progress:4:missing_expected_source",
+    "printer-negative-progress:4:missing_complete_document",
+    "printer-negative-progress:4:missing_agent_capture",
+    "printer-negative-progress:4:investigation_changed",
+    "ris-erp-switch-resume:1:missing_expected_source",
+    "ris-erp-switch-resume:2:missing_expected_source",
+    "ris-erp-switch-resume:2:missing_complete_document",
+    "ris-erp-switch-resume:2:missing_agent_capture",
+    "ris-erp-switch-resume:2:investigation_changed",
+    "ris-erp-switch-resume:4:missing_expected_source",
+    "ris-erp-switch-resume:4:missing_complete_document",
+    "ris-erp-switch-resume:4:missing_agent_capture",
+    "ris-erp-switch-resume:4:investigation_changed",
+    "ris-erp-switch-resume:5:investigation_not_resumed",
+    "ris-erp-switch-resume:6:missing_expected_source",
+    "ris-erp-switch-resume:6:missing_complete_document",
+    "ris-erp-switch-resume:6:missing_agent_capture",
+    "ris-erp-switch-resume:6:investigation_changed",
+    "focused-scanner-and-mode:1:missing_expected_source",
+    "focused-scanner-and-mode:2:missing_expected_source",
+    "focused-scanner-and-mode:2:missing_agent_capture",
+    "focused-scanner-and-mode:2:investigation_changed",
+    "focused-scanner-and-mode:3:investigation_changed",
+    "focused-scanner-and-mode:4:missing_expected_source",
+    "focused-scanner-and-mode:4:missing_complete_document",
+    "focused-scanner-and-mode:4:missing_agent_capture",
+    "focused-scanner-and-mode:4:investigation_changed",
+    "revoked-procedure:1:missing_expected_source",
+    "restricted-knowledge:2:investigation_changed",
+    "semantic-controller-disambiguation:2:missing_expected_source",
+    "semantic-controller-disambiguation:2:missing_required_value",
+    "semantic-controller-disambiguation:2:missing_agent_capture",
+    "semantic-controller-disambiguation:2:investigation_changed",
+    "informal-intent-and-context-switch:1:missing_expected_source",
+    "informal-intent-and-context-switch:1:missing_required_value",
+    "informal-intent-and-context-switch:2:missing_expected_source",
+    "informal-intent-and-context-switch:2:missing_required_value",
+    "informal-intent-and-context-switch:2:missing_agent_capture",
+    "informal-intent-and-context-switch:2:investigation_not_switched",
+    "informal-intent-and-context-switch:3:missing_expected_source",
+    "informal-intent-and-context-switch:3:missing_complete_document",
+    "informal-intent-and-context-switch:3:missing_agent_capture",
+    "informal-intent-and-context-switch:3:wrong_support_mode",
+    "informal-intent-and-context-switch:3:wrong_semantic_route",
+    "informal-intent-and-context-switch:3:investigation_not_resumed",
+    "semantic-specific-question:2:missing_expected_source",
+    "semantic-specific-question:2:missing_required_value",
+    "semantic-specific-question:2:missing_agent_capture",
+    "semantic-specific-question:2:wrong_semantic_route",
+    "semantic-specific-question:2:investigation_changed"
+  ],
+  "humanReview": "pending"
+}

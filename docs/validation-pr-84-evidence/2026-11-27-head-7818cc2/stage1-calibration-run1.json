@@ -1,0 +1,82 @@
+[
+  {
+    "id": "phone",
+    "query": "configurar ramal no telefone",
+    "split": "pilot",
+    "expected": [
+      "d4c4ea81-180e-4ff4-84d3-a9cbd4322420"
+    ],
+    "candidates": [
+      {
+        "documentId": "18d4eb76-fe5e-4898-8024-35581ba226a1",
+        "versionId": "d4c4ea81-180e-4ff4-84d3-a9cbd4322420",
+        "versionNumber": 1,
+        "title": "Telefone de laboratório",
+        "ordinal": 0,
+        "content": "Consulte o endereço IP no menu Status e configure a conta SIP.",
+        "score": 0.6547361805075489,
+        "semantic": 0.45473617752731665
+      }
+    ]
+  },
+  {
+    "id": "printer",
+    "query": "calibrar impressora de etiquetas",
+    "split": "pilot",
+    "expected": [
+      "cc4abae1-1f5f-4ef9-8c70-fd7695944696"
+    ],
+    "candidates": [
+      {
+        "documentId": "a4278f8a-bee6-4aa3-bba8-51cf502b9d06",
+        "versionId": "cc4abae1-1f5f-4ef9-8c70-fd7695944696",
+        "versionNumber": 1,
+        "title": "Impressora de etiquetas",
+        "ordinal": 0,
+        "content": "Calibre a impressora de etiquetas pelo botão Feed com a tampa fechada.",
+        "score": 1.2104682363684187,
+        "semantic": 0.610468227427722
+      }
+    ]
+  },
+  {
+    "id": "wifi",
+    "query": "conectar wifi de visitantes",
+    "split": "holdout",
+    "expected": [
+      "49c58677-5e17-4c9c-913a-7df909d75178"
+    ],
+    "candidates": [
+      {
+        "documentId": "ffe05552-7481-4b15-aff0-d09f339dd81b",
+        "versionId": "49c58677-5e17-4c9c-913a-7df909d75178",
+        "versionNumber": 1,
+        "title": "Rede sem fio de visitantes",
+        "ordinal": 0,
+        "content": "Selecione a rede Visitantes e abra o portal de acesso.",
+        "score": 0.8042267485024316,
+        "semantic": 0.5042267440320832
+      }
+    ]
+  },
+  {
+    "id": "scanner",
+    "query": "digitalizar documento em PDF",
+    "split": "holdout",
+    "expected": [
+      "b5dd4198-fa36-47ee-8af1-e208bdd48703"
+    ],
+    "candidates": [
+      {
+        "documentId": "1d125c7e-c210-4164-a783-bbe85a52e0ae",
+        "versionId": "b5dd4198-fa36-47ee-8af1-e208bdd48703",
+        "versionNumber": 1,
+        "title": "Digitalizador de documentos",
+        "ordinal": 0,
+        "content": "Selecione resolução de 300 DPI e formato PDF no aplicativo do scanner.",
+        "score": 0.779496112065268,
+        "semantic": 0.6794961105751519
+      }
+    ]
+  }
+]

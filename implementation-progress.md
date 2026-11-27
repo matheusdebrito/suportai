@@ -2,6 +2,21 @@
 
 Source of truth: melhorias.md. No merge authorized. Code first, execution of tests last.
 
+## Missão de validação final — checkpoint atual
+
+- **Etapa atual:** 2 de 6 — ampliar e congelar o corpus de calibração do RAG.
+- **Etapa 1:** concluída em 27/11/2026 no HEAD `7818cc2ad93c06e957a4f99315518ac759c687d4`, com resultado reprovado e causa-raiz reproduzida.
+- **Banco:** PostgreSQL 17/pgvector descartável exclusivo, em porta separada. `DATABASE_URL` e `TEST_DATABASE_URL` eram idênticas. Migrações 001–010 aplicaram na primeira execução e ficaram inalteradas na segunda.
+- **Avaliação real:** os três testes opt-in foram executados, sem skips, com `gpt-4.1-mini`, `text-embedding-3-small`, temperatura `0.2`, fixtures sintéticas e processamento externo explicitamente habilitado somente para a rodada. Resultado do arquivo: 10 testes, 8 aprovados e 2 reprovados.
+- **Cobertura efetiva:** quatro casos de calibração, episódio histórico de telefone com cinco turnos e matriz ampliada com nove episódios/26 turnos, totalizando os 10 episódios/31 turnos esperados.
+- **Falha principal:** o `semantic_turn_v1` aceitou estruturalmente combinações que o prompt proibia apenas em linguagem natural. Em reproduções reais, o modelo devolveu `topic` para `route=existing`, herdou `equipment` fora da mensagem atual e classificou pedidos de continuidade/modo com campos incompatíveis. `parseSemanticTurn` rejeitou essas respostas e a rota HTTP caiu em `provider_failure`, interrompendo contexto, recuperação e captura do agente.
+- **Impacto medido:** o corpus de recuperação isolado encontrou os quatro documentos esperados; a matriz conversacional registrou 55 checks falhos, sobretudo perda/troca de investigação, fonte ausente e captura ausente após rejeição do intérprete. O episódio de telefone falhou no segundo turno. Isso aponta primeiro para interpretação/contrato e, como efeitos, contexto e harness; não há evidência para atribuir a falha primária ao RAG.
+- **Falhas secundárias observadas:** `claim_shape`, `invalid_question` e `invalid_reference` no verificador em alguns primeiros turnos válidos; serão analisadas após o corpus e o baseline serem congelados, conforme a ordem obrigatória.
+- **Limitação do harness:** o relatório do telefone só é escrito depois de todos os turnos; a asserção no segundo turno impediu o artefato parcial. A matriz ampliada foi preservada e contém respostas e métricas dos 26 turnos.
+- **Evidências novas:** `docs/validation-pr-84-evidence/2026-11-27-head-7818cc2/`. Os artefatos históricos permaneceram intactos.
+- **CI remoto do HEAD inicial:** `validate` e `audit` aprovados nas execuções 46032632050 e 46032632043. CI verde determinístico não substitui a avaliação real reprovada.
+- **Próximo passo:** criar pelo menos 100 casos positivos (60% piloto/40% holdout sem famílias vazando entre divisões) e uma suíte separada de segurança/abstenção. Depois estabelecer o baseline ampliado antes de corrigir o contrato semântico.
+
 | Requirement | State | Evidence / next action |
 |---|---|---|
 | Active investigation and short follow-ups | Implemented and validated | One investigation ID remained stable across five real turns; `sim` advanced to the next documented stage |
