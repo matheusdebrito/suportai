@@ -107,8 +107,8 @@ try {
             throw "Comando necessario nao encontrado: $cmd"
         }
     }
-    $npmCommand = Get-Command npm.cmd -ErrorAction SilentlyContinue
-    if (-not $npmCommand) { $npmCommand = Get-Command npm -CommandType Application -ErrorAction Stop }
+    $npmCommand = Get-Command npm.cmd -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $npmCommand) { $npmCommand = Get-Command npm -CommandType Application -ErrorAction Stop | Select-Object -First 1 }
     $npm = $npmCommand.Source
     $nodeMajor = & node -p "process.versions.node.split('.')[0]"
     if ($LASTEXITCODE -ne 0 -or [int]$nodeMajor -lt 22) { throw 'Node.js 22 ou superior e obrigatorio.' }

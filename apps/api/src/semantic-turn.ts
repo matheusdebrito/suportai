@@ -51,7 +51,11 @@ export function parseSemanticTurn(value:unknown,input:SemanticTurnInput):Semanti
  if(route==='existing'){
   if(typeof investigationId!=='string')return null;
   if(/^\s*(?:(?:vamos\s+)?(?:voltar|retomar)|voltando|retomando)\b/i.test(input.message)){
-   const mentioned=input.subjects.filter(candidate=>{const name=normalized(candidate.topic);return name&&normalizedMessage.includes(` ${name} `);});
+   const requested=normalized(input.message).replace(/^(?:(?:vamos )?(?:voltar|retomar)|voltando|retomando)\s+(?:(?:ao|a|o|as|os|para|no|na)\s+)*/,'');
+   const mentioned=input.subjects.filter(candidate=>{
+    const names=[candidate.topic,candidate.equipmentOrSystem??''].map(normalized).filter(Boolean);
+    return requested.length>=3&&names.some(name=>normalizedMessage.includes(` ${name} `)||` ${name} `.includes(` ${requested} `));
+   });
    if(mentioned.length===1)investigationId=mentioned[0].id;
   }
   const generic=new Set(['laboratorio','ambiente','sistema','equipamento','problema','temporario','temporaria','configuracao','acesso']);

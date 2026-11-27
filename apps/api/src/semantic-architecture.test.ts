@@ -263,3 +263,22 @@ test('semantic interpreter repairs an invalid decision within the shared budget 
  const rejected=await interpretSemanticTurn(scripted([assistant(JSON.stringify(invalid)),assistant(JSON.stringify(invalid))]),input,new AgentBudget());
  assert.deepEqual(rejected,{status:'invalid'});
 });
+
+test('explicit resume resolves a shorter system name inside a descriptive authorized subject',()=>{
+ const ris=randomUUID(),erp=randomUUID();
+ const input:SemanticTurnInput={message:'Voltando ao RIS de laboratório',activeId:erp,history:[],subjects:[
+  {id:ris,topic:'Configurar RIS de laboratório'},{id:erp,topic:'Consultar inventário no ERP de laboratório'}
+ ]};
+ const result=parseSemanticTurn(semantic({investigationId:erp,query:'RIS de laboratório'}),input);
+ assert.equal(result?.investigationId,ris);
+});
+test('semantic clarification cannot skip a useful authorized lookup',async()=>{
+ const calls:any[]=[];let searches=0;
+ const result=await respond(actor,randomUUID(),'Como emito acesso na rede Verde?',[],scripted([
+  tool('ask_clarification',{question:'Qual controlador você utiliza?'}),
+  assistant(green.content),ground(green.content)
+ ],calls),async()=>{searches++;return [green];},{semantic:semantic(),budget:plannedBudget(),verifyEvidence:true});
+ assert.equal(searches,1);
+ assert.deepEqual(calls[0].tool_choice,{type:'function',function:{name:'search_knowledge'}});
+ assert.deepEqual(result.sources.map(s=>s.versionId),[green.versionId]);
+});
