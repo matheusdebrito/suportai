@@ -47,7 +47,7 @@ test('grounding benchmarks separate false acceptance and false blocking on ficti
   'invented-ip':supported(checks.current('Use 192.0.2.53.')),
   'incomplete-evidence':supported(checks.current('No ambiente Azul, aguarde 15 segundos.')),
   'old-as-current':supported(checks.current('No ambiente Azul, aguarde 10 segundos.',2)),
-  'unresolved-conflict':{verdict:'conflict'}
+  'unresolved-conflict':{verdict:'conflict',claims:[]}
  };
  const provider={chat:{completions:{create:async(request:OpenAI.Chat.Completions.ChatCompletionCreateParams)=>{
   const parsed=JSON.parse(String(request.messages[1].content)) as {units:{text:string}[];evidence:unknown[]};
@@ -55,7 +55,7 @@ test('grounding benchmarks separate false acceptance and false blocking on ficti
   const answer=parsed.units.map(unit=>unit.text).join(' ');
   const item=groundingCases.find(fixture=>normalize(fixture.answer)===normalize(answer)&&fixture.sources.length===parsed.evidence.length);
   assert.ok(item,answer);
-  return {choices:[{message:{content:JSON.stringify(reports[item.id]??{verdict:'unsupported'})}}]};
+  return {choices:[{message:{content:JSON.stringify(reports[item.id]??{verdict:'unsupported',claims:[]})}}]};
  }}}} as unknown as OpenAI;
  const benchmark=await benchmarkGrounding(provider);
  assert.deepEqual(benchmark.rows.filter(row=>row.accepted!==row.shouldAccept),[], 'Grounding classification mismatch (case and reason)');
@@ -136,10 +136,42 @@ test('semantic verifier returns supported and only uses supplied evidence',async
 test('semantic verifier fails closed on incompatible, undecidable or malformed answers',async()=>{
  const source:Source={documentId:'a',versionId:'b',versionNumber:1,
   title:'Manual sintético',ordinal:0,content:'Não reinicie antes de verificar os logs.',score:0.8};
- assert.equal((await verifyGroundedAnswer(mockedProvider('{"verdict":"unsupported"}',[]),
+ assert.equal((await verifyGroundedAnswer(mockedProvider('{"verdict":"unsupported","claims":[]}',[]),
   'O que fazer?', 'Reinicie imediatamente.',[source])).verdict,'unsupported');
  assert.equal((await verifyGroundedAnswer(mockedProvider('resposta inválida',[]),
   'O que fazer?', 'Reinicie imediatamente.',[source])).verdict,'uncertain');
  assert.equal((await verifyGroundedAnswer(mockedProvider('{"verdict":"supported"}',[]),
   'O que fazer?', 'Sem evidências.',[])).verdict,'unsupported');
+});
+
+
+test('strict grounding contract rejects malformed objects before semantic review',async()=>{
+ const fixture=groundingCases.find(item=>item.id==='current-condition')!;
+ const valid={unit:1,kind:'current',refs:[{evidence:1,quote:fixture.answer}]};
+ const requests:any[]=[];
+ const run=(value:unknown)=>verifyGroundedAnswer(mockedProvider(JSON.stringify(value),requests),'procedimento',fixture.answer,fixture.sources);
+ const accepted=await run({verdict:'supported',claims:[valid]});
+ assert.equal(accepted.verdict,'supported');
+ assert.equal(requests[0].response_format.type,'json_schema');
+ assert.equal(requests[0].response_format.json_schema.strict,true);
+ assert.equal(requests[0].response_format.json_schema.schema.additionalProperties,false);
+ for(const value of [
+  {verdict:'supported',claims:[valid],extra:true},
+  {verdict:'unknown',claims:[]},
+  {verdict:'supported'},
+  {verdict:'supported',claims:[{...valid,extra:true}]},
+  {verdict:'supported',claims:[{...valid,kind:'invented'}]},
+  {verdict:'supported',claims:[{...valid,refs:[{...valid.refs[0],extra:true}]}]}
+ ])assert.deepEqual(await run(value),{verdict:'uncertain',reason:'schema_invalid'});
+ assert.deepEqual(await run({verdict:'supported',claims:[]}),{verdict:'uncertain',reason:'claim_shape'});
+ const refusal={chat:{completions:{create:async()=>({choices:[{message:{refusal:'not available',content:null}}]})}}} as unknown as OpenAI;
+ assert.deepEqual(await verifyGroundedAnswer(refusal,'procedimento',fixture.answer,fixture.sources),{verdict:'uncertain',reason:'model_refusal'});
+ const incompatible={chat:{completions:{create:async()=>{throw {status:400,param:'response_format'};}}}} as unknown as OpenAI;
+ assert.deepEqual(await verifyGroundedAnswer(incompatible,'procedimento',fixture.answer,fixture.sources),{verdict:'uncertain',reason:'provider_incompatible'});
+});
+test('strict grounding contract rejects duplicate units even with valid schema',async()=>{
+ const source=groundingCases.find(item=>item.id==='current-condition')!.sources[0];
+ const row={unit:1,kind:'current',refs:[{evidence:1,quote:'No ambiente Azul, aguarde 15 segundos.'}]};
+ const result=await verifyGroundedAnswer(mockedProvider(JSON.stringify({verdict:'supported',claims:[row,row]}),[]),'procedimento','No ambiente Azul, aguarde 15 segundos. Não religue antes de conferir o visor.',[source]);
+ assert.deepEqual(result,{verdict:'uncertain',reason:'claim_shape'});
 });

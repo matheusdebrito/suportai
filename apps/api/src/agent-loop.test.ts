@@ -129,7 +129,7 @@ test('unresolved source conflicts stop before relaying an operational choice',as
  const model=fakeModel([
   {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'orientação DNS'},'q1')]},
   {role:'assistant',content:'Use o primeiro procedimento imediatamente.'},
-  {role:'assistant',content:'{"verdict":"conflict"}'}
+  {role:'assistant',content:'{"verdict":"conflict","claims":[]}'}
  ],[]);
  const output=await respond(actor,randomUUID(),'Qual procedimento de DNS aplico?',[],model,async()=>[source,conflicting],{verifyEvidence:true});
  assert.equal(output.metrics?.stopReason,'source_conflict');

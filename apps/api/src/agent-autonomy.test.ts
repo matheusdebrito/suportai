@@ -111,9 +111,9 @@ test('rejected synthesis never leaks invented instructions and falls back to an 
  const model=scripted([
   {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'ZD230 calibração'},'q1')]},
   {role:'assistant',content:'Reinicie o serviço antes de qualquer verificação.'},
-  {role:'assistant',content:'{"verdict":"unsupported"}'},
+  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'},
   {role:'assistant',content:'Reinicie o serviço antes de qualquer verificação.'},
-  {role:'assistant',content:'{"verdict":"unsupported"}'}
+  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'}
  ],calls);
  const result=await respond(actor,randomUUID(),'Qual o procedimento da ZD230?',[],model,
   async()=>[source],{verifyEvidence:true});
@@ -125,7 +125,7 @@ test('rejected synthesis never leaks invented instructions and falls back to an 
  assert.equal(result.sources[0]?.versionId,source.versionId);
  assert.match(result.answer,/trecho original/);
  assert.doesNotMatch(result.answer,/Reinicie o serviço antes/i);
- assert.equal(calls[2].response_format.type,'json_object');
+ assert.equal(calls[2].response_format.type,'json_schema');
 });
 test('RIS how-to recovers an authorized inline checklist after verifier rejection',async()=>{
  const ris:Source={...source,title:'Habilitar Alteração de guia',
@@ -133,9 +133,9 @@ test('RIS how-to recovers an authorized inline checklist after verifier rejectio
  const model=scripted([
   {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'habilitar guia RIS'},'q')]},
   {role:'assistant',content:'Altere uma configuração não documentada.'},
-  {role:'assistant',content:'{"verdict":"unsupported"}'},
+  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'},
   {role:'assistant',content:'Use outro sistema.'},
-  {role:'assistant',content:'{"verdict":"unsupported"}'}
+  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'}
  ],[]);
  const result=await respond(actor,randomUUID(),'como eu habilito uma guia no ris?',[],model,async()=>[ris],{verifyEvidence:true});
  assert.equal(result.metrics?.stopReason,'answered');
@@ -182,7 +182,7 @@ test('verified partial response omits unsupported independent claim',async()=>{
  const model=scripted([
   {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'ZD230 calibração'},'q')]},
   {role:'assistant',content:'Verifique o alinhamento antes da calibração na ZD230. Reinicie o servidor.'},
-  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[{unit:1,kind:'current',refs:[{evidence:1,quote:source.content}]},{unit:2,kind:'omitted',refs:[]}]})}
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[{unit:1,kind:'current',refs:[{evidence:1,quote:source.content}]},{unit:2,kind:'unsupported',refs:[]}]})}
  ],[]);
  const result=await respond(actor,randomUUID(),'Qual o procedimento da ZD230?',[],model,async()=>[source],{verifyEvidence:true});
  assert.match(result.answer,/alinhamento/);assert.doesNotMatch(result.answer,/Reinicie o servidor/);assert.match(result.answer,/parte verificada/);
@@ -193,7 +193,7 @@ test('independent verifier rejection triggers bounded grounded rewrite',async()=
  const model=scripted([
   {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'calibração ZD230'},'q')]},
   {role:'assistant',content:'Reinicie o servidor.'},
-  {role:'assistant',content:'{"verdict":"unsupported"}'},
+  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'},
   {role:'assistant',content:'Verifique o alinhamento antes da calibração na ZD230.'},
   {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[{unit:1,kind:'current',refs:[{evidence:1,quote:source.content}]}]})}
  ],[]);
@@ -233,9 +233,9 @@ test('generic phone setup recovers a guided first stage after two verifier rejec
  const model=scripted([
   {role:'assistant',content:null,tool_calls:[tool('ask_clarification',{question:'Qual a marca do telefone?'},'q')]},
   {role:'assistant',content:'Reinicie o servidor.'},
-  {role:'assistant',content:'{"verdict":"unsupported"}'},
+  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'},
   {role:'assistant',content:'Configure uma porta não documentada.'},
-  {role:'assistant',content:'{"verdict":"unsupported"}'}
+  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'}
  ],[]);
  const result=await respond(actor,randomUUID(),'Preciso configurar um telefone fixo',[],model,async(_actor,q)=>{queries.push(q);return [phone];},{verifyEvidence:true});
  assert.equal(result.metrics?.literalFallbacks,1);
@@ -251,7 +251,7 @@ test('recovery search can add a missing procedure before re-verification',async(
  const model=scripted([
   {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'calibração'},'q')]},
   {role:'assistant',content:'Use o painel.'},
-  {role:'assistant',content:'{"verdict":"unsupported"}'},
+  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'},
   {role:'assistant',content:'A calibração deve ser feita pelo painel.'},
   {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[{unit:1,kind:'current',refs:[{evidence:2,quote:extra.content}]}]})}
  ],[]);
@@ -316,9 +316,9 @@ test('complete follow-up ignores sensitive words from history when recovering th
  const model=scripted([
   {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'passo a passo telefone'},'q')]},
   {role:'assistant',content:'Orientação não confirmada.'},
-  {role:'assistant',content:'{"verdict":"unsupported"}'},
+  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'},
   {role:'assistant',content:'Outra orientação não confirmada.'},
-  {role:'assistant',content:'{"verdict":"unsupported"}'}
+  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'}
  ],[]);
  const result=await respond(actor,randomUUID(),'Sim. Me dê o passo a passo completo',[
   {role:'user',content:'Não entendi a parte da senha.'},
