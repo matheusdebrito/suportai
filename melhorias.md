@@ -154,6 +154,21 @@ Critérios de aceitação:
 - o fallback nunca mistura versões, não expõe segredos e mantém valores e ordem do procedimento;
 - a telemetria permite medir quantas respostas dependeram do fallback e por qual classe de falha.
 
+## P1 — Seleção semântica de conhecimento pelo LLM
+
+O RAG é responsável por recuperar candidatos publicados e autorizados, não por decidir sozinho qual fonte atende ao usuário. A escolha deve usar o objetivo, contexto conversacional, ação solicitada, aplicabilidade e suficiência do conteúdo, evitando regras específicas para cada equipamento, verbo ou procedimento.
+
+- O modelo pode buscar, comparar candidatos, selecionar versões aplicáveis por `select_knowledge`, abrir o documento escolhido, responder com evidência parcial ou fazer uma pergunta de esclarecimento quando a dúvida impedir uma decisão segura.
+- A ferramenta de seleção aceita somente IDs vigentes obtidos no turno, não cria permissões e não executa mutações. A seleção pode ser invalidada quando novas alternativas forem recuperadas.
+- Em modo completo, não abrir automaticamente o primeiro resultado quando houver documentos concorrentes. Usar a decisão semântica para escolher a versão, com revalidação de acesso.
+- Manter o verificador independente com as fontes selecionadas e alternativas disponíveis; uma citação literal não basta quando o contexto ou a ação divergem.
+- Aceitar perguntas neutras sem citações quando não houver orientação factual, incluindo durante a recuperação após rejeição do verificador. Não solicitar credenciais nem repetir perguntas desnecessárias.
+- Se a informação for parcial, apresentar somente o que estiver sustentado e explicitar a lacuna. Não inventar menus ou etapas; não tratar dados de acesso como procedimento completo.
+- Fallback determinístico continua sendo recuperação conservadora, sem confiar na seleção do modelo para contornar autorização, conflito ou grounding.
+- Reutilizar o loop e seus orçamentos de tempo, tokens, buscas e iterações. Registrar seleção, suficiência, rejeições, invalidações e esclarecimentos sem dados sensíveis.
+
+Critérios de aceitação: escolher semanticamente entre conhecimentos concorrentes; distinguir sistemas e operações semelhantes; perguntar quando faltar contexto, sem forçar uma síntese; manter zero referências fora da autorização ou do conjunto recuperado; preservar os critérios anteriores de grounding e segurança. Validar com testes simulados e episódios reais complementares, sem modificar o baseline histórico.
+
 ## P2 — Recuperação RAG
 
 ### Chunking estrutural

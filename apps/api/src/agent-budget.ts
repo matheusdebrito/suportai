@@ -23,6 +23,8 @@ export type AgentMetrics={
  durationMs:number;stopReason:AgentStopReason;
  verifierChecks?:number;verifierRejections?:number;recoverySearches?:number;literalFallbacks?:number;lastVerifierFailure?:GroundingFailure;
  verifierFailures?:Partial<Record<GroundingFailure,number>>;fallbackReason?:GroundingFailure|AgentStopReason;
+ knowledgeSelectionAttempts?:number;knowledgeSelections?:number;knowledgeSelectionRejections?:number;knowledgeSelectionInvalidations?:number;
+ selectedKnowledgeVersions?:number;knowledgeSufficiency?:'sufficient'|'partial';
  adaptiveRewrites?:number;nonclaimsRemoved?:number;unsupportedUnits?:number;supportPreference?:'adaptive'|'guided'|'complete';
 };
 
