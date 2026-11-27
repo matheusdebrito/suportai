@@ -4,7 +4,7 @@ Source of truth: melhorias.md. No merge authorized. Code first, execution of tes
 
 ## Missão de validação final — checkpoint atual
 
-- **Etapa atual:** 2 de 6 — ampliar e congelar o corpus de calibração do RAG.
+- **Etapa atual:** 3 de 6 — estabelecer baseline histórico comparável e baseline ampliado antes das correções.
 - **Etapa 1:** concluída em 27/11/2026 no HEAD `7818cc2ad93c06e957a4f99315518ac759c687d4`, com resultado reprovado e causa-raiz reproduzida.
 - **Banco:** PostgreSQL 17/pgvector descartável exclusivo, em porta separada. `DATABASE_URL` e `TEST_DATABASE_URL` eram idênticas. Migrações 001–010 aplicaram na primeira execução e ficaram inalteradas na segunda.
 - **Avaliação real:** os três testes opt-in foram executados, sem skips, com `gpt-4.1-mini`, `text-embedding-3-small`, temperatura `0.2`, fixtures sintéticas e processamento externo explicitamente habilitado somente para a rodada. Resultado do arquivo: 10 testes, 8 aprovados e 2 reprovados.
@@ -16,6 +16,20 @@ Source of truth: melhorias.md. No merge authorized. Code first, execution of tes
 - **Evidências novas:** `docs/validation-pr-84-evidence/2026-11-27-head-7818cc2/`. Os artefatos históricos permaneceram intactos.
 - **CI remoto do HEAD inicial:** `validate` e `audit` aprovados nas execuções 46032632050 e 46032632043. CI verde determinístico não substitui a avaliação real reprovada.
 - **Próximo passo:** criar pelo menos 100 casos positivos (60% piloto/40% holdout sem famílias vazando entre divisões) e uma suíte separada de segurança/abstenção. Depois estabelecer o baseline ampliado antes de corrigir o contrato semântico.
+
+### Etapa 2 — corpus de calibração v2
+
+- **Estado:** concluída em 27/11/2026, ainda sem ajuste de parâmetros.
+- **Corpus congelado:** `suportai-rag-calibration-v2`, gerado de forma determinística por `npm run rag:corpus -w @suportai/api -- <arquivo>`.
+- **Casos positivos:** 100, com a distribuição exigida: 20 procedimentos, 15 diagnósticos, 15 linguagem informal, 15 vizinhos semânticos, 10 procedimentos longos, 10 informações parciais, 10 versões conflitantes e 5 consultas multiobjetivo.
+- **Divisão:** 60 piloto e 40 holdout. Famílias e documentos candidatos não atravessam as divisões; o holdout não foi usado para tuning.
+- **Cobertura:** telefonia, impressoras, computadores, redes, Wi-Fi, DNS, DHCP, scanners, RIS, ERP, PACS, instalações, configurações, diagnóstico, permissões e acessos.
+- **Rótulos:** todos os casos registram ID/família estáveis, categoria, domínio, consulta, candidatos, documentos e chunks relevantes, comportamento, justificativa e risco. A origem é `ai-technical-review`; revisão humana está explicitamente pendente.
+- **Segurança e abstenção:** 20 casos separados, dois para cada um dos 10 riscos exigidos. `split=security`, relevantes esperados vazios e exclusão explícita das métricas positivas.
+- **Documentos:** 120 fixtures sintéticas, incluindo versões históricas concorrentes e segundos objetivos. Nenhum documento ou segredo real foi usado.
+- **Validação:** 2 testes do contrato aprovados, typecheck da API aprovado e snapshot regenerado sem divergência de contagem.
+- **Evidência:** `docs/validation-pr-84-evidence/2026-11-27-head-7818cc2/rag-calibration-corpus-v2.json`.
+- **Próximo passo:** instrumentar a execução do corpus v2, medir o baseline piloto e preservar o holdout fechado até a política candidata ser escolhida.
 
 | Requirement | State | Evidence / next action |
 |---|---|---|

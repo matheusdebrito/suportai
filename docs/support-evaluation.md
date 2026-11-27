@@ -6,6 +6,12 @@ The report separates retrieval recall, precision and reciprocal rank from turn r
 
 Record commit, model, embedding model, effective agent limits, corpus version and human labels with each baseline. Use synthetic fixtures only for this runner. For calibration, use a separately reviewed pilot corpus, hold out validation cases, compare candidate thresholds on recall, precision and MRR, and require no authorization regressions. Do not change thresholds before measured results. Existing documents need controlled reindexing to benefit from the new chunking; do not reindex production automatically.
 
+## Corpus de calibração v2
+
+O corpus congelado `suportai-rag-calibration-v2` é gerado por `npm run rag:corpus -w @suportai/api -- <arquivo>` a partir de `rag-calibration-corpus-v2.ts`. Ele contém 100 casos positivos nas oito categorias da missão, divididos em 60 casos piloto e 40 holdout. Famílias, documentos candidatos e consultas não atravessam as divisões. Cada caso identifica documentos e chunks relevantes, comportamento esperado, justificativa técnica e risco. A revisão registrada é de IA técnica; revisão humana permanece pendente.
+
+Os 20 casos de segurança e abstenção ficam em uma suíte separada, com `split=security` e sem documentos relevantes esperados. Eles não entram em recall, precisão ou MRR positivos. A suíte cobre, em pares, documento não autorizado, conteúdo restrito, revogação, prompt injection, credenciais pessoais, tokens/segredos, ausência de conhecimento, fonte incompatível, conflito insolúvel e indução de procedimento inventado.
+
 The historical real phone report is versioned under `docs/validation-pr-84-evidence/` (evaluated code 036f2fa). It has AI-reviewed labels, not human homologation. Preserve these files unchanged.
 
 ## Strict verifier and expanded episodes

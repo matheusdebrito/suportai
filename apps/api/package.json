@@ -14,6 +14,7 @@
     "preflight": "tsx src/preflight.ts",
     "rag:evaluate": "tsx src/rag-evaluation.ts",
     "rag:calibrate": "tsx src/rag-calibration.ts",
+    "rag:corpus": "tsx src/rag-calibration-corpus-v2.ts",
     "episode:review": "tsx src/episode-review.ts",
     "episode:baseline": "tsx src/episode-baseline.ts",
     "episode:compare": "tsx src/episode-compare.ts"
