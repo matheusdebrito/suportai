@@ -8,7 +8,7 @@ import {buildConversationMemory,memoryMessage} from './conversation-memory.js';
 import {getPublishedDocument,getVisibleDocumentVersions,documentToSource,validDocumentId} from './agent-knowledge-tools.js';
 import {reviewDraftIntent} from './agent-intent.js';
 import {splitGroundingUnits,verifyGroundedAnswer,type GroundingFailure} from './agent-verifier.js';
-import {completeGroundingFallback,focusedGroundingFallback,guidedGroundingFallback,literalGroundingFallback} from './grounding-fallback.js';
+import {completeGroundingFallback,confirmedGuidance,focusedGroundingFallback,guidedGroundingFallback,literalGroundingFallback} from './grounding-fallback.js';
 import {isFocusedKnowledgeQuestion,lastProgressQuestion,supportPreference,supportContext,structuredSupportQuery,SUPPORT_POLICY} from './support-dialogue.js';
 import {shouldForceKnowledgeLookup,groundedReply} from './llm-policy.js';
 import {unsupportedNetworkLiterals} from './answer-evidence.js';
@@ -51,11 +51,14 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
   : '';
  const responseContract=SUPPORT_POLICY+'\nMODO ATUAL: '+preference+focusedAnswerPolicy;
  let lastVerifierFailure:GroundingFailure|undefined;
+ const verifierFailures:Partial<Record<GroundingFailure,number>>={};
+ let fallbackReason:GroundingFailure|AgentStopReason|undefined;
+ const recordVerifierFailure=(reason:GroundingFailure)=>{verifierRejections++;lastVerifierFailure=reason;verifierFailures[reason]=(verifierFailures[reason]??0)+1;};
  const done=(result:AgentOutput,reason:AgentStopReason):AgentOutput=>({
    ...result,metrics:{...budget.metrics(reason),...plan.metrics(),verifierChecks,verifierRejections,recoverySearches,literalFallbacks,adaptiveRewrites,nonclaimsRemoved,unsupportedUnits,supportPreference:preference,
-     ...(lastVerifierFailure?{lastVerifierFailure}:{})}
+     verifierFailures,...(lastVerifierFailure?{lastVerifierFailure}:{}),...(fallbackReason?{fallbackReason}:{})}
  });
- const budgetReply=(reason:AgentStopReason):AgentOutput=>done({
+ const budgetReply=(reason:AgentStopReason):AgentOutput=>tryFallback(reason)??done({
    answer:'O limite seguro da investigação foi atingido. Posso continuar com uma pergunta mais específica, mas não vou apresentar um procedimento incompleto como confirmado.',
    sources:[],pendingActions
  },reason);
@@ -65,18 +68,19 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  let clarificationRecoveryAttempted=false;
  let synthesisRecoveryAttempted=false;
  const olderMemory=buildConversationMemory(history);
- const fallbackReply=():AgentOutput=>{
+ const tryFallback=(reason:GroundingFailure|AgentStopReason):AgentOutput|null=>{
    const available=[...sources,...historicalSources];
-   const fallback=!pendingActions.length&&(isFocusedKnowledgeQuestion(userMessage)
-     ? focusedGroundingFallback(userMessage,available)
+   const fallback=!pendingActions.length&&available.length>0&&(isFocusedKnowledgeQuestion(userMessage)
+     ? focusedGroundingFallback(userMessage,available,contextualQuery)
      : preference==='guided'
-       ? guidedGroundingFallback(contextualQuery,available,history.filter(entry=>entry.role==='assistant').map(entry=>entry.content))
+       ? guidedGroundingFallback(contextualQuery,available,confirmedGuidance(history,userMessage))
        : preference==='complete'
          ? completeGroundingFallback(contextualQuery,available)
          : literalGroundingFallback(contextualQuery,available));
-   if(fallback){literalFallbacks++;return done({...fallback,pendingActions},'answered');}
-   return done({answer:'Encontrei documentos, mas não consegui validar uma orientação aplicável. Informe o equipamento ou ambiente para refinar a consulta.',sources:[],pendingActions},'unsafe_answer');
+   if(fallback){literalFallbacks++;fallbackReason=reason;return done({...fallback,pendingActions},'answered');}
+   return null;
  };
+ const fallbackReply=():AgentOutput=>tryFallback(lastVerifierFailure??'unsafe_answer')??done({answer:'Encontrei documentos, mas não consegui validar uma orientação aplicável. Informe o equipamento ou ambiente para refinar a consulta.',sources:[],pendingActions},'unsafe_answer');
  const runRead=async <T>(read:()=>Promise<T>):Promise<T>=>{
    const remaining=budget.remainingMs();
    if(remaining<1_000)throw new ReadDeadlineError();
@@ -164,7 +168,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      },{timeout:turnBudget.timeoutMs,maxRetries:0,signal:AbortSignal.timeout(turnBudget.timeoutMs)});
    }catch(error){
      const timeout=isDeadlineError(error);
-     return unresolvedReply()??done({answer:timeout?'A consulta à IA excedeu o prazo. Tente novamente.':
+     return unresolvedReply()??tryFallback(timeout?'model_timeout':'provider_failure')??done({answer:timeout?'A consulta à IA excedeu o prazo. Tente novamente.':
        'Não foi possível concluir a consulta à IA neste momento. Tente novamente.',
        sources:[],pendingActions},timeout?'model_timeout':'provider_failure');
    }
@@ -179,7 +183,8 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      return budgetReply('token_budget');
    const choice=completion.choices[0];
    const message=choice?.message;
-   if(!message)return done({answer:'O modelo não retornou uma resposta. Tente novamente.',sources:[],pendingActions},'provider_failure');
+   if(!message)return tryFallback('provider_failure')??done({answer:'O modelo não retornou uma resposta. Tente novamente.',sources:[],pendingActions},'provider_failure');
+   if(message.refusal)return tryFallback('model_refusal')??done({answer:'Não foi possível obter uma resposta aplicável da IA.',sources:[],pendingActions},'provider_failure');
    if(turnBudget.finalTurn&&message.tool_calls?.length)return unresolvedReply()??budgetReply('step_budget');
    // Do not present incomplete procedural instructions as a finished answer.
    // A truncated tool call must never be executed, and a partial answer must
@@ -188,7 +193,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      const reason=choice.finish_reason==='length'
        ? 'A resposta da IA foi interrompida pelo limite de tamanho.'
        : 'A resposta da IA foi interrompida pelo filtro do provedor.';
-     return done({answer:reason+' Não execute instruções parciais. Reformule a pergunta ou divida o procedimento em etapas.',
+     return tryFallback('model_interrupted')??done({answer:reason+' Não execute instruções parciais. Reformule a pergunta ou divida o procedimento em etapas.',
        sources:[],pendingActions},'model_interrupted');
    }
    messages.push(message);
@@ -244,7 +249,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      // Retrieved excerpts are not evidence that a usable answer was produced.
      // Never attach their citations to an empty model response.
      if(!message.content?.trim())
-       return done({answer:'O modelo não conseguiu produzir uma resposta. Reformule a pergunta ou tente novamente.',
+       return tryFallback('provider_failure')??done({answer:'O modelo não conseguiu produzir uma resposta. Reformule a pergunta ou tente novamente.',
          sources:[],pendingActions},'provider_failure');
      const unresolved=unresolvedReply();
      if(unresolved)return unresolved;
@@ -274,14 +279,14 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      let replySources=sources;
      if(sources.length>0&&shouldVerify){
        const validation=budget.startModelTurn(true);
-       if(!validation)return fallbackReply();
+       if(!validation)return budgetReply(budget.stopCause()??'token_budget');
        verifierChecks++;
        const review=await verifyGroundedAnswer(provider,contextualQuery,message.content,
          [...sources,...historicalSources],Math.min(10_000,validation.timeoutMs),validation.maxTokens);
        budget.recordModelUsage(undefined,
          userMessage.length+message.content.length+[...sources,...historicalSources].reduce((sum,source)=>sum+Math.min(source.content.length,source.completeDocument?10000:1800),0),
          review.verdict==='supported'?JSON.stringify(review.sources.map(source=>source.excerpts)).length+120:40);
-       if(review.verdict!=='supported'){verifierRejections++;lastVerifierFailure=review.reason;}
+       if(review.verdict!=='supported')recordVerifierFailure(review.reason);
        if(review.verdict==='conflict'){
          plan.recordConflict();
          return done({answer:'Encontrei orientações divergentes nas fontes publicadas. '+
@@ -308,9 +313,9 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
        nonclaimsRemoved+=review.nonclaimsRemoved??0;
        unsupportedUnits+=review.unsupportedUnits??0;
         if((preference==='guided'||preference==='complete')&&(review.unsupportedUnits??0)>0){
-          verifierRejections++;lastVerifierFailure='model_rejected';return fallbackReply();
+          recordVerifierFailure('model_rejected');return fallbackReply();
         }
-        if(preference==='complete'&&lastProgressQuestion(review.answer))return fallbackReply();
+        if(preference==='complete'&&lastProgressQuestion(review.answer)){recordVerifierFailure('model_rejected');return fallbackReply();}
        verifiedAnswer=review.answer;
        replySources=review.sources;
      }

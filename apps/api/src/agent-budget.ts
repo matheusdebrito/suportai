@@ -22,6 +22,7 @@ export type AgentMetrics={
  toolCalls:number;promptTokens:number;completionTokens:number;
  durationMs:number;stopReason:AgentStopReason;
  verifierChecks?:number;verifierRejections?:number;recoverySearches?:number;literalFallbacks?:number;lastVerifierFailure?:GroundingFailure;
+ verifierFailures?:Partial<Record<GroundingFailure,number>>;fallbackReason?:GroundingFailure|AgentStopReason;
  adaptiveRewrites?:number;nonclaimsRemoved?:number;unsupportedUnits?:number;supportPreference?:'adaptive'|'guided'|'complete';
 };
 

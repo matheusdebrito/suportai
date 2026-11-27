@@ -348,3 +348,17 @@ test('complete mode removes an unnecessary progress question by using the verifi
  assert.match(result.answer,/1\. Consulte o IP/);
  assert.doesNotMatch(result.answer,/Conseguiu concluir/);
 });
+
+
+test('provider transport failure after retrieval uses only deterministic authorized evidence',async()=>{
+ let calls=0;
+ const provider={chat:{completions:{create:async()=>{
+  if(++calls===1)return {choices:[{message:{role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'ZD230 calibração'},'q')]}}]};
+  throw new Error('synthetic transport failure');
+ }}}} as unknown as OpenAI;
+ const result=await respond(actor,randomUUID(),'Qual o procedimento da ZD230?',[],provider,async()=>[source],{verifyEvidence:true});
+ assert.equal(result.metrics?.fallbackReason,'provider_failure');
+ assert.equal(result.metrics?.literalFallbacks,1);
+ assert.equal(result.sources[0]?.versionId,source.versionId);
+ assert.match(result.answer,/alinhamento/i);
+});

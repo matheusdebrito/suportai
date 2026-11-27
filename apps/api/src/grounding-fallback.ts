@@ -1,12 +1,19 @@
 import type {Source} from './retrieval.js';
 import {hasInfrastructureSecrets,hasSecrets} from './knowledge.js';
+import {lastProgressQuestion} from './support-dialogue.js';
 const common=new Set('preciso quero saber como qual quais configurar configuracao configuro fazer instalar instalacao procedimento procedimentos passo passos completo completa inteiro inteira tutorial instrucoes roteiro todos todas etapas manual ajuda preciso necessario tenho pode poderia passe passar envie enviar mostre mostrar forneca sim claro beleza certo agora orientacao tecnica por favor para sobre meu minha um uma do da de dos das no na o a os as em com e ou que isso esse essa modelo marca nao sei fixo problema sistema ambiente'.split(' '));
 const normal=(s:string)=>s.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase();
 const words=(s:string)=>s.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().match(/[\p{L}\p{N}]{3,}/gu)??[];
 // Keep fallback relevance strict while accepting ordinary Portuguese inflection
 // such as habilito/habilitar and alteração/alterar. Seven shared characters
 // avoid turning a short, generic prefix into evidence of applicability.
-const sameLexeme=(left:string,right:string)=>left===right||(left.length>=7&&right.length>=7&&left.slice(0,7)===right.slice(0,7));
+const suffixes=new Set(['o','a','as','os','ar','er','ir','am','em','ando','endo','indo','ado','ada','ados','adas']);
+const sameLexeme=(left:string,right:string)=>{
+ if(left===right)return true;
+ if(!/^[a-z]+$/.test(left)||!/^[a-z]+$/.test(right))return false;
+ let shared=0;while(shared<Math.min(left.length,right.length)&&left[shared]===right[shared])shared++;
+ return shared>=7&&suffixes.has(left.slice(shared))&&suffixes.has(right.slice(shared));
+};
 const hasLexeme=(tokens:string[],term:string)=>tokens.some(token=>sameLexeme(token,term));
 const readableChecklist=(content:string)=>content
  .replace(/\s+-\s+\[[ xX]\]\s+/g,'\n- ')
@@ -27,7 +34,7 @@ function eligibleSource(question:string,sources:Source[],allowGeneric=false):Sou
  const body=words(current.map(s=>s.content).join(' '));
  if(terms.length&&(!terms.some(term=>hasLexeme(title,term))||terms.some(term=>!hasLexeme(title,term)&&!hasLexeme(body,term))))return null;
  // A single complete retrieved passage; don't splice chunks or truncate steps.
- const best=current.find(s=>s.ordinal===-1&&s.content.length<=3500)??current.find(s=>s.ordinal===0&&s.content.length<=1100);
+ const best=current.find(s=>s.ordinal===-1&&s.completeDocument===true&&s.content.length<=3500)??current.find(s=>s.ordinal===0&&s.completeDocument!==false&&s.content.length<=1100);
  if(!best||best.content.trim().length<20)return null;
  return best;
 }
@@ -44,17 +51,23 @@ export function literalGroundingFallback(question:string,sources:Source[]):{answ
 /** A focused value lookup may return one exact authorized line, including an
  * operational default password. It never synthesizes, combines versions or
  * exposes personal/infrastructure secrets. */
-export function focusedGroundingFallback(question:string,sources:Source[]):{answer:string;sources:Source[]}|null{
+export function focusedGroundingFallback(question:string,sources:Source[],contextualQuery=question):{answer:string;sources:Source[]}|null{
  const normalized=question.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase();
  const focus=['senha','usuario','login','endereco','ip','porta','servidor','url','link','valor','codigo','caminho','menu']
   .find(term=>new RegExp(`\\b${term}\\b`).test(normalized));
- if(!focus||/\b(?:anterior|antigo|historico|comparar|versoes)\b/.test(normalized))return null;
+ if(!focus||/\b(?:anterior|antigo|historico|comparar|versoes|pessoal|minha conta|meu usuario|de outro usuario)\b/.test(normalized)||hasSecrets(question))return null;
  const current=sources.filter(source=>!source.historical);
  if(!current.length||sources.some(source=>source.historical)||new Set(current.map(source=>source.versionId)).size!==1)return null;
  if(current.some(source=>hostile.test(source.title)||hostile.test(source.content)||hasSecrets(source.title)||hasInfrastructureSecrets(source.content)))return null;
- const proposed=/\bpode ser\s+([\p{L}\p{N}._-]{2,80})/u.exec(normalized)?.[1];
+ const proposed=/\bpode ser\s+([\p{L}\p{N}._-]{2,80})/iu.exec(question)?.[1];
+ const proposalMatches=(text:string)=>!proposed||text.split(/[^\p{L}\p{N}._-]+/u).some(value=>value.replace(/\.$/,'')===proposed);
+ const contextTerms=words(contextualQuery).filter(term=>!common.has(term)&&!['dado','configuracao','senha','usuario','login','endereco','porta','servidor','url','link','valor','codigo','caminho','menu','interface','acessar','acesso','parte','entendi','ser'].includes(term)&&term!==normal(proposed??''));
+ const availableWords=words(current.map(source=>source.title+' '+source.content).join(' '));
+ if(contextTerms.some(term=>!hasLexeme(availableWords,term)))return null;
  const candidates=current.flatMap(source=>source.content.split(/\r?\n|(?<=[.!?])\s+/).map(text=>({source,text:text.trim()})))
-  .filter(({text})=>text.length>=4&&text.length<=240&&new RegExp(`\\b${focus}\\b`,'i').test(text)&&(!proposed||normal(text).includes(proposed)));
+  .filter(({text})=>text.length>=4&&text.length<=240&&new RegExp(`\\b${focus}\\b`,'i').test(text)&&proposalMatches(text)&&(focus!=='senha'||/\b(?:padr[aã]o|operacional|equipamento)\b/i.test(text))&&!/\b(?:pessoal|individual|privad[ao]|de outro usu[aá]rio)\b/i.test(text));
+ const distinct=new Set(candidates.map(({text})=>text.replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/,'').trim()));
+ if(distinct.size!==1)return null;
  const selected=candidates[0];
  if(!selected||hasSecrets(selected.text)||hasInfrastructureSecrets(selected.text))return null;
  const answer=selected.text.replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/,'').trim();
@@ -73,21 +86,63 @@ function naturalStep(raw:string):string{
  return /[.!?]$/.test(natural)?natural:natural+'.';
 }
 
-/** A guided recovery must never dump the whole article. It presents only the
- * first documented stage and asks for the observed result. */
-export function guidedGroundingFallback(question:string,sources:Source[],previousAnswers:string[]=[]):{answer:string;sources:Source[]}|null{
+/** Only explicit user confirmation of the immediately preceding progress
+ * question can authorize advancing a deterministic stage. Merely seeing an
+ * instruction in the history does not establish that it was completed. */
+export function confirmedGuidance(history:{role:'user'|'assistant';content:string}[],message:string):string[]{
+ const turns=[...history,{role:'user' as const,content:message}];
+ const confirmed:string[]=[];
+ for(let i=1;i<turns.length;i++){
+  const previous=turns[i-1],next=turns[i];
+  if(next.role==='user'&&/\b(?:mudando de assunto|outro assunto|outro problema|agora sobre)\b/.test(normal(next.content)))confirmed.length=0;
+  if(previous.role==='assistant'&&next.role==='user'&&lastProgressQuestion(previous.content)&&
+    /^(?:sim|consegui|conclui|feito|ja fiz|deu certo|funcionou)[.!\s]*$/.test(normal(next.content).trim()))confirmed.push(previous.content);
+ }
+ return confirmed;
+}
+const bullet=/^(?:[-*+]\s+|\d+[.)]\s+)/;
+const heading=/^#{1,6}\s+(.+)$/;
+const prerequisite=/\b(?:antes de|somente|apenas se|se |caso |desde que|nao |nunca|requisito|condicao|obrigatorio|necessario|depois de)\b/i;
+type Stage={scope:string[];steps:string[]};
+function guidedStages(content:string):Stage[]{
+ const lines=contentLines(content);
+ if(!lines.some(line=>bullet.test(line)))return lines.length<=3?[{scope:[],steps:lines}]:[];
+ const stages:Stage[]=[];
+ let global:string[]=[],scope:string[]=[],steps:string[]=[];
+ const flush=()=>{if(steps.length){stages.push({scope:[...global,...scope],steps});steps=[];}};
+ for(const line of lines){
+  if(heading.test(line)){flush();scope=[line];continue;}
+  if(!bullet.test(line)){flush();if(!stages.length&&!scope.length)global.push(line);else scope.push(line);continue;}
+  // A condition or prerequisite starts a fresh group and is carried to later stages.
+  if(prerequisite.test(normal(line))){flush();scope.push(line);continue;}
+  steps.push(line);if(steps.length===2)flush();
+ }
+ flush();
+ return stages;
+}
+/** Do not present a later stage without explicit confirmation of the previous
+ * contiguous stages. Preserve headings and prose prerequisites verbatim. */
+export function guidedGroundingFallback(question:string,sources:Source[],confirmedAnswers:string[]=[]):{answer:string;sources:Source[]}|null{
  const best=eligibleSource(question,sources);
  if(!best)return null;
- const lines=contentLines(best.content);
- const seen=normal(previousAnswers.join('\n')).replace(/\s+/g,' ');
- const actionable=lines.filter(line=>!/^#{1,6}\s+/.test(line)&&/^(?:[-*+]\s+|\d+[.)]\s+)/.test(line));
- const stage=(actionable.length?actionable:lines.filter(line=>!/^#{1,6}\s+/.test(line)))
-  .filter(line=>!seen.includes(normal(naturalStep(line)).replace(/\s+/g,' ')))
-  .slice(0,2);
- if(!stage.length||stage.some(line=>hasSecrets(line)||hasInfrastructureSecrets(line)))return null;
- const steps=stage.map((line,index)=>`${index+1}. ${naturalStep(line)}`).join('\n');
- return {answer:`Vamos por etapas. Primeiro, faça o seguinte:\n\n${steps} [1]\n\nConseguiu concluir essa etapa?`,
-  sources:[{...best,excerpts:stage.map(line=>line.replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/,'').trim())}]};
+ const stages=guidedStages(best.content);
+ const seen=confirmedAnswers.map(answer=>normal(answer).replace(/\s+/g,' '));
+ let index=0;
+ for(const confirmed of seen){
+  const stage=stages[index];
+  if(stage&&stage.steps.every(line=>confirmed.includes(normal(naturalStep(line)).replace(/\s+/g,' '))))index++;
+ }
+ // A first chunk may be incomplete; never infer subsequent stages from it.
+ if(index>0&&!best.completeDocument&&sources.some(s=>s.ordinal!==best.ordinal))return null;
+ const stage=stages[index];
+ if(!stage)return null;
+ const lines=[...stage.scope,...stage.steps];
+ if(lines.some(line=>hasSecrets(line)||hasInfrastructureSecrets(line)))return null;
+ const scope=stage.scope.map(line=>line.replace(/^#{1,6}\s+/,'').replace(bullet,'')).join('\n');
+ const steps=stage.steps.map((line,i)=>`${i+1}. ${naturalStep(line)}`).join('\n');
+ if(scope.length+steps.length>850)return null;
+ return {answer:`Vamos por etapas. Primeiro, faça o seguinte:\n\n${scope?scope+'\n\n':''}${steps} [1]\n\nConseguiu concluir essa etapa?`,
+  sources:[{...best,excerpts:lines.map(line=>line.replace(/^#{1,6}\s+/,'').replace(bullet,'').trim())}]};
 }
 
 /** When the user explicitly requests the complete procedure, recover all
@@ -98,14 +153,15 @@ export function completeGroundingFallback(question:string,sources:Source[]):{ans
  const normalize=(value:string)=>value.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
  const lines=contentLines(best.content);
  if(lines.length&&!/^(?:#{1,6}\s|[-*+]\s|\d+[.)]\s)/.test(lines[0])){
-  const first=normalize(lines[0]),titleWords=normalize(best.title).split(' ').filter(word=>word.length>2);
-  if(first===normalize(best.title)||titleWords.every(word=>first.split(' ').includes(word)))lines.shift();
+  const first=normalize(lines[0]),title=normalize(best.title);
+  if(first===title||['configuracao do ','configuracao da ','configuracao de '].some(prefix=>first===prefix+title))lines.shift();
  }
  const rendered:string[]=[];
  let number=0;
  for(const line of lines){
   const heading=/^#{1,6}\s+(.+)$/.exec(line);
   if(heading){rendered.push(`\n${heading[1].trim()}:`);continue;}
+  if(!bullet.test(line)&&lines.some(item=>bullet.test(item))){rendered.push(line);continue;}
   number++;
   rendered.push(`${number}. ${naturalStep(line)}`);
  }

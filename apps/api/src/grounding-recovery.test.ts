@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import type OpenAI from 'openai';
 import type {Source} from './retrieval.js';
-import {completeGroundingFallback,focusedGroundingFallback,guidedGroundingFallback,literalGroundingFallback} from './grounding-fallback.js';
+import {completeGroundingFallback,confirmedGuidance,focusedGroundingFallback,guidedGroundingFallback,literalGroundingFallback} from './grounding-fallback.js';
 import {splitGroundingUnits,verifyGroundedAnswer} from './agent-verifier.js';
 const source:Source={documentId:'doc',versionId:'v1',versionNumber:1,ordinal:0,title:'Telefone Grandstream',content:'Consulte o IP do telefone.\nAccount Active: YES\nSIP Server: sip.example.test',score:1};
 const provider=(message:string)=>({chat:{completions:{create:async()=>({choices:[{message:{content:message},finish_reason:'stop'}]})}}}) as unknown as OpenAI;
@@ -52,7 +52,7 @@ test('guided fallback turns only the first documented stage into a short interac
  assert.match(guided.answer,/Status > Network Status > IPV4/);
  assert.match(guided.answer,/Conseguiu concluir essa etapa\?/);
  assert.doesNotMatch(guided.answer,/Account Active|SIP Server|trecho original/);
- const next=guidedGroundingFallback('configurar telefone',[phone],[guided.answer]);
+ const next=guidedGroundingFallback('configurar telefone',[phone],confirmedGuidance([{role:'assistant',content:guided.answer}],'sim'));
  assert.ok(next);
  assert.match(next.answer,/Account Active|SIP Server/);
  assert.doesNotMatch(next.answer,/Segure o botão central|Network Status/);
@@ -102,4 +102,31 @@ test('a prose paragraph with a colon is not mistaken for a single configuration 
 test('complete fallback rejects chunks and truncated documents',()=>{
  assert.equal(completeGroundingFallback('procedimento completo',[source]),null);
  assert.equal(completeGroundingFallback('procedimento completo',[{...source,ordinal:-1,completeDocument:false}]),null);
+});
+
+
+test('guided fallback never advances on an unconfirmed or negative result and carries prerequisites',()=>{
+ const phone={...source,title:'Configurar telefone',ordinal:-1,completeDocument:true,content:'Somente no laboratório Azul.\n# Etapa inicial\n1. Verifique o visor.\n2. Consulte o IP.\n# Etapa seguinte\n3. Abra o navegador.\n4. Configure a conta.'};
+ const first=guidedGroundingFallback('configurar telefone',[phone]);assert.ok(first);
+ const history=[{role:'assistant' as const,content:first.answer}];
+ for(const message of ['não','não consegui','sim, mas deu erro','e depois?']){
+  const retry=guidedGroundingFallback('configurar telefone',[phone],confirmedGuidance(history,message));
+  assert.equal(retry?.answer,first.answer);
+ }
+ const next=guidedGroundingFallback('configurar telefone',[phone],confirmedGuidance(history,'sim'));
+ assert.ok(next);assert.match(next.answer,/Somente no laboratório Azul/);assert.match(next.answer,/Abra o navegador/);
+ assert.doesNotMatch(next.answer,/Consulte o IP/);
+});
+test('fallback preserves complete-document conditions and rejects explicit truncation',()=>{
+ const phone={...source,title:'Configurar telefone',ordinal:-1,completeDocument:true,content:'Configure o telefone somente após conferir o visor.\n1. Consulte o IP.\n2. Abra o navegador.'};
+ const result=completeGroundingFallback('procedimento completo',[phone]);assert.ok(result);
+ assert.match(result.answer,/somente após conferir o visor/);
+ assert.equal(guidedGroundingFallback('configurar telefone',[{...phone,completeDocument:false}]),null);
+});
+test('focused fallback rejects personal, mismatched and conflicting values',()=>{
+ const phone={...source,content:'Use a senha padrão admin.'};
+ assert.equal(focusedGroundingFallback('Qual a senha do ERP?',[phone]),null);
+ assert.equal(focusedGroundingFallback('Qual a senha pessoal?',[phone]),null);
+ assert.equal(focusedGroundingFallback('Qual a senha?',[{...phone,content:'Use a senha padrão admin.\nUse a senha padrão root.'}]),null);
+ assert.equal(focusedGroundingFallback('A senha pode ser Admin?',[phone]),null);
 });

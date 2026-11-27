@@ -68,3 +68,6 @@ Detailed commands, outputs, responses, metrics and limitations are recorded in `
 
 ## Structured Outputs checkpoint
 PR head 78bf151 CI and dependency audit passed. Migrated verifier to versioned strict JSON schema with backend exact-key and enum checks, explicit refusal/incompatibility/schema failure codes, and updated mocks and contract regressions. No downgrade to free JSON. Pending CI and real-model comparison. Next: deterministic fallback safety, harness telemetry, expanded episodes, then evaluation. No merge.
+
+## Deterministic recovery checkpoint
+Fallback is now attempted for generation transport failures, interruption, refusal and exhausted model budgets only when existing authorized evidence permits it. Counts and reason codes are captured without raw content. Guided advancement requires explicit confirmation and preserves stage headings and conditions; focused recovery rejects ambiguity, personal values and mismatched subjects. Complete fallback requires a non-truncated document. Added regression tests. CI and real evaluation pending. Next: harness telemetry and expanded scenarios.
