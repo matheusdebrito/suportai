@@ -86,6 +86,25 @@ test('grounding preserves verified equipment scope and rejects dropping it from 
  }
 });
 
+test('grounding safely fills sparse verifier rows only for framing and progress questions',async()=>{
+ const source:Source={documentId:'phone',versionId:'phone-v1',versionNumber:1,title:'Telefone de laboratório',ordinal:0,
+  content:'1. Consulte o IP no menu Status.\n2. Abra o IP no navegador.',score:1};
+ const answer='Vamos por etapas. Primeiro, faça o seguinte:\n\n1. Consulte o IP no menu Status.\n2. Abra o IP no navegador.\n\nConseguiu concluir essa etapa?';
+ const sparse=[
+  {unit:3,kind:'current',refs:[{evidence:1,quote:'1. Consulte o IP no menu Status.'}]},
+  {unit:4,kind:'current',refs:[{evidence:1,quote:'2. Abra o IP no navegador.'}]}
+ ];
+ const result=await verifyGroundedAnswer(mockedProvider(JSON.stringify({verdict:'supported',claims:sparse}),[]),'configurar telefone',answer,[source]);
+ assert.equal(result.verdict,'supported');
+ if(result.verdict==='supported'){
+  assert.match(result.answer,/Conseguiu concluir essa etapa\?/);
+  assert.equal(result.nonclaimsRemoved,2);
+  assert.equal(result.unsupportedUnits,0);
+ }
+ const missingFact=await verifyGroundedAnswer(mockedProvider(JSON.stringify({verdict:'supported',claims:[sparse[0]]}),[]),'configurar telefone',answer,[source]);
+ assert.notEqual(missingFact.verdict,'supported','A missing factual step must still fail closed');
+});
+
 test('grounding rejects a fabricated evidence ID and a quote absent from the cited excerpt',async()=>{
  const item=groundingCases.find(item=>item.id==='current-condition')!;
  for(const ref of [{evidence:2,quote:'No ambiente Azul, aguarde 15 segundos.'},{evidence:1,quote:'Um trecho que não existe.'}]){

@@ -1,6 +1,6 @@
 import type {Source} from './retrieval.js';
 import {hasInfrastructureSecrets,hasSecrets} from './knowledge.js';
-const common=new Set('preciso quero saber como qual quais configurar configuracao configuro fazer instalar instalacao procedimento procedimentos passo passos completo completa inteiro inteira tutorial instrucoes guia roteiro todos todas etapas manual ajuda preciso necessario tenho pode poderia passe passar envie enviar mostre mostrar forneca sim claro beleza certo agora por favor para sobre meu minha um uma do da de dos das no na o a os as em com e ou que isso esse essa modelo marca nao sei fixo problema sistema ambiente'.split(' '));
+const common=new Set('preciso quero saber como qual quais configurar configuracao configuro fazer instalar instalacao procedimento procedimentos passo passos completo completa inteiro inteira tutorial instrucoes guia roteiro todos todas etapas manual ajuda preciso necessario tenho pode poderia passe passar envie enviar mostre mostrar forneca sim claro beleza certo agora orientacao tecnica por favor para sobre meu minha um uma do da de dos das no na o a os as em com e ou que isso esse essa modelo marca nao sei fixo problema sistema ambiente'.split(' '));
 const words=(s:string)=>s.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().match(/[\p{L}\p{N}]{3,}/gu)??[];
 const hostile=/(?:ignore|desconsidere|desobede[cç]a|esque[cç]a)\s+(?:todas?\s+)?(?:as\s+|os\s+)?(?:regras|permiss[oõ]es|instru[cç][oõ]es|mensagens|restri[cç][oõ]es)|(?:prompt\s*(?:injection|do sistema)|instru[cç][aã]o[_\s-]*maliciosa|system\s*prompt|revele\s+(?:um\s+)?segredo)/i;
 const sensitiveRequest=/\b(?:senha|password|token|credencial|chave|segredo)\b/i;
@@ -68,8 +68,9 @@ export function guidedGroundingFallback(question:string,sources:Source[]):{answe
 export function completeGroundingFallback(question:string,sources:Source[]):{answer:string;sources:Source[]}|null{
  const best=eligibleSource(question,sources,true);
  if(!best?.completeDocument)return null;
- if(!best)return null;
+ const normalize=(value:string)=>value.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
  const lines=best.content.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+ if(lines.length&&normalize(lines[0])===normalize(best.title))lines.shift();
  const rendered:string[]=[];
  let number=0;
  for(const line of lines){
@@ -79,6 +80,6 @@ export function completeGroundingFallback(question:string,sources:Source[]):{ans
   rendered.push(`${number}. ${naturalStep(line)}`);
  }
  if(!number)return null;
- return {answer:`Claro — aqui está o passo a passo completo:${rendered.join('\n')} [1]`,
+ return {answer:`Claro — aqui está o passo a passo completo:\n\n${rendered.join('\n').trim()} [1]`,
   sources:[{...best,excerpts:[best.content]}]};
 }

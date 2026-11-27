@@ -12,15 +12,30 @@ const segmenter=new Intl.Segmenter('pt-BR',{granularity:'sentence'});
 const historicalWording=/\b(?:históric[oa]s?|anterior(?:es)?|antig[oa]s?|no passado)\b/i;
 const currentWording=/\b(?:vigente|atual)\b/i;
 const injectedDirective=/\b(?:ignore|desconsidere)\s+(?:(?:todas?\s+)?as\s+)?(?:regras|permissões|instruções)\b/i;
+const safeNonclaim=(text:string)=>/^(?:#{1,6}\s+[^\n:]+|(?:claro|certo|vamos por etapas|vamos lá|vamos la)[.!:]?|primeiro,?\s+faça o seguinte[:.]?|(?:passo a passo|procedimento|orientações|orientacoes)(?: completo| completa)?[:.]?)$/i.test(text.trim());
 
 function reviewClaims(question:string,answer:string,units:{text:string;end:number}[],passages:Passage[],claims:unknown):GroundingResult{
- if(!Array.isArray(claims)||claims.length!==units.length)return rejected('claim_shape','uncertain');
+ if(!Array.isArray(claims)||claims.length>units.length)return rejected('claim_shape','uncertain');
+ const byUnit=new Map<number,any>();
+ for(const claim of claims){
+  if(!claim||!Number.isInteger(claim.unit)||claim.unit<1||claim.unit>units.length||byUnit.has(claim.unit))return rejected('claim_shape','uncertain');
+  byUnit.set(claim.unit,claim);
+ }
+ for(const [index,unit] of units.entries()){
+  if(!byUnit.has(index+1)&&!safeProgressQuestion(unit.text)&&!safeNonclaim(unit.text))return rejected('claim_shape','uncertain');
+ }
  const cited=new Map<number,{source:Source;number:number}>();
  let rendered='',start=0,unsupportedUnits=0,nonclaimsRemoved=0,pendingLabels='';
  const flushLabels=()=>{if(pendingLabels){rendered+=' '+pendingLabels;pendingLabels='';}};
  // Partial mode is explicit. A malformed reference still fails closed.
  for(const [index,unit] of units.entries()){
-  const claim=claims[index];
+  // Some providers omit harmless framing and progress questions even when the
+  // prompt requests one row per unit. Infer only those two narrow shapes. Any
+  // missing factual unit remains unsupported and therefore fails closed for a
+  // procedure instead of disappearing silently.
+  const claim=byUnit.get(index+1)??(safeProgressQuestion(unit.text)
+   ? {unit:index+1,kind:'question',refs:[]}
+   : {unit:index+1,kind:'nonclaim',refs:[]});
   if(!claim||claim.unit!==index+1||!['current','historical','comparison','question','omitted','nonclaim','unsupported'].includes(claim.kind)||
      !Array.isArray(claim.refs)||claim.refs.length>3)return rejected('claim_shape','uncertain');
   const fragment=answer.slice(start,unit.end);
@@ -31,7 +46,7 @@ function reviewClaims(question:string,answer:string,units:{text:string;end:numbe
    if(claim.kind==='nonclaim'){
     // Only narrow, nontechnical framing is permitted to disappear silently.
     // Unknown classifications fail closed as unsupported rather than hiding a claim.
-    if(/^(?:#{1,6}\s+[^\n:]+|(?:claro|certo|vamos por etapas|vamos lá|vamos la|primeiro)[.!:]?|(?:passo a passo|procedimento|orientações|orientacoes)(?: completo| completa)?[:.]?)$/i.test(unit.text.trim()))nonclaimsRemoved++;
+    if(safeNonclaim(unit.text))nonclaimsRemoved++;
     else unsupportedUnits++;
    }else unsupportedUnits++;
    continue;

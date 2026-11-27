@@ -48,6 +48,15 @@ test('complete fallback formats every documented stage without a raw-article pre
  assert.doesNotMatch(complete.answer,/trecho original|Não consegui validar a síntese/);
 });
 
+test('complete fallback does not number a plain-text document title as a step',()=>{
+ const phone={...source,title:'Configuração do telefone de laboratório',ordinal:-1,completeDocument:true,
+  content:'Configuração do telefone de laboratório.\n1. Consulte o IP no menu Status.\n2. Abra o IP no navegador.'};
+ const complete=completeGroundingFallback('configurar telefone procedimento completo',[phone]);
+ assert.ok(complete);
+ assert.match(complete.answer,/completo:\n\n1\. Consulte/);
+ assert.doesNotMatch(complete.answer,/1\. Configuração do telefone/);
+});
+
 test('a prose paragraph with a colon is not mistaken for a single configuration field',()=>{
  assert.equal(splitGroundingUnits('Abra a interface web pelo IP. Senha: fixture-device-only. Configure a conta SIP.').length,3);
 });

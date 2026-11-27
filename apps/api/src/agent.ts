@@ -68,10 +68,10 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  const fallbackReply=():AgentOutput=>{
    const available=[...sources,...historicalSources];
    const fallback=!pendingActions.length&&(preference==='guided'
-     ? guidedGroundingFallback(userMessage,available)
+     ? guidedGroundingFallback(contextualQuery,available)
      : preference==='complete'
-       ? completeGroundingFallback(userMessage,available)
-       : literalGroundingFallback(userMessage,available));
+       ? completeGroundingFallback(contextualQuery,available)
+       : literalGroundingFallback(contextualQuery,available));
    if(fallback){literalFallbacks++;return done({...fallback,pendingActions},'answered');}
    return done({answer:'Encontrei documentos, mas não consegui validar uma orientação aplicável. Informe o equipamento ou ambiente para refinar a consulta.',sources:[],pendingActions},'unsafe_answer');
  };
