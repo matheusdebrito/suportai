@@ -363,24 +363,26 @@ test('complete follow-up ignores sensitive words from history when recovering th
  assert.doesNotMatch(result.answer,/Informe o equipamento|trecho original/);
 });
 
-test('complete mode removes an unnecessary progress question by using the verified full document',async()=>{
+test('complete mode removes an unnecessary progress question without substituting unreviewed content',async()=>{
  const phone:Source={...source,title:'Configurar telefone',ordinal:-1,completeDocument:true,
   content:'Configurar telefone\n1. Consulte o IP no menu Status.\n2. Abra o IP no navegador.'};
  const model=scripted([
   {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'procedimento completo telefone'},'q')]},
   {role:'assistant',content:'Consulte o IP no menu Status. Abra o IP no navegador. Conseguiu concluir essa etapa?'},
-  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[
-   {unit:1,kind:'current',refs:[{evidence:1,quote:'1. Consulte o IP no menu Status.'}]},
-   {unit:2,kind:'current',refs:[{evidence:1,quote:'2. Abra o IP no navegador.'}]},
-   {unit:3,kind:'question',refs:[]}
-  ]})}
+  {role:'assistant',content:JSON.stringify({verdict:'supported',coverage:'complete',claims:{
+   u1:{kind:'current',refs:['e1s2']},
+   u2:{kind:'current',refs:['e1s3']},
+   u3:{kind:'question',refs:[]}
+  }})}
  ],[]);
  const result=await respond(actor,randomUUID(),'Me dê o passo a passo completo',[],model,async()=>[phone],{verifyEvidence:true,
   investigation:{topic:'Configurar telefone',supportPreference:'adaptive',reportedFacts:[],hypotheses:[],openQuestions:[],tests:[],sourceVersionIds:[]},
   semantic:{route:'existing',investigationId:randomUUID(),topic:null,intent:'knowledge',mode:'adaptive',focused:false,query:'procedimento completo',equipment:null,environment:null,observations:[]}});
  assert.equal(result.metrics?.supportPreference,'complete');
- assert.match(result.answer,/passo a passo completo/i);
- assert.match(result.answer,/1\. Consulte o IP/);
+ assert.equal(result.metrics?.completeProcedureVerified,true);
+ assert.equal(result.metrics?.literalFallbacks,0);
+ assert.match(result.answer,/Consulte o IP/);
+ assert.match(result.answer,/Abra o IP no navegador/);
  assert.doesNotMatch(result.answer,/Conseguiu concluir/);
 });
 

@@ -9,7 +9,7 @@ import {applySemanticMemory,interpretSemanticTurn,parseSemanticTurn,SEMANTIC_TUR
 import {neutralQuestionCandidate,reviewDialogueReply} from './dialogue-review.js';
 import {respond} from './agent.js';
 import {verifyGroundedAnswer} from './agent-verifier.js';
-import {indexEvidenceSpans,indexedGroundingResponseFormat,parseIndexedGroundingReview,INDEXED_GROUNDING_SCHEMA_VERSION} from './grounding-contract.js';
+import {indexEvidenceSpans,indexedGroundingResponseFormat,parseIndexedGroundingReview,INDEXED_GROUNDING_SCHEMA_VERSION,COMPLETE_GROUNDING_SCHEMA_VERSION} from './grounding-contract.js';
 
 const actor:Actor={id:randomUUID(),role:'USER',auth_revision:1,must_change_password:false};
 const caseId=randomUUID();
@@ -200,28 +200,31 @@ test('complete semantic review repairs an invalid reference within the shared bu
  const calls:any[]=[];
  const result=await respond(actor,randomUUID(),'Me dê o procedimento completo do controlador Verde.',[],scripted([
   tool('search_knowledge',{query:'emitir acesso verde'}),assistant(candidate),
-  ground('Trecho que não existe.'),assistant(JSON.stringify({verdict:'supported',claims:{u1:{kind:'current',refs:['e1s1']}}}))
+  assistant(JSON.stringify({verdict:'supported',coverage:'complete',claims:{u1:{kind:'current',refs:['unknown-span']}}})),
+  assistant(JSON.stringify({verdict:'supported',coverage:'complete',claims:{u1:{kind:'current',refs:['e1s1']}}}))
  ],calls),async()=>[doc],{semantic:semantic({mode:'complete',query:'emitir acesso verde'}),budget:plannedBudget(),verifyEvidence:true});
  assert.equal(result.metrics?.verifierRepairs,1);
  assert.equal(result.metrics?.verifierChecks,2);
  assert.equal(result.metrics?.steps,5);
  assert.deepEqual(result.sources.map(s=>s.versionId),[doc.versionId]);
  assert.match(result.answer,/Novo acesso temporário/);
- const reviews=calls.filter(c=>['grounding_review_v1',INDEXED_GROUNDING_SCHEMA_VERSION].includes(c.response_format?.json_schema?.name));
+ const reviews=calls.filter(c=>[COMPLETE_GROUNDING_SCHEMA_VERSION].includes(c.response_format?.json_schema?.name));
  assert.equal(reviews.length,2);
  const before=JSON.parse(reviews[0].messages[1].content),after=JSON.parse(reviews[1].messages[1].content);
  assert.equal(after.question,before.question);
  assert.deepEqual(after.units.map((unit:any)=>unit.text),before.units.map((unit:any)=>unit.text));
  assert.deepEqual(after.evidence[0].spans,[{id:'e1s1',text:candidate}]);
- assert.equal(reviews[1].response_format.json_schema.name,INDEXED_GROUNDING_SCHEMA_VERSION);
- assert.match(reviews[1].messages[0].content,/invalid_reference/);
+ assert.equal(reviews[1].response_format.json_schema.name,COMPLETE_GROUNDING_SCHEMA_VERSION);
+ assert.match(reviews[1].messages[0].content,/schema_invalid/);
+ assert.equal(result.metrics?.completeProcedureVerified,true);
 });
 test('a semantic rejection is not erased by a subsequent structural failure',async()=>{
  const doc={...green,ordinal:-1,completeDocument:true};
  const result=await respond(actor,randomUUID(),'Me dê o procedimento completo do controlador Verde.',[],scripted([
   tool('search_knowledge',{query:'emitir acesso verde'}),assistant('Use uma operação não confirmada.'),
-  assistant(JSON.stringify({verdict:'unsupported',claims:[]})),
-  assistant(green.content),ground('Trecho que não existe.'),assistant(JSON.stringify({verdict:'supported',claims:{u1:{kind:'current',refs:['invented']}}}))
+  assistant(JSON.stringify({verdict:'unsupported',coverage:'not_applicable',claims:null})),
+  assistant(green.content),assistant(JSON.stringify({verdict:'supported',coverage:'complete',claims:{u1:{kind:'current',refs:['invented']}}})),
+  assistant(JSON.stringify({verdict:'supported',coverage:'complete',claims:{u1:{kind:'current',refs:['invented-again']}}}))
  ]),async()=>[doc],{semantic:semantic({mode:'complete',query:'emitir acesso verde'}),budget:plannedBudget(),verifyEvidence:true});
  assert.equal(result.metrics?.verifierRepairs,1);
  assert.equal(result.metrics?.literalFallbacks,0);
@@ -281,4 +284,30 @@ test('semantic clarification cannot skip a useful authorized lookup',async()=>{
  assert.equal(searches,1);
  assert.deepEqual(calls[0].tool_choice,{type:'function',function:{name:'search_knowledge'}});
  assert.deepEqual(result.sources.map(s=>s.versionId),[green.versionId]);
+});
+
+test('complete review rejects supported but incomplete guidance even with a full source',async()=>{
+ const doc={...green,ordinal:-1,completeDocument:true,content:'No controlador Verde, abra o painel.\nConfirme a emissão.'};
+ const partial='Abra o painel.';
+ const candidate=assistant(JSON.stringify({verdict:'supported',coverage:'partial',claims:{u1:{kind:'current',refs:['e1s1']}}}));
+ const result=await verifyGroundedAnswer(scripted([candidate]),'Me dê o procedimento completo',partial,[doc],1000,1000,undefined,undefined,undefined,undefined,true);
+ assert.deepEqual(result,{verdict:'unsupported',reason:'incomplete_procedure'});
+ const falselyComplete=assistant(JSON.stringify({verdict:'supported',coverage:'complete',claims:{u1:{kind:'current',refs:['e1s1']}}}));
+ const chunk={...doc,ordinal:0,completeDocument:false};
+ assert.deepEqual(await verifyGroundedAnswer(scripted([falselyComplete]),'Me dê o procedimento completo',partial,[chunk],1000,1000,undefined,undefined,undefined,undefined,true),{verdict:'unsupported',reason:'incomplete_procedure'});
+});
+test('complete mode rewrites a partial answer instead of accepting a full-document citation',async()=>{
+ const doc={...green,ordinal:-1,completeDocument:true,content:'Abra o painel.\nConfirme a emissão.'};
+ const indexed=(coverage:string,claims:Record<string,unknown>)=>assistant(JSON.stringify({verdict:'supported',coverage,claims}));
+ const calls:any[]=[];
+ const result=await respond(actor,randomUUID(),'Me dê o procedimento completo',[],scripted([
+  tool('search_knowledge',{query:'emitir acesso verde'}),assistant('Abra o painel.'),
+  indexed('partial',{u1:{kind:'current',refs:['e1s1']}}),
+  assistant('1. Abra o painel.\n2. Confirme a emissão.'),
+  indexed('complete',{u1:{kind:'current',refs:['e1s1']},u2:{kind:'current',refs:['e1s2']}})
+ ],calls),async()=>[doc],{semantic:semantic({mode:'complete'}),budget:plannedBudget(),verifyEvidence:true});
+ assert.equal(result.metrics?.completeProcedureVerified,true);
+ assert.equal(result.metrics?.verifierFailures?.incomplete_procedure,1);
+ assert.match(result.answer,/Confirme a emissão/);
+ assert.equal(result.metrics?.literalFallbacks,0);
 });

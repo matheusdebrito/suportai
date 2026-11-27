@@ -203,7 +203,7 @@ if(!process.env.TEST_DATABASE_URL){
       assert.ok(turns.every(t=>t.states.length===1&&t.states[0].id===turns[0].states[0].id));
       assert.ok(turns[3].sources.length>0,'Password answer must cite evidence');
       assert.ok(turns[4].sources.length>0,'Complete procedure must cite evidence');
-       assert.deepEqual(completeProcedureChecks(turns[4].answer,turns[4].sources,turns[4].capture?.agentMetrics.supportPreference),[]);
+       assert.deepEqual(completeProcedureChecks(turns[4].answer,turns[4].sources,turns[4].capture?.agentMetrics.supportPreference,turns[4].capture?.agentMetrics.completeProcedureVerified===true),[]);
        assert.ok(turns[1].capture?.agentMetrics.stopReason==='answered'||turns[1].capture?.agentMetrics.stopReason==='clarified','Confirmation must not end in a generic unsafe/budget failure');
       assert.equal(turns.at(-1)?.states[0].support_preference,'complete');
     }finally{await app.close();await query('DELETE FROM documents WHERE id=$1',[source.document]);await query('DELETE FROM users WHERE id=$1',[actor.id]);}
@@ -254,7 +254,7 @@ if(!process.env.TEST_DATABASE_URL){
           const checks:string[]=[];
           if(result.sources.some(source=>!expected.includes(source.versionId)))checks.push('unexpected_final_source');
           if(target&&!turn.mayClarify&&!result.sources.length)checks.push('missing_expected_source');
-          if(turn.complete&&target)checks.push(...completeProcedureChecks(result.answer,result.sources,observed?.agentMetrics.supportPreference));
+          if(turn.complete&&target)checks.push(...completeProcedureChecks(result.answer,result.sources,observed?.agentMetrics.supportPreference,observed?.agentMetrics.completeProcedureVerified===true));
           if((turn.forbidden??[]).some(marker=>result.answer.includes(marker)))checks.push('forbidden_content');
           if((turn.required??[]).some(marker=>!result.answer.includes(marker)))checks.push('missing_required_value');
           if(turn.mustClarify&&(observed?.agentMetrics.stopReason!=='clarified'||result.sources.length!==0||!result.answer.trim().endsWith('?')))checks.push('missing_safe_clarification');

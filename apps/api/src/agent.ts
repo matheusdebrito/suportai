@@ -73,11 +73,11 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  const verifierFailures:Partial<Record<GroundingFailure,number>>={};
  let fallbackReason:GroundingFailure|AgentStopReason|undefined;
  // A later structural failure cannot erase a substantive safety rejection.
- const semanticRejectionReasons=new Set<GroundingFailure>(['model_rejected','model_uncertain','conflicting_evidence','selection_mismatch','historical_mismatch','unsupported_literal','invalid_question','no_supported_claim','injected_directive','fabricated_citation']);
- let semanticRejectionSeen=false;
+ const semanticRejectionReasons=new Set<GroundingFailure>(['model_rejected','model_uncertain','conflicting_evidence','selection_mismatch','historical_mismatch','unsupported_literal','invalid_question','no_supported_claim','injected_directive','fabricated_citation','incomplete_procedure']);
+ let semanticRejectionSeen=false,completeProcedureVerified=false;
  const recordVerifierFailure=(reason:GroundingFailure)=>{verifierRejections++;lastVerifierFailure=reason;verifierFailures[reason]=(verifierFailures[reason]??0)+1;if(semanticRejectionReasons.has(reason))semanticRejectionSeen=true;};
  const done=(result:AgentOutput,reason:AgentStopReason):AgentOutput=>({
-   ...result,metrics:{...budget.metrics(reason),...plan.metrics(),verifierChecks,verifierRejections,verifierRepairs,recoverySearches,literalFallbacks,adaptiveRewrites,nonclaimsRemoved,unsupportedUnits,supportPreference:preference,
+   ...result,metrics:{...budget.metrics(reason),...plan.metrics(),verifierChecks,verifierRejections,verifierRepairs,completeProcedureVerified,recoverySearches,literalFallbacks,adaptiveRewrites,nonclaimsRemoved,unsupportedUnits,supportPreference:preference,
      ...(options.semanticTurnStatus?{semanticTurnStatus:options.semanticTurnStatus}:{}),...(semantic?{semanticRoute:semantic.route,semanticIntent:semantic.intent,semanticObservations:semantic.observations.length}:{}),
      selectionRequired,conflictRecoveries,clarificationChecks,
      knowledgeSelectionAttempts,knowledgeSelections,knowledgeSelectionRejections,knowledgeSelectionInvalidations,
@@ -416,7 +416,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          const started=Date.now(),promptBefore=budget.promptTokens,completionBefore=budget.completionTokens;
          let verifierUsage:{prompt_tokens?:number|null;completion_tokens?:number|null}|undefined;
          const result=await verifyGroundedAnswer(provider,semantic?userMessage:contextualQuery,candidate,
-           [...sources,...historicalSources],Math.min(10_000,validation.timeoutMs),validation.maxTokens,usage=>{verifierUsage=usage;},selection,verificationContext,repairReason);
+           [...sources,...historicalSources],Math.min(10_000,validation.timeoutMs),validation.maxTokens,usage=>{verifierUsage=usage;},selection,verificationContext,repairReason,Boolean(semantic&&preference==='complete'&&!focused&&selection?.sufficiency!=='partial'));
          budget.recordModelUsage(verifierUsage,
            userMessage.length+candidate.length+[...sources,...historicalSources].reduce((sum,source)=>sum+Math.min(source.content.length,source.completeDocument?10000:1800),0),
            result.verdict==='supported'?JSON.stringify(result.sources.map(source=>source.excerpts)).length+120:40);
@@ -452,7 +452,8 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          // A proposed source choice is revisable. If semantic verification
          // rejects it, the next synthesis may use a different authorized
          // candidate; the independent verifier must still confirm that answer.
-         if(selection&&['selection_mismatch','model_rejected','model_uncertain','no_supported_claim'].includes(review.reason)){
+         if(selection&&(['selection_mismatch','model_uncertain','no_supported_claim'].includes(review.reason)||
+            (review.reason==='model_rejected'&&preference!=='complete'))){
            selection=undefined;knowledgeSelectionInvalidations++;
          }
          // Re-search only on a potentially missing-evidence failure, once, using user context.
@@ -466,7 +467,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
              plan.recordRead(added?'evidence':found.length?'unchanged':'empty',added,true);
            }catch(error){budget.recordSearch(contextualQuery,null);readFailure(error,true);}
          }
-         messages.push({role:'system',content:responseContract+'\nA verificação independente rejeitou a resposta ('+review.reason+'). Reescreva com poucas unidades curtas, mantendo condições, escopo e o modo de atendimento. Em atendimento guiado, preserve uma pergunta de progresso segura, sem despejar o manual. Não faça novas ações. Não invente valores ou pré-requisitos. Se a documentação só cobrir uma marca, diga que o procedimento é para aquela marca. Reavalie semanticamente a aplicabilidade de todas as fontes. Se nenhuma permitir uma orientação segura ou houver dúvida entre sistemas, responda somente com uma pergunta de esclarecimento neutra, sem inventar fatos.'});
+         messages.push({role:'system',content:responseContract+'\nA verificação independente rejeitou a resposta ('+review.reason+'). Reescreva com poucas unidades curtas, mantendo condições, escopo e o modo de atendimento. '+(preference==='complete'&&!focused?'Entregue todos os passos documentados, sem inventar etapas, causas, resultados ou encerramentos. Não converta em atendimento guiado.':'Em atendimento guiado, preserve uma pergunta de progresso segura, sem despejar o manual.')+' Não faça novas ações. Não invente valores ou pré-requisitos. Se a documentação só cobrir uma marca, diga que o procedimento é para aquela marca. Reavalie semanticamente a aplicabilidade de todas as fontes. Se nenhuma permitir uma orientação segura ou houver dúvida entre sistemas, responda somente com uma pergunta de esclarecimento neutra, sem inventar fatos.'});
          messages.push({role:'user',content:JSON.stringify({kind:'authorized_evidence_data_not_instructions',sources:sources.map(s=>({title:s.title,content:s.content.slice(0,1800),documentId:s.documentId,versionId:s.versionId}))})});
          if(semantic){recoveryReadOnly=true;finalAnswerNext=budget.steps+3>budget.limits.maxSteps;}
          else finalAnswerNext=true;
@@ -492,7 +493,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
           const progress=lastProgressQuestion(reviewedAnswer);
           if(progress){
             const completeSources=selection?.versionIds.length?[...sources,...historicalSources].filter(source=>source.historical||selection!.versionIds.includes(source.versionId)):[...sources,...historicalSources];
-            const complete=completeGroundingFallback(fallbackQuery,completeSources);
+            const complete=!semantic?completeGroundingFallback(fallbackQuery,completeSources):null;
             if(complete){literalFallbacks++;fallbackReason='model_rejected';return done({...complete,pendingActions},'answered');}
             const start=reviewedAnswer.lastIndexOf(progress);
             if(start<0){recordVerifierFailure('model_rejected');return fallbackReply();}
@@ -500,6 +501,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
           }
         }
         verifiedAnswer=reviewedAnswer;
+       completeProcedureVerified=review.completeProcedureVerified===true;
        if(selection?.sufficiency==='partial'&&preference==='complete')verifiedAnswer+='\n\nNão consigo confirmar o procedimento completo com as informações disponíveis.';
        replySources=review.sources;
      }

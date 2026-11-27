@@ -3,7 +3,7 @@ export const GROUNDING_SCHEMA_VERSION='grounding_review_v1';
 const verdicts=['supported','unsupported','uncertain','conflict'] as const;
 const kinds=['current','historical','comparison','question','nonclaim','unsupported'] as const;
 export type GroundingClaim={unit:number;kind:typeof kinds[number];refs:{evidence:number;quote:string}[]};
-export type GroundingReview={verdict:typeof verdicts[number];claims:GroundingClaim[]};
+export type GroundingReview={verdict:typeof verdicts[number];claims:GroundingClaim[];coverage?:'complete'|'partial'|'not_applicable'};
 export const GROUNDING_RESPONSE_FORMAT={
  type:'json_schema' as const,
  json_schema:{name:GROUNDING_SCHEMA_VERSION,strict:true,schema:{
@@ -47,6 +47,8 @@ export function incompatibleStructuredOutput(error:unknown):boolean{
  * key. References select existing evidence spans; the model never reproduces
  * a quote. The same local grounding checks consume the resolved claims. */
 export const INDEXED_GROUNDING_SCHEMA_VERSION='grounding_indexed_review_v2';
+export const COMPLETE_GROUNDING_SCHEMA_VERSION='grounding_complete_review_v3';
+const coverageValues=['complete','partial','not_applicable'] as const;
 export type IndexedEvidenceSpan={id:string;evidence:number;quote:string};
 export function indexEvidenceSpans(passages:readonly {text:string}[]):IndexedEvidenceSpan[]{
  const spans:IndexedEvidenceSpan[]=[];
@@ -71,12 +73,12 @@ export function indexEvidenceSpans(passages:readonly {text:string}[]):IndexedEvi
  return spans;
 }
 const unitKeys=(count:number)=>Array.from({length:count},(_,i)=>'u'+(i+1));
-export function indexedGroundingResponseFormat(count:number){
+export function indexedGroundingResponseFormat(count:number,requireCoverage=false){
  if(!Number.isInteger(count)||count<1||count>20)throw new Error('Invalid grounding unit count');
  const keys=unitKeys(count);
- return {type:'json_schema' as const,json_schema:{name:INDEXED_GROUNDING_SCHEMA_VERSION,strict:true,schema:{
-  type:'object',additionalProperties:false,required:['verdict','claims'],
-  properties:{verdict:{type:'string',enum:[...verdicts]},claims:{anyOf:[
+ return {type:'json_schema' as const,json_schema:{name:requireCoverage?COMPLETE_GROUNDING_SCHEMA_VERSION:INDEXED_GROUNDING_SCHEMA_VERSION,strict:true,schema:{
+  type:'object',additionalProperties:false,required:['verdict','claims',...(requireCoverage?['coverage']:[])],
+  properties:{verdict:{type:'string',enum:[...verdicts]},...(requireCoverage?{coverage:{type:'string',enum:[...coverageValues]}}:{}),claims:{anyOf:[
    {type:'object',additionalProperties:false,required:keys,
     properties:Object.fromEntries(keys.map(key=>[key,{$ref:'#/$defs/claim'}]))},
    {type:'null'}
@@ -85,11 +87,13 @@ export function indexedGroundingResponseFormat(count:number){
    properties:{kind:{type:'string',enum:[...kinds]},refs:{type:'array',items:{type:'string'}}}}}
  }}};
 }
-export function parseIndexedGroundingReview(value:unknown,count:number,spans:readonly IndexedEvidenceSpan[]):GroundingReview|null{
- if(!Number.isInteger(count)||count<1||count>20||!exact(value,['verdict','claims'])||
+export function parseIndexedGroundingReview(value:unknown,count:number,spans:readonly IndexedEvidenceSpan[],requireCoverage=false):GroundingReview|null{
+ if(!Number.isInteger(count)||count<1||count>20||!exact(value,['verdict','claims',...(requireCoverage?['coverage']:[])])||
     !verdicts.includes(value.verdict as GroundingReview['verdict']))return null;
  const verdict=value.verdict as GroundingReview['verdict'];
- if(verdict!=='supported')return value.claims===null?{verdict,claims:[]}:null;
+ const coverage=requireCoverage?value.coverage as GroundingReview['coverage']:undefined;
+ if(requireCoverage&&!coverageValues.includes(coverage as typeof coverageValues[number]))return null;
+ if(verdict!=='supported')return value.claims===null&&(!requireCoverage||coverage==='not_applicable')?{verdict,claims:[],...(coverage?{coverage}:{})}:null;
  const keys=unitKeys(count);
  if(!exact(value.claims,keys))return null;
  const byId=new Map(spans.map(span=>[span.id,span]));
@@ -106,5 +110,5 @@ export function parseIndexedGroundingReview(value:unknown,count:number,spans:rea
   }
   claims.push({unit:index+1,kind:claim.kind as GroundingClaim['kind'],refs});
  }
- return {verdict,claims};
+ return {verdict,claims,...(coverage?{coverage}:{})};
 }

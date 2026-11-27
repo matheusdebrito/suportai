@@ -18,3 +18,8 @@ test('a raw fallback with a full-document citation does not establish complete g
  assert.deepEqual(completeProcedureChecks('1. Abra o painel.\n2. Consulte o inventário. [1]',source,'complete'),[]);
  assert.deepEqual(completeProcedureChecks('Abra o painel.',[{ordinal:0}],'guided'),['missing_complete_document','wrong_support_mode']);
 });
+
+test('a complete citation and mode are insufficient without positive coverage review',()=>{
+ assert.deepEqual(completeProcedureChecks('Abra o painel.',[{ordinal:-1}],'complete',false),['missing_verified_complete_coverage']);
+ assert.deepEqual(completeProcedureChecks('Abra o painel. Confirme a emissão.',[{ordinal:-1}],'complete',true),[]);
+});
