@@ -103,6 +103,9 @@ test('grounding safely fills sparse verifier rows only for framing and progress 
  }
  const missingFact=await verifyGroundedAnswer(mockedProvider(JSON.stringify({verdict:'supported',claims:[sparse[0]]}),[]),'configurar telefone',answer,[source]);
  assert.notEqual(missingFact.verdict,'supported','A missing factual step must still fail closed');
+ const offer='1. Consulte o IP no menu Status.\n\nQuer que eu ajude com algum passo específico?';
+ const offered=await verifyGroundedAnswer(mockedProvider(JSON.stringify({verdict:'supported',claims:[{...sparse[0],unit:1}]}),[]),'configurar telefone',offer,[source]);
+ assert.equal(offered.verdict,'supported','A bounded non-factual assistance offer may be inferred when the verifier omits it');
 });
 
 test('grounding rejects a fabricated evidence ID and a quote absent from the cited excerpt',async()=>{

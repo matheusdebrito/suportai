@@ -2,6 +2,7 @@ import type OpenAI from 'openai';
 import type {Source} from './retrieval.js';
 import {unsupportedNetworkLiterals,unsupportedNumbers,unsupportedConfigurationField} from './answer-evidence.js';
 import {safeProgressQuestion} from './support-dialogue.js';
+import {neutralQuestionCandidate} from './dialogue-review.js';
 import {orderKnowledgeEvidence,type KnowledgeSelection} from './knowledge-selection.js';
 import {GROUNDING_RESPONSE_FORMAT,parseGroundingReview,incompatibleStructuredOutput,type GroundingClaim} from './grounding-contract.js';
 
@@ -24,7 +25,7 @@ function reviewClaims(question:string,answer:string,units:{text:string;end:numbe
   byUnit.set(claim.unit,claim);
  }
  for(const [index,unit] of units.entries()){
-  if(!byUnit.has(index+1)&&!safeProgressQuestion(unit.text)&&!safeNonclaim(unit.text))return rejected('claim_shape','uncertain');
+  if(!byUnit.has(index+1)&&!safeProgressQuestion(unit.text)&&!neutralQuestionCandidate(unit.text)&&!safeNonclaim(unit.text))return rejected('claim_shape','uncertain');
  }
  const cited=new Map<number,{source:Source;number:number}>();
  let rendered='',start=0,unsupportedUnits=0,nonclaimsRemoved=0,pendingLabels='';
@@ -35,7 +36,7 @@ function reviewClaims(question:string,answer:string,units:{text:string;end:numbe
   // prompt requests one row per unit. Infer only those two narrow shapes. Any
   // missing factual unit remains unsupported and therefore fails closed for a
   // procedure instead of disappearing silently.
-  const claim=byUnit.get(index+1)??(safeProgressQuestion(unit.text)
+  const claim=byUnit.get(index+1)??(safeProgressQuestion(unit.text)||neutralQuestionCandidate(unit.text)
    ? {unit:index+1,kind:'question',refs:[]}
    : {unit:index+1,kind:'nonclaim',refs:[]});
   if(!claim||claim.unit!==index+1||!['current','historical','comparison','question','nonclaim','unsupported'].includes(claim.kind)||
@@ -55,7 +56,7 @@ function reviewClaims(question:string,answer:string,units:{text:string;end:numbe
   }
   if(claim.kind==='question'){
    flushLabels();rendered+=fragment;
-   if(claim.refs.length||!safeProgressQuestion(unit.text))return rejected('invalid_question');
+   if(claim.refs.length||(!safeProgressQuestion(unit.text)&&!neutralQuestionCandidate(unit.text)))return rejected('invalid_question');
    continue;
   }
   if(!claim.refs.length)return rejected('missing_reference');
@@ -98,7 +99,7 @@ function reviewClaims(question:string,answer:string,units:{text:string;end:numbe
  // A question-only conclusion is useful when applicability is unresolved.
  // Require an explicit verifier judgment; sparse-row inference is not enough.
  if(!cited.size){
-  if(units.length===1&&claims.length===1&&claims[0].kind==='question'&&claims[0].refs.length===0&&safeProgressQuestion(units[0].text))
+  if(units.length===1&&claims.length===1&&claims[0].kind==='question'&&claims[0].refs.length===0&&(safeProgressQuestion(units[0].text)||neutralQuestionCandidate(units[0].text)))
     return {verdict:'supported',answer:units[0].text,sources:[],clarification:true};
   return rejected('no_supported_claim');
  }
