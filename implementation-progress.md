@@ -4,7 +4,7 @@ Source of truth: melhorias.md. No merge authorized. Code first, execution of tes
 
 ## Missão de validação final — checkpoint atual
 
-- **Etapa atual:** 3 de 6 — estabelecer baseline histórico comparável e baseline ampliado antes das correções.
+- **Etapa atual:** 4 de 6 — corrigir somente as causas demonstradas pelos baselines e validar primeiro no piloto.
 - **Etapa 1:** concluída em 27/11/2026 no HEAD `7818cc2ad93c06e957a4f99315518ac759c687d4`, com resultado reprovado e causa-raiz reproduzida.
 - **Banco:** PostgreSQL 17/pgvector descartável exclusivo, em porta separada. `DATABASE_URL` e `TEST_DATABASE_URL` eram idênticas. Migrações 001–010 aplicaram na primeira execução e ficaram inalteradas na segunda.
 - **Avaliação real:** os três testes opt-in foram executados, sem skips, com `gpt-4.1-mini`, `text-embedding-3-small`, temperatura `0.2`, fixtures sintéticas e processamento externo explicitamente habilitado somente para a rodada. Resultado do arquivo: 10 testes, 8 aprovados e 2 reprovados.
@@ -30,6 +30,22 @@ Source of truth: melhorias.md. No merge authorized. Code first, execution of tes
 - **Validação:** 2 testes do contrato aprovados, typecheck da API aprovado e snapshot regenerado sem divergência de contagem.
 - **Evidência:** `docs/validation-pr-84-evidence/2026-11-27-head-7818cc2/rag-calibration-corpus-v2.json`.
 - **Próximo passo:** instrumentar a execução do corpus v2, medir o baseline piloto e preservar o holdout fechado até a política candidata ser escolhida.
+
+### Etapa 3 — baseline histórico e ampliado
+
+- **Estado:** concluída em 27/11/2026 antes de correções funcionais.
+- **Comparação histórica:** modelo, embeddings, temperatura, limites e corpus do telefone permaneceram equivalentes. O comparador recusou deltas porque o HEAD completou somente dois dos cinco turnos (`mismatch=messages`). Valores ausentes permaneceram `null`, nunca zero.
+- **Variabilidade conversacional:** três rodadas reais do mesmo episódio falharam no segundo turno com `semanticTurnStatus=invalid`. Duas primeiras respostas terminaram em `unsafe_answer`; uma pediu esclarecimento. Nenhuma rodada chegou aos cinco turnos, portanto a continuidade completa foi 0/3 e não há baseline comparável de latência/custo do episódio inteiro.
+- **Baseline conversacional ampliado:** a execução inicial preservada contém nove episódios/26 turnos e 55 checks falhos; somada ao telefone, confirma 10 episódios/31 turnos no HEAD.
+- **Baseline RAG válido:** pool candidato materializado por caso, sem mistura entre piloto, holdout ou segurança. Piloto: Recall@5 0,9083, MRR 0,8917, cobertura de chunks 0,9083. Holdout congelado: Recall@5 0,95, MRR 0,8792, cobertura 0,95. Versão vigente: 1,0 nos dois conjuntos; incompatíveis fora do pool: zero.
+- **Precisão:** precisão sobre resultados retornados foi 0,6722 no piloto e 0,6008 no holdout. A precisão com denominador fixo 5 foi 0,1933 e 0,195 porque o reranker devolve menos de cinco itens quando aplica o limiar; ambas foram registradas para evitar ambiguidade.
+- **Categorias críticas no piloto:** linguagem informal teve Recall@5/MRR 0,60. Um caso de versão conflitante perdeu o vigente e um multiobjetivo recuperou somente um dos dois documentos. Procedimentos e diagnósticos formais atingiram recall 1,0 no pool rotulado.
+- **Segurança de recuperação:** 20 casos executados; nenhuma fonte restrita ou revogada atravessou o filtro. A segurança de síntese ainda depende da validação final do agente.
+- **Scores:** 188 candidatos observados; similaridade semântica mínima 0,2344, mediana 0,4715, p95 0,6497 e máxima 0,7363. Casos informais ausentes ficaram abaixo do piso SQL de 0,45 ou abaixo do limiar de reranking 0,56.
+- **Latência:** consulta/reranking no PostgreSQL, sem tempo de embedding: piloto média 3,37 ms, mediana 3,08 ms, p95 4,52 ms; holdout média 3,12 ms, mediana 3,02 ms, p95 4,15 ms.
+- **Uso reportado pelo provedor:** cinco chamadas de embeddings em lote, 5.898 tokens de entrada/total. Não houve chat nesse baseline RAG; custo monetário não foi informado e não foi estimado como faturamento.
+- **Correção do harness:** relatório do telefone passa a ser persistido por turno e marca `complete=false` quando uma asserção interrompe o episódio. O primeiro ensaio RAG, que misturou pools candidatos, foi marcado inválido e preservado sem uso nas métricas.
+- **Próximo passo:** no piloto, avaliar a recuperação de linguagem informal abaixo do piso atual e o contrato condicional de `semantic_turn_v1`; selecionar somente mudanças que melhorem o piloto e então consultar o holdout uma vez.
 
 | Requirement | State | Evidence / next action |
 |---|---|---|

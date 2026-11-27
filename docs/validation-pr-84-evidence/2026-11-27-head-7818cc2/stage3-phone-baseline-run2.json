@@ -1,0 +1,162 @@
+{
+  "mode": "real-http",
+  "architecture": "semantic_turn_v1",
+  "model": "gpt-4.1-mini",
+  "embeddingModel": "text-embedding-3-small",
+  "temperature": 0.2,
+  "limits": {
+    "maxSteps": 8,
+    "maxSearches": 5,
+    "maxToolsPerStep": 4,
+    "maxSources": 12,
+    "maxElapsedMs": 60000,
+    "maxTokensPerCall": 1800,
+    "maxCompletionTokens": 9000,
+    "maxTotalTokens": 40000,
+    "maxRepeatedSearches": 2,
+    "maxSearchFailures": 2
+  },
+  "corpusHash": "669005f2f335bfe15218a29ac29a3c8b5a55cb9edcb3d67343db9b82f4657e43",
+  "commit": "21a5f050ddfe28f0b10e8a646fe28b196fb94c3c",
+  "ranking": {
+    "recall": 1,
+    "precision": 1,
+    "mrr": 1
+  },
+  "turns": [
+    {
+      "message": "Preciso configurar um telefone de laboratório",
+      "answer": "Não consegui confirmar uma orientação aplicável com segurança. Podemos continuar se você informar o detalhe do ambiente ou do resultado observado que ainda falta.",
+      "sources": [],
+      "states": [
+        {
+          "id": "7ccc31a6-0697-47bf-91b0-8573b20ee2ec",
+          "topic": "configuração de telefone de laboratório",
+          "support_preference": "adaptive"
+        }
+      ],
+      "capture": {
+        "agentMetrics": {
+          "steps": 6,
+          "searches": 1,
+          "repeatedSearches": 0,
+          "searchFailures": 0,
+          "toolCalls": 1,
+          "promptTokens": 9651,
+          "completionTokens": 435,
+          "durationMs": 9368,
+          "stopReason": "unsafe_answer",
+          "readAttempts": 1,
+          "readsWithNewEvidence": 1,
+          "evidenceCount": 1,
+          "emptyReads": 0,
+          "duplicateReads": 0,
+          "readTimeouts": 0,
+          "unavailableReads": 0,
+          "inaccessibleReads": 0,
+          "stalledSteps": 0,
+          "clarificationRequests": 0,
+          "conflicts": 0,
+          "blockedWriteRetries": 0,
+          "verifierChecks": 2,
+          "verifierRejections": 2,
+          "recoverySearches": 0,
+          "literalFallbacks": 0,
+          "adaptiveRewrites": 0,
+          "nonclaimsRemoved": 0,
+          "unsupportedUnits": 0,
+          "supportPreference": "adaptive",
+          "semanticTurnStatus": "accepted",
+          "semanticRoute": "new",
+          "semanticIntent": "knowledge",
+          "semanticObservations": 1,
+          "selectionRequired": 0,
+          "conflictRecoveries": 0,
+          "clarificationChecks": 0,
+          "knowledgeSelectionAttempts": 0,
+          "knowledgeSelections": 0,
+          "knowledgeSelectionRejections": 0,
+          "knowledgeSelectionInvalidations": 0,
+          "selectedKnowledgeVersions": 0,
+          "verifierFailures": {
+            "claim_shape": 1,
+            "invalid_reference": 1
+          },
+          "lastVerifierFailure": "invalid_reference"
+        },
+        "retrieval": [
+          {
+            "ranked": [
+              {
+                "versionId": "cae133e6-7c55-4402-a28d-0abd8be3a284",
+                "ordinal": 0,
+                "score": 1.3230150047013862
+              }
+            ],
+            "metrics": {
+              "recall": 1,
+              "precision": 1,
+              "mrr": 1
+            },
+            "chunkMetrics": {
+              "recall": 1,
+              "precision": 1,
+              "mrr": 1
+            }
+          }
+        ],
+        "review": [
+          {
+            "candidate": "Para configurar o telefone de laboratório, siga esses passos:\n\n1. Consulte o IP do telefone no menu Status.\n2. Abra esse IP no navegador do seu computador.\n3. Use a senha padrão \"admin\" para acessar.\n4. Ative a opção \"Account Active\" para YES.\n\nQuer que eu te ajude com algum passo específico?",
+            "verdict": "uncertain",
+            "reason": "claim_shape",
+            "durationMs": 2194,
+            "promptTokens": 1287,
+            "completionTokens": 151,
+            "usageObserved": true
+          },
+          {
+            "candidate": "Qual é a marca ou modelo do telefone de laboratório que você quer configurar? Isso ajuda a garantir que eu te passe o passo certo.",
+            "verdict": "unsupported",
+            "reason": "invalid_reference",
+            "durationMs": 1359,
+            "promptTokens": 1217,
+            "completionTokens": 94,
+            "usageObserved": true
+          }
+        ]
+      },
+      "quality": {
+        "literalOverlap": 0,
+        "repeatedLines": 0,
+        "boilerplate": false,
+        "escapedMarkdown": false,
+        "partialWarning": false,
+        "sentenceCount": 2
+      }
+    },
+    {
+      "message": "sim",
+      "answer": "Não consegui interpretar o contexto desta mensagem com segurança. Pode informar qual assunto deseja consultar?",
+      "sources": [],
+      "states": [
+        {
+          "id": "7ccc31a6-0697-47bf-91b0-8573b20ee2ec",
+          "topic": "configuração de telefone de laboratório",
+          "support_preference": "adaptive"
+        }
+      ],
+      "capture": null,
+      "quality": {
+        "literalOverlap": 0,
+        "repeatedLines": 0,
+        "boilerplate": false,
+        "escapedMarkdown": false,
+        "partialWarning": false,
+        "sentenceCount": 2
+      }
+    }
+  ],
+  "complete": false,
+  "humanReview": "pending"
+}
