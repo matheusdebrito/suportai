@@ -294,3 +294,18 @@ export function semanticEvidenceFallback(query:string,sources:Source[],complete=
  return {answer:'Não consegui concluir a análise automática. Segue somente um trecho autorizado da documentação, sem confirmar sua aplicação ou a completude do procedimento.\n\n'+best.title+' [1]\n\n'+readableChecklist(best.content),
   sources:[{...best,excerpts:[best.content]}]};
 }
+
+/** Internal candidate for independent review, never a user-facing fallback.
+ * Preserve the document's literal content and all conditions. The independent
+ * verifier must still judge relevance, authorization, coverage and conflicts. */
+export function sourceAlignedProcedureCandidate(sources:readonly Source[],selectedVersion?:string):string|null{
+ if(sources.some(s=>s.historical))return null;
+ const current=selectedVersion?sources.filter(s=>s.versionId===selectedVersion):sources;
+ if(new Set(current.map(s=>s.versionId)).size!==1)return null;
+ const doc=current.find(s=>s.ordinal===-1&&s.completeDocument===true);
+ if(!doc||doc.content.trim().length<20||doc.content.length>3500||
+    hostile.test(doc.title)||hostile.test(doc.content)||hasSecrets(doc.title)||hasSecrets(doc.content)||
+    hasInfrastructureSecrets(doc.content)||personalCredential.test(doc.content)||parseAccessNote(doc.content)||
+    /\b(?:senha|password|login|usu[aá]rio|credencia(?:l|is)|tokens?|segredo|secret|chave)\b/i.test(doc.content))return null;
+ return readableChecklist(doc.content).trim();
+}

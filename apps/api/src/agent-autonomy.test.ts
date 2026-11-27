@@ -369,7 +369,7 @@ test('complete mode removes an unnecessary progress question without substitutin
  const model=scripted([
   {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'procedimento completo telefone'},'q')]},
   {role:'assistant',content:'Consulte o IP no menu Status. Abra o IP no navegador. Conseguiu concluir essa etapa?'},
-  {role:'assistant',content:JSON.stringify({verdict:'supported',coverage:'complete',claims:{
+  {role:'assistant',content:JSON.stringify({verdict:'supported',coverage:'complete',issue:'none',claims:{
    u1:{kind:'current',refs:['e1s2']},
    u2:{kind:'current',refs:['e1s3']},
    u3:{kind:'question',refs:[]}

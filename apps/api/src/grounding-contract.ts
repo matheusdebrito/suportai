@@ -3,7 +3,9 @@ export const GROUNDING_SCHEMA_VERSION='grounding_review_v1';
 const verdicts=['supported','unsupported','uncertain','conflict'] as const;
 const kinds=['current','historical','comparison','question','nonclaim','unsupported'] as const;
 export type GroundingClaim={unit:number;kind:typeof kinds[number];refs:{evidence:number;quote:string}[]};
-export type GroundingReview={verdict:typeof verdicts[number];claims:GroundingClaim[];coverage?:'complete'|'partial'|'not_applicable'};
+export const reviewIssues=['none','unsupported_content','missing_coverage','wrong_scope','unresolved_conflict','unsafe_content','other'] as const;
+export type GroundingReviewIssue=typeof reviewIssues[number];
+export type GroundingReview={verdict:typeof verdicts[number];claims:GroundingClaim[];coverage?:'complete'|'partial'|'not_applicable';issue?:GroundingReviewIssue};
 export const GROUNDING_RESPONSE_FORMAT={
  type:'json_schema' as const,
  json_schema:{name:GROUNDING_SCHEMA_VERSION,strict:true,schema:{
@@ -47,7 +49,7 @@ export function incompatibleStructuredOutput(error:unknown):boolean{
  * key. References select existing evidence spans; the model never reproduces
  * a quote. The same local grounding checks consume the resolved claims. */
 export const INDEXED_GROUNDING_SCHEMA_VERSION='grounding_indexed_review_v2';
-export const COMPLETE_GROUNDING_SCHEMA_VERSION='grounding_complete_review_v3';
+export const COMPLETE_GROUNDING_SCHEMA_VERSION='grounding_complete_review_v4';
 const coverageValues=['complete','partial','not_applicable'] as const;
 export type IndexedEvidenceSpan={id:string;evidence:number;quote:string};
 export function indexEvidenceSpans(passages:readonly {text:string}[]):IndexedEvidenceSpan[]{
@@ -77,8 +79,8 @@ export function indexedGroundingResponseFormat(count:number,requireCoverage=fals
  if(!Number.isInteger(count)||count<1||count>20)throw new Error('Invalid grounding unit count');
  const keys=unitKeys(count);
  return {type:'json_schema' as const,json_schema:{name:requireCoverage?COMPLETE_GROUNDING_SCHEMA_VERSION:INDEXED_GROUNDING_SCHEMA_VERSION,strict:true,schema:{
-  type:'object',additionalProperties:false,required:['verdict','claims',...(requireCoverage?['coverage']:[])],
-  properties:{verdict:{type:'string',enum:[...verdicts]},...(requireCoverage?{coverage:{type:'string',enum:[...coverageValues]}}:{}),claims:{anyOf:[
+  type:'object',additionalProperties:false,required:['verdict','claims',...(requireCoverage?['coverage','issue']:[])],
+  properties:{verdict:{type:'string',enum:[...verdicts]},...(requireCoverage?{coverage:{type:'string',enum:[...coverageValues]},issue:{type:'string',enum:[...reviewIssues]}}:{}),claims:{anyOf:[
    {type:'object',additionalProperties:false,required:keys,
     properties:Object.fromEntries(keys.map(key=>[key,{$ref:'#/$defs/claim'}]))},
    {type:'null'}
@@ -88,12 +90,14 @@ export function indexedGroundingResponseFormat(count:number,requireCoverage=fals
  }}};
 }
 export function parseIndexedGroundingReview(value:unknown,count:number,spans:readonly IndexedEvidenceSpan[],requireCoverage=false):GroundingReview|null{
- if(!Number.isInteger(count)||count<1||count>20||!exact(value,['verdict','claims',...(requireCoverage?['coverage']:[])])||
+ if(!Number.isInteger(count)||count<1||count>20||!exact(value,['verdict','claims',...(requireCoverage?['coverage','issue']:[])])||
     !verdicts.includes(value.verdict as GroundingReview['verdict']))return null;
  const verdict=value.verdict as GroundingReview['verdict'];
  const coverage=requireCoverage?value.coverage as GroundingReview['coverage']:undefined;
- if(requireCoverage&&!coverageValues.includes(coverage as typeof coverageValues[number]))return null;
- if(verdict!=='supported')return value.claims===null&&(!requireCoverage||coverage==='not_applicable')?{verdict,claims:[],...(coverage?{coverage}:{})}:null;
+ const issue=requireCoverage?value.issue as GroundingReviewIssue:undefined;
+ if(requireCoverage&&(!coverageValues.includes(coverage as typeof coverageValues[number])||!reviewIssues.includes(issue as GroundingReviewIssue)))return null;
+ if(verdict!=='supported')return value.claims===null&&(!requireCoverage||coverage==='not_applicable'&&issue!=='none')?{verdict,claims:[],...(coverage?{coverage}:{}),...(issue?{issue}:{})}:null;
+ if(requireCoverage&&coverage==='complete'&&issue!=='none')return null;
  const keys=unitKeys(count);
  if(!exact(value.claims,keys))return null;
  const byId=new Map(spans.map(span=>[span.id,span]));
@@ -110,5 +114,5 @@ export function parseIndexedGroundingReview(value:unknown,count:number,spans:rea
   }
   claims.push({unit:index+1,kind:claim.kind as GroundingClaim['kind'],refs});
  }
- return {verdict,claims,...(coverage?{coverage}:{})};
+ return {verdict,claims,...(coverage?{coverage}:{}),...(issue?{issue}:{})};
 }

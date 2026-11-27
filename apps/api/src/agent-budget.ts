@@ -21,7 +21,7 @@ export type AgentMetrics={
  steps:number;searches:number;repeatedSearches:number;searchFailures:number;
  toolCalls:number;promptTokens:number;completionTokens:number;
  durationMs:number;stopReason:AgentStopReason;
- verifierChecks?:number;verifierRejections?:number;verifierRepairs?:number;completeProcedureVerified?:boolean;recoverySearches?:number;literalFallbacks?:number;lastVerifierFailure?:GroundingFailure;
+ verifierChecks?:number;verifierRejections?:number;verifierRepairs?:number;sourceAlignedReviews?:number;completeProcedureVerified?:boolean;recoverySearches?:number;literalFallbacks?:number;lastVerifierFailure?:GroundingFailure;
  verifierFailures?:Partial<Record<GroundingFailure,number>>;fallbackReason?:GroundingFailure|AgentStopReason;
  knowledgeSelectionAttempts?:number;knowledgeSelections?:number;knowledgeSelectionRejections?:number;knowledgeSelectionInvalidations?:number;
  selectedKnowledgeVersions?:number;knowledgeSufficiency?:'sufficient'|'partial';

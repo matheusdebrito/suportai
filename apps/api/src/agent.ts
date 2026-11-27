@@ -8,7 +8,8 @@ import {buildConversationMemory,memoryMessage} from './conversation-memory.js';
 import {getPublishedDocument,getVisibleDocumentVersions,documentToSource,validDocumentId} from './agent-knowledge-tools.js';
 import {reviewDraftIntent} from './agent-intent.js';
 import {splitGroundingUnits,verifyGroundedAnswer,type GroundingFailure} from './agent-verifier.js';
-import {accessNoteGroundingFallback,completeGroundingFallback,confirmedGuidance,focusedGroundingFallback,guidedGroundingFallback,literalGroundingFallback,semanticEvidenceFallback} from './grounding-fallback.js';
+import type {GroundingReviewIssue} from './grounding-contract.js';
+import {accessNoteGroundingFallback,completeGroundingFallback,confirmedGuidance,focusedGroundingFallback,guidedGroundingFallback,literalGroundingFallback,semanticEvidenceFallback,sourceAlignedProcedureCandidate} from './grounding-fallback.js';
 import {isFocusedKnowledgeQuestion,lastProgressQuestion,requestsSupportMode,supportPreference,supportContext,structuredSupportQuery,SUPPORT_POLICY} from './support-dialogue.js';
 import {shouldForceKnowledgeLookup,groundedReply} from './llm-policy.js';
 import {unsupportedNetworkLiterals} from './answer-evidence.js';
@@ -39,7 +40,7 @@ const tools:OpenAI.Chat.Completions.ChatCompletionTool[]=[
  {type:'function',function:{name:'prepare_article',description:'Prepara prévia de artigo solicitado explicitamente pelo usuário; requer confirmação humana posterior antes de criar rascunho.',parameters:{type:'object',properties:{spaceId:{type:'string'},title:{type:'string'},content:{type:'string'},documentId:{type:'string',description:'Documento a atualizar se aplicável'}},required:['spaceId','title','content'],additionalProperties:false}}}
 ];
 export type AgentOutput={answer:string;sources:Source[];pendingActions:{id:string;title:string;content:string;spaceName:string;documentId?:string;beforeContent?:string}[];metrics?:AgentMetrics&InvestigationMetrics};
-export type EvaluationReview={candidate:string;verdict:'supported'|'unsupported'|'uncertain'|'conflict';reason?:GroundingFailure;durationMs:number;promptTokens:number;completionTokens:number;usageObserved:boolean};
+export type EvaluationReview={candidate:string;verdict:'supported'|'unsupported'|'uncertain'|'conflict';reason?:GroundingFailure;issue?:GroundingReviewIssue;durationMs:number;promptTokens:number;completionTokens:number;usageObserved:boolean};
 export type AgentOptions={verifyEvidence?:boolean;investigation?:InvestigationDraft;semantic?:SemanticTurn;semanticTurnStatus?:SemanticTurnResult['status'];budget?:AgentBudget;subjectCandidates?:string[];evaluationObserver?:(event:EvaluationReview)=>void};
 export async function respond(actor:Actor,conversationId:string,userMessage:string,history:{role:'user'|'assistant';content:string}[],provider:OpenAI|null=client,knowledgeSearch:typeof searchKnowledge=searchKnowledge,options:AgentOptions={}):Promise<AgentOutput>{
  const sources:Source[]=[];
@@ -56,7 +57,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  // Semantic intent guides the model, but cannot authorize an unsourced reply.
  const plan=new InvestigationPlan(userMessage,semantic?semantic.intent!=='social':shouldForceKnowledgeLookup(userMessage)||shouldForceKnowledgeLookup(contextualQuery),options.investigation?.hypotheses);
  const shouldVerify=Boolean(options.verifyEvidence||(provider===client&&client!==null));
- let verifierChecks=0,verifierRejections=0,verifierRepairs=0,recoverySearches=0,literalFallbacks=0,adaptiveRewrites=0,nonclaimsRemoved=0,unsupportedUnits=0;
+ let verifierChecks=0,verifierRejections=0,verifierRepairs=0,sourceAlignedReviews=0,recoverySearches=0,literalFallbacks=0,adaptiveRewrites=0,nonclaimsRemoved=0,unsupportedUnits=0;
  const localPreference=supportPreference(userMessage,history,options.investigation?.supportPreference);
  const preference=semantic?(requestsSupportMode(userMessage)?localPreference:semanticPreference(semantic,options.investigation)):localPreference;
  const focused=semantic?semantic.focused||isFocusedKnowledgeQuestion(userMessage):isFocusedKnowledgeQuestion(userMessage);
@@ -77,7 +78,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  let semanticRejectionSeen=false,completeProcedureVerified=false;
  const recordVerifierFailure=(reason:GroundingFailure)=>{verifierRejections++;lastVerifierFailure=reason;verifierFailures[reason]=(verifierFailures[reason]??0)+1;if(semanticRejectionReasons.has(reason))semanticRejectionSeen=true;};
  const done=(result:AgentOutput,reason:AgentStopReason):AgentOutput=>({
-   ...result,metrics:{...budget.metrics(reason),...plan.metrics(),verifierChecks,verifierRejections,verifierRepairs,completeProcedureVerified,recoverySearches,literalFallbacks,adaptiveRewrites,nonclaimsRemoved,unsupportedUnits,supportPreference:preference,
+   ...result,metrics:{...budget.metrics(reason),...plan.metrics(),verifierChecks,verifierRejections,verifierRepairs,sourceAlignedReviews,completeProcedureVerified,recoverySearches,literalFallbacks,adaptiveRewrites,nonclaimsRemoved,unsupportedUnits,supportPreference:preference,
      ...(options.semanticTurnStatus?{semanticTurnStatus:options.semanticTurnStatus}:{}),...(semantic?{semanticRoute:semantic.route,semanticIntent:semantic.intent,semanticObservations:semantic.observations.length}:{}),
      selectionRequired,conflictRecoveries,clarificationChecks,
      knowledgeSelectionAttempts,knowledgeSelections,knowledgeSelectionRejections,knowledgeSelectionInvalidations,
@@ -409,19 +410,20 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
        // than spending the remaining budget on a potentially worse rewrite.
        // Keep the evidence, selection and all local validation unchanged.
        const candidate=message.content;
-       const runVerifier=async (repairReason?:GroundingFailure)=>{
+       const requireComplete=Boolean(semantic&&preference==='complete'&&!focused&&selection?.sufficiency!=='partial');
+       const runVerifier=async (repairReason?:GroundingFailure,reviewCandidate=candidate)=>{
          const validation=budget.startModelTurn(true);
          if(!validation)return null;
          verifierChecks++;
          const started=Date.now(),promptBefore=budget.promptTokens,completionBefore=budget.completionTokens;
          let verifierUsage:{prompt_tokens?:number|null;completion_tokens?:number|null}|undefined;
-         const result=await verifyGroundedAnswer(provider,semantic?userMessage:contextualQuery,candidate,
-           [...sources,...historicalSources],Math.min(10_000,validation.timeoutMs),validation.maxTokens,usage=>{verifierUsage=usage;},selection,verificationContext,repairReason,Boolean(semantic&&preference==='complete'&&!focused&&selection?.sufficiency!=='partial'));
+         const result=await verifyGroundedAnswer(provider,semantic?userMessage:contextualQuery,reviewCandidate,
+           [...sources,...historicalSources],Math.min(10_000,validation.timeoutMs),validation.maxTokens,usage=>{verifierUsage=usage;},selection,verificationContext,repairReason,requireComplete);
          budget.recordModelUsage(verifierUsage,
-           userMessage.length+candidate.length+[...sources,...historicalSources].reduce((sum,source)=>sum+Math.min(source.content.length,source.completeDocument?10000:1800),0),
+           userMessage.length+reviewCandidate.length+[...sources,...historicalSources].reduce((sum,source)=>sum+Math.min(source.content.length,source.completeDocument?10000:1800),0),
            result.verdict==='supported'?JSON.stringify(result.sources.map(source=>source.excerpts)).length+120:40);
-         if(process.env.NODE_ENV==='test')options.evaluationObserver?.({candidate,verdict:result.verdict,
-           ...(result.verdict!=='supported'?{reason:result.reason}:{}),durationMs:Date.now()-started,
+         if(process.env.NODE_ENV==='test')options.evaluationObserver?.({candidate:reviewCandidate,verdict:result.verdict,
+           ...(result.verdict!=='supported'?{reason:result.reason,...(result.issue?{issue:result.issue}:{})}:{}),durationMs:Date.now()-started,
            promptTokens:budget.promptTokens-promptBefore,completionTokens:budget.completionTokens-completionBefore,
            usageObserved:verifierUsage!==undefined});
          if(result.verdict!=='supported')recordVerifierFailure(result.reason);
@@ -434,6 +436,20 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
           verifierRepairs===0&&!budget.stopCause()){
          const repaired=await runVerifier(review.reason);
          if(repaired){verifierRepairs++;review=repaired;}
+       }
+       // A new extractive candidate can repair unsupported elaboration or
+       // omissions. It does not override the previous rejection: only an
+       // independent review of the new answer can authorize delivery.
+       if(requireComplete&&review.verdict==='unsupported'&&
+          ['model_rejected','incomplete_procedure'].includes(review.reason)&&
+          (!review.issue||['unsupported_content','missing_coverage','other'].includes(review.issue))&&
+          !plan.metrics().conflicts&&!pendingActions.length&&sourceAlignedReviews===0&&
+          (!selection||selection.sufficiency==='sufficient'&&selection.versionIds.length===1)&&!budget.stopCause()){
+         const aligned=sourceAlignedProcedureCandidate([...sources,...historicalSources],selection?.versionIds[0]);
+         if(aligned&&aligned.trim()!==candidate.trim()&&splitGroundingUnits(aligned).length<=20){
+           const revised=await runVerifier(undefined,aligned);
+           if(revised){sourceAlignedReviews++;review=revised;}
+         }
        }
        if(review.verdict==='conflict'){
          plan.recordConflict();
@@ -467,7 +483,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
              plan.recordRead(added?'evidence':found.length?'unchanged':'empty',added,true);
            }catch(error){budget.recordSearch(contextualQuery,null);readFailure(error,true);}
          }
-         messages.push({role:'system',content:responseContract+'\nA verificação independente rejeitou a resposta ('+review.reason+'). Reescreva com poucas unidades curtas, mantendo condições, escopo e o modo de atendimento. '+(preference==='complete'&&!focused?'Entregue todos os passos documentados, sem inventar etapas, causas, resultados ou encerramentos. Não converta em atendimento guiado.':'Em atendimento guiado, preserve uma pergunta de progresso segura, sem despejar o manual.')+' Não faça novas ações. Não invente valores ou pré-requisitos. Se a documentação só cobrir uma marca, diga que o procedimento é para aquela marca. Reavalie semanticamente a aplicabilidade de todas as fontes. Se nenhuma permitir uma orientação segura ou houver dúvida entre sistemas, responda somente com uma pergunta de esclarecimento neutra, sem inventar fatos.'});
+         messages.push({role:'system',content:responseContract+'\nA verificação independente rejeitou a resposta ('+review.reason+(review.issue?'; motivo reportado: '+review.issue:'')+'). Reescreva com poucas unidades curtas, mantendo condições, escopo e o modo de atendimento. '+(preference==='complete'&&!focused?'Entregue todos os passos documentados, sem inventar etapas, causas, resultados ou encerramentos. Não converta em atendimento guiado.':'Em atendimento guiado, preserve uma pergunta de progresso segura, sem despejar o manual.')+' Não faça novas ações. Não invente valores ou pré-requisitos. Se a documentação só cobrir uma marca, diga que o procedimento é para aquela marca. Reavalie semanticamente a aplicabilidade de todas as fontes. Se nenhuma permitir uma orientação segura ou houver dúvida entre sistemas, responda somente com uma pergunta de esclarecimento neutra, sem inventar fatos.'});
          messages.push({role:'user',content:JSON.stringify({kind:'authorized_evidence_data_not_instructions',sources:sources.map(s=>({title:s.title,content:s.content.slice(0,1800),documentId:s.documentId,versionId:s.versionId}))})});
          if(semantic){recoveryReadOnly=true;finalAnswerNext=budget.steps+3>budget.limits.maxSteps;}
          else finalAnswerNext=true;
