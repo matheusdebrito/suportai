@@ -130,3 +130,12 @@ test('focused fallback rejects personal, mismatched and conflicting values',()=>
  assert.equal(focusedGroundingFallback('Qual a senha?',[{...phone,content:'Use a senha padrão admin.\nUse a senha padrão root.'}]),null);
  assert.equal(focusedGroundingFallback('A senha pode ser Admin?',[phone]),null);
 });
+
+
+test('guided recovery preserves headings for unmarked prose and rejects interleaved conditions',()=>{
+ const phone={...source,title:'Telefone de laboratório',content:'# Etapa inicial\nConsulte o IP.\nAbra o navegador.\n# Configuração\nAtive a conta SIP.'};
+ const first=guidedGroundingFallback('configurar telefone',[phone]);
+ assert.ok(first);assert.match(first.answer,/Etapa inicial/);assert.match(first.answer,/Consulte o IP/);assert.doesNotMatch(first.answer,/Ative a conta/);
+ const ambiguous={...phone,content:'1. Abra o compartimento.\nSomente se estiver desligado.\n2. Confira o visor.'};
+ assert.equal(guidedGroundingFallback('configurar telefone',[ambiguous]),null);
+});

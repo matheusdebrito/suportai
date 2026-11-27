@@ -74,3 +74,6 @@ Fallback is now attempted for generation transport failures, interruption, refus
 
 ## Harness telemetry checkpoint
 Test-only agentResponder wrapper now captures real agent metrics, actual retrieval rankings and verifier candidate/outcome/timing/usage per turn. Production HTTP response unchanged. The phone episode asserts capture exists. Previous baseline remains unchanged and lacks per-turn telemetry; no fabricated historical values. Next: expand synthetic episodes, compare comparable baseline fields, verify CI and execute real evaluation where explicitly authorized.
+
+## Expanded episode checkpoint
+CI on 191308a failed one regression: heading-based prose without bullets could no longer recover a guided first stage. Restored section-aware unmarked prose while rejecting ambiguous interleaved conditions. Added five opt-in real HTTP episodes (18 turns) for negative progression, RIS/ERP switch and resume, scanner focus/mode, revocation and restricted knowledge; fixture-only retrieval checks and chunk ranking metrics. Previous phone baseline unchanged. Pending new CI, actual real execution and human review.

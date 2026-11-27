@@ -30,12 +30,12 @@ function eligibleSource(question:string,sources:Source[],allowGeneric=false):Sou
  if(!terms.length&&!allowGeneric)return null;
  // Require all specific terms in the retrieved document, and one in the title.
  // Never infer applicability solely from vector similarity or a generic word.
- const title=words(current[0].title);
- const body=words(current.map(s=>s.content).join(' '));
- if(terms.length&&(!terms.some(term=>hasLexeme(title,term))||terms.some(term=>!hasLexeme(title,term)&&!hasLexeme(body,term))))return null;
- // A single complete retrieved passage; don't splice chunks or truncate steps.
  const best=current.find(s=>s.ordinal===-1&&s.completeDocument===true&&s.content.length<=3500)??current.find(s=>s.ordinal===0&&s.completeDocument!==false&&s.content.length<=1100);
  if(!best||best.content.trim().length<20)return null;
+ const title=words(best.title);
+ const body=words(best.content);
+ if(terms.length&&(!terms.some(term=>hasLexeme(title,term))||terms.some(term=>!hasLexeme(title,term)&&!hasLexeme(body,term))))return null;
+ // Never rely on a different chunk to justify applicability of this passage.
  return best;
 }
 /** Not a synthesized answer. Return one complete retrieved passage, explicitly
@@ -105,19 +105,38 @@ const heading=/^#{1,6}\s+(.+)$/;
 const prerequisite=/\b(?:antes de|somente|apenas se|se |caso |desde que|nao |nunca|requisito|condicao|obrigatorio|necessario|depois de)\b/i;
 type Stage={scope:string[];steps:string[]};
 function guidedStages(content:string):Stage[]{
- const lines=contentLines(content);
- if(!lines.some(line=>bullet.test(line)))return lines.length<=3?[{scope:[],steps:lines}]:[];
- const stages:Stage[]=[];
- let global:string[]=[],scope:string[]=[],steps:string[]=[];
- const flush=()=>{if(steps.length){stages.push({scope:[...global,...scope],steps});steps=[];}};
+ const lines=contentLines(content),hasBullets=lines.some(line=>bullet.test(line)),hasHeadings=lines.some(line=>heading.test(line));
+ if(!hasBullets&&!hasHeadings)return lines.length<=3?[{scope:[],steps:lines}]:[];
+ const sections:{heading?:string;lines:string[]}[]=[];
+ let section:{heading?:string;lines:string[]}={lines:[]};
  for(const line of lines){
-  if(heading.test(line)){flush();scope=[line];continue;}
-  if(!bullet.test(line)){flush();if(!stages.length&&!scope.length)global.push(line);else scope.push(line);continue;}
-  // A condition or prerequisite starts a fresh group and is carried to later stages.
-  if(prerequisite.test(normal(line))){flush();scope.push(line);continue;}
-  steps.push(line);if(steps.length===2)flush();
+  if(heading.test(line)){
+   if(section.lines.length)sections.push(section);
+   section={heading:line,lines:[]};
+  }else section.lines.push(line);
  }
- flush();
+ if(section.lines.length)sections.push(section);
+ const stages:Stage[]=[],global:string[]=[];
+ for(const part of sections){
+  if(!part.heading&&hasHeadings&&!part.lines.some(line=>bullet.test(line))){global.push(...part.lines);continue;}
+  const listed=part.lines.some(line=>bullet.test(line));
+  const scope=part.heading?[part.heading]:[];
+  const steps:string[]=[];
+  for(const line of part.lines){
+   const isCondition=prerequisite.test(normal(line));
+   const isStep=listed?bullet.test(line):true;
+   if(!isStep||isCondition){
+    // A prerequisite after an action may qualify that earlier action.
+    // Do not split/reorder ambiguous interleaved prose or conditions.
+    if(steps.length)return [];
+    scope.push(line);
+   }else steps.push(line);
+  }
+  if(!steps.length){global.push(...scope);continue;}
+  const carried=[...global,...scope];
+  for(let i=0;i<steps.length;i+=2)stages.push({scope:carried,steps:steps.slice(i,i+2)});
+  global.push(...scope.filter(line=>!heading.test(line)&&prerequisite.test(normal(line))));
+ }
  return stages;
 }
 /** Do not present a later stage without explicit confirmation of the previous

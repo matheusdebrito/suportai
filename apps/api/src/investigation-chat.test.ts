@@ -1,5 +1,7 @@
 import {captureCalibrationCase} from './calibration-capture.js';
 import {createEpisodeCapture,type TurnCapture} from './episode-harness.js';
+import {expandedEpisodes} from './episode-fixtures.js';
+import {chunks} from './knowledge.js';
 
 import {after,test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -167,7 +169,7 @@ if(!process.env.TEST_DATABASE_URL){
     const {actor,headers}=await createSession();
     const source=await createPublishedSource(actor.id,'SHARED');
     const article='Configuração do telefone de laboratório.\n1. Consulte o IP no menu Status.\n2. Abra o IP no navegador.\n3. Use a senha padrão admin.\n4. Ative Account Active: YES.';
-    const capture=createEpisodeCapture(()=>[source.version],()=>new Set([source.version]));
+    const capture=createEpisodeCapture(()=>[source.version],()=>new Set([source.version]),()=>[source.version+':0']);
     const app=await buildApp({agentResponder:capture.agentResponder});
     try{
       await query('UPDATE documents SET title=$2 WHERE id=$1',[source.document,'Telefone de laboratório']);
@@ -198,6 +200,79 @@ if(!process.env.TEST_DATABASE_URL){
       assert.ok(turns[4].sources.length>0,'Complete procedure must cite evidence');
       assert.equal(turns.at(-1)?.states[0].support_preference,'complete');
     }finally{await app.close();await query('DELETE FROM documents WHERE id=$1',[source.document]);await query('DELETE FROM users WHERE id=$1',[actor.id]);}
+  });
+
+  test('expanded real HTTP support episode matrix',{skip:process.env.RUN_REAL_EPISODES!=='1',timeout:900000},async()=>{
+    assert.ok(client,'External AI authorization is required');
+    const episodes:unknown[]=[],failures:string[]=[];
+    for(const fixture of expandedEpisodes){
+      const {actor,headers}=await createSession();
+      const docs=new Map<string,{document:string;version:string;article:string;ordinals:number[]}>();
+      const allowed=new Set<string>();
+      let expected:string[]=[],expectedChunks:string[]=[];
+      const capture=createEpisodeCapture(()=>expected,()=>allowed,()=>expectedChunks);
+      const app=await buildApp({agentResponder:capture.agentResponder});
+      const turns:unknown[]=[],previous:string[]=[];
+      const investigationByDoc=new Map<string,string>();
+      try{
+        for(const doc of fixture.documents){
+          const source=await createPublishedSource(actor.id,doc.restricted?'RESTRICTED':'SHARED');
+          const pieces=chunks(doc.article),ordinals=pieces.map((_,i)=>i);
+          docs.set(doc.id,{...source,article:doc.article,ordinals});
+          if(!doc.restricted)allowed.add(source.version);
+          await query('UPDATE documents SET title=$2 WHERE id=$1',[source.document,doc.title]);
+          await query('UPDATE document_versions SET content=$2 WHERE id=$1',[source.version,doc.article]);
+          for(const [ordinal,content] of pieces.entries()){
+            const embedding=await embedText(content);assert.ok(embedding);
+            await query('INSERT INTO knowledge_chunks(version_id,ordinal,content,embedding) VALUES($1,$2,$3,$4::vector)',[source.version,ordinal,content,JSON.stringify(embedding)]);
+          }
+        }
+        const conversation=await openConversation(app,headers);
+        let lastId:string|undefined;
+        for(const turn of fixture.turns){
+          if(turn.archiveBefore){
+            const doc=docs.get(turn.archiveBefore)!;
+            await query('UPDATE documents SET archived_at=now() WHERE id=$1',[doc.document]);
+            allowed.delete(doc.version);
+          }
+          const target=turn.expectedDocument?docs.get(turn.expectedDocument):undefined;
+          expected=target?[target.version]:[];expectedChunks=target?target.ordinals.map(o=>target.version+':'+o):[];
+          const response=await postTurn(app,headers,conversation,turn.message);
+          const observed=capture.take();
+          assert.equal(response.statusCode,200,response.body);
+          const result=response.json<{id:string;answer:string;sources:{versionId:string;ordinal:number}[]}>();
+          const saved=await query('SELECT investigation_id FROM messages WHERE id=$1',[result.id]);
+          const investigationId=saved.rows[0]?.investigation_id as string|undefined;
+          const checks:string[]=[];
+          if(result.sources.some(source=>!expected.includes(source.versionId)))checks.push('unexpected_final_source');
+          if(target&&!turn.mayClarify&&!result.sources.length)checks.push('missing_expected_source');
+          if(turn.complete&&target&&!result.sources.some(source=>source.ordinal===-1))checks.push('missing_complete_document');
+          if((turn.forbidden??[]).some(marker=>result.answer.includes(marker)))checks.push('forbidden_content');
+          if(!observed&&!turn.mayClarify)checks.push('missing_agent_capture');
+          if(turn.context==='same'&&lastId&&investigationId!==lastId)checks.push('investigation_changed');
+          if(turn.context==='new'&&lastId&&investigationId===lastId)checks.push('investigation_not_switched');
+          if(turn.context==='resume'&&turn.expectedDocument&&investigationId!==investigationByDoc.get(turn.expectedDocument))checks.push('investigation_not_resumed');
+          if(turn.expectedDocument&&investigationId&&!investigationByDoc.has(turn.expectedDocument))investigationByDoc.set(turn.expectedDocument,investigationId);
+          if(investigationId)lastId=investigationId;
+          turns.push({message:turn.message,answer:result.answer,sources:result.sources,investigationId,capture:observed??null,
+            quality:episodeQuality(result.answer,target?.article??'',previous),checks});
+          previous.push(result.answer);
+          failures.push(...checks.map(check=>fixture.id+':'+turns.length+':'+check));
+        }
+      }catch(error){failures.push(fixture.id+':'+(error instanceof Error?error.name:'error'));throw error;}
+      finally{
+        episodes.push({id:fixture.id,turns});
+        await app.close();
+        for(const doc of docs.values())await query('DELETE FROM documents WHERE id=$1',[doc.document]);
+        await query('DELETE FROM users WHERE id=$1',[actor.id]);
+        writeFileSync(process.env.EXPANDED_EPISODE_REPORT_PATH||'episode-expanded-report.json',JSON.stringify({
+          mode:'real-http-expanded',commit:process.env.EVALUATION_COMMIT||null,
+          model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',embeddingModel:process.env.OPENAI_EMBED_MODEL||'text-embedding-3-small',
+          temperature:AGENT_GENERATION_TEMPERATURE,limits:resolveAgentLimits(),corpusHash:createHash('sha256').update(JSON.stringify(expandedEpisodes)).digest('hex'),
+          episodes,failures,humanReview:'pending'},null,2));
+      }
+    }
+    assert.deepEqual(failures,[]);
   });
 
   test('chat hides a reply derived from a source after that source is archived',async()=>{
