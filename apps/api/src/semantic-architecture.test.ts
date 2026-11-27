@@ -369,3 +369,19 @@ test('a partial source selection cannot mark unrelated or incomplete guidance as
  assert.deepEqual(await verifyGroundedAnswer(scripted([wrongScope]),'Me dê o procedimento completo','Abra o painel.',[doc],1000,1000,undefined,selection,undefined,undefined,true),
   {verdict:'unsupported',reason:'model_rejected',issue:'wrong_scope'});
 });
+
+test('explicit complete mode takes precedence over conflicting focus and recovers a documented equipment-default step',async()=>{
+ const doc={...green,ordinal:-1,completeDocument:true,content:'1. Abra o painel.\n2. Use a senha padrão demo-default.\n3. Confirme a opção.'};
+ const calls:any[]=[];
+ const result=await respond(actor,randomUUID(),'Me dê o passo a passo completo',[],scripted([
+  tool('search_knowledge',{query:'controlador Verde procedimento'}),
+  assistant('Abra o painel.'),
+  assistant(JSON.stringify({verdict:'unsupported',coverage:'not_applicable',issue:'missing_coverage',claims:null})),
+  assistant(JSON.stringify({verdict:'supported',issue:'none'}))
+ ],calls),async()=>[doc],{semantic:semantic({mode:'complete',focused:true}),budget:plannedBudget(),verifyEvidence:true});
+ assert.equal(result.metrics?.completeProcedureVerified,true);
+ assert.equal(result.metrics?.sourceAlignedReviews,1);
+ assert.equal(result.answer,doc.content+' [1]');
+ assert.equal(calls.at(-1).response_format.json_schema.name,'source_aligned_review_v1');
+ assert.deepEqual(result.sources[0].excerpts,[doc.content]);
+});

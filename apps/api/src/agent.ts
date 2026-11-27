@@ -444,6 +444,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          return result;
        };
        let review=await runVerifier();
+       let alignedAccepted=false;
        if(!review)return budgetReply(budget.stopCause()??'token_budget');
        if(semantic&&review.verdict!=='supported'&&review.verdict!=='conflict'&&
           ['claim_shape','invalid_reference','missing_reference','schema_invalid','invalid_json'].includes(review.reason)&&
@@ -462,7 +463,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          const aligned=sourceAlignedProcedureCandidate([...sources,...historicalSources],selection?.versionIds[0]);
          if(aligned&&splitGroundingUnits(aligned).length<=20){
            const revised=await runVerifier(undefined,aligned,true);
-           if(revised){sourceAlignedReviews++;review=revised;}
+           if(revised){sourceAlignedReviews++;review=revised;alignedAccepted=revised.verdict==='supported';}
          }
        }
        if(review.verdict==='conflict'){
@@ -520,7 +521,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
           recordVerifierFailure('model_rejected');return fallbackReply();
         }
         let reviewedAnswer=review.answer;
-        if(preference==='complete'&&selection?.sufficiency!=='partial'){
+        if(!alignedAccepted&&preference==='complete'&&selection?.sufficiency!=='partial'){
           const progress=lastProgressQuestion(reviewedAnswer);
           if(progress){
             const completeSources=selection?.versionIds.length?[...sources,...historicalSources].filter(source=>source.historical||selection!.versionIds.includes(source.versionId)):[...sources,...historicalSources];

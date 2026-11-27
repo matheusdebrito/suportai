@@ -9,12 +9,13 @@
 param(
     [switch]$ApproveExternalAI,
     [switch]$SkipInstall,
-    [switch]$DatabaseSmoke
+    [switch]$DatabaseSmoke,
+    [switch]$ConversationOnly
 )
 $ErrorActionPreference = 'Stop'
 # Native nonzero exit codes are handled explicitly, including on PowerShell 7.
 $PSNativeCommandUseErrorActionPreference = $false
-if ($ApproveExternalAI -and $DatabaseSmoke) {
+if ($DatabaseSmoke -and ($ApproveExternalAI -or $ConversationOnly)) {
     Write-Host 'Escolha -ApproveExternalAI para avaliacao real ou -DatabaseSmoke para preparar bancos sem IA.'
     exit 2
 }
@@ -31,7 +32,7 @@ $dbPassword = $null
 $savedEnv = @{}
 $summary = [ordered]@{
     schemaVersion = 1
-    mode = $(if ($DatabaseSmoke) { 'database_smoke' } else { 'real' })
+    mode = $(if ($DatabaseSmoke) { 'database_smoke' } elseif ($ConversationOnly) { 'conversations_only' } else { 'real' })
     commit = $null
     chatModel = 'gpt-4.1-mini'
     embeddingModel = 'text-embedding-3-small'
@@ -39,6 +40,7 @@ $summary = [ordered]@{
     coverage = $null
     rag = $null
     comparisonComparable = $null
+    conversationalChecksPassed = $false
     automatedChecksPassed = $false
     humanReview = 'pending'
     status = 'failed'
@@ -228,10 +230,15 @@ try {
         } finally { Pop-Location }
 
         # Preserve reports and continue independent evaluations even if assertions fail.
-        Write-Host '4/5 - Avaliando os 100 casos positivos e 20 casos de seguranca do RAG...'
-        Set-EvalEnv 'DATABASE_URL' "$baseUrl/suportai_rag_eval"
-        Set-EvalEnv 'TEST_DATABASE_URL' "$baseUrl/suportai_rag_eval"
-        $summary.stages.rag = Invoke-Logged $npm @('run','rag:baseline','-w','@suportai/api','--',$corpus,(Join-Path $reportDir 'rag-report.json'),$commit) 'rag.log'
+        if ($ConversationOnly) {
+            Write-Host '4/5 - Corpus RAG ampliado omitido por solicitacao; homologacao integral permanece pendente.'
+            $summary.stages.rag = 'skipped_by_request'
+        } else {
+            Write-Host '4/5 - Avaliando os 100 casos positivos e 20 casos de seguranca do RAG...'
+            Set-EvalEnv 'DATABASE_URL' "$baseUrl/suportai_rag_eval"
+            Set-EvalEnv 'TEST_DATABASE_URL' "$baseUrl/suportai_rag_eval"
+            $summary.stages.rag = Invoke-Logged $npm @('run','rag:baseline','-w','@suportai/api','--',$corpus,(Join-Path $reportDir 'rag-report.json'),$commit) 'rag.log'
+        }
 
         Write-Host '5/5 - Comparando com o baseline e verificando cobertura...'
         if (Test-Path -LiteralPath $env:EPISODE_REPORT_PATH -PathType Leaf) {
@@ -270,10 +277,15 @@ try {
             }
         }
         if ($comparison) { $summary.comparisonComparable = $comparison.comparable }
-        $summary.automatedChecksPassed = ($summary.stages.episodes -eq 0 -and $summary.stages.rag -eq 0 -and
-            $summary.stages.comparison -eq 0 -and $coverageOk -and $expandedFailures -eq 0 -and $ragOk -and
+        $summary.conversationalChecksPassed = ($summary.stages.episodes -eq 0 -and
+            $summary.stages.comparison -eq 0 -and $coverageOk -and $expandedFailures -eq 0 -and
             $comparison.comparable -eq $true)
-        if ($summary.automatedChecksPassed) {
+        $summary.automatedChecksPassed = (-not $ConversationOnly -and $summary.conversationalChecksPassed -and
+            $summary.stages.rag -eq 0 -and $ragOk)
+        if ($ConversationOnly -and $summary.conversationalChecksPassed) {
+            $summary.status = 'conversational_checks_passed_full_validation_pending'
+            $exitCode = 0
+        } elseif ($summary.automatedChecksPassed) {
             $summary.status = 'automated_checks_passed_review_pending'
             $exitCode = 0
         } else { $summary.status = 'evaluation_requires_review' }
