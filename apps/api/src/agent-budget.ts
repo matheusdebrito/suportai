@@ -21,8 +21,14 @@ export type AgentMetrics={
  steps:number;searches:number;repeatedSearches:number;searchFailures:number;
  toolCalls:number;promptTokens:number;completionTokens:number;
  durationMs:number;stopReason:AgentStopReason;
- verifierChecks?:number;verifierRejections?:number;recoverySearches?:number;literalFallbacks?:number;lastVerifierFailure?:GroundingFailure;
- adaptiveRewrites?:number;supportPreference?:'adaptive'|'guided'|'complete';
+ verifierChecks?:number;verifierRejections?:number;verifierRepairs?:number;sourceAlignedReviews?:number;entailmentChecks?:number;entailmentRejections?:number;completeProcedureVerified?:boolean;recoverySearches?:number;literalFallbacks?:number;lastVerifierFailure?:GroundingFailure;
+ verifierFailures?:Partial<Record<GroundingFailure,number>>;fallbackReason?:GroundingFailure|AgentStopReason;
+ knowledgeSelectionAttempts?:number;knowledgeSelections?:number;knowledgeSelectionRejections?:number;knowledgeSelectionInvalidations?:number;
+ selectedKnowledgeVersions?:number;knowledgeSufficiency?:'sufficient'|'partial';
+ semanticTurnStatus?:'accepted'|'disabled'|'invalid'|'unavailable'|'budget';
+ semanticRoute?:'new'|'existing'|'standalone'|'uncertain';semanticIntent?:'knowledge'|'social'|'write'|'clarify';
+ semanticObservations?:number;selectionRequired?:number;conflictRecoveries?:number;clarificationChecks?:number;
+ adaptiveRewrites?:number;nonclaimsRemoved?:number;unsupportedUnits?:number;supportPreference?:'adaptive'|'guided'|'complete';
 };
 
 /** Limits are deliberately bounded; operators cannot configure unlimited agent calls. */

@@ -796,7 +796,7 @@ if(!process.env.TEST_DATABASE_URL){
    const comparisonRequests:OpenAI.Chat.Completions.ChatCompletionMessageParam[][]=[];
    const comparisonModel={chat:{completions:{create:async(request:OpenAI.Chat.Completions.ChatCompletionCreateParams)=>{
      comparisonRequests.push([...request.messages]);
-     if(request.response_format?.type==='json_object'){
+     if(request.response_format?.type==='json_schema'){
        const {evidence}=JSON.parse(String(request.messages[1].content)) as {evidence:{evidence:number;versionId:string}[]};
        const old=evidence.find(item=>item.versionId===newPdfVersion.versionId);
        const current=evidence.find(item=>item.versionId===newestDraft.versionId);

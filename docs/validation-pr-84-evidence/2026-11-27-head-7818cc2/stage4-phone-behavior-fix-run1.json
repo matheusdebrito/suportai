@@ -1,0 +1,594 @@
+{
+  "mode": "real-http",
+  "architecture": "semantic_turn_v1",
+  "model": "gpt-4.1-mini",
+  "embeddingModel": "text-embedding-3-small",
+  "temperature": 0.2,
+  "limits": {
+    "maxSteps": 8,
+    "maxSearches": 5,
+    "maxToolsPerStep": 4,
+    "maxSources": 12,
+    "maxElapsedMs": 60000,
+    "maxTokensPerCall": 1800,
+    "maxCompletionTokens": 9000,
+    "maxTotalTokens": 40000,
+    "maxRepeatedSearches": 2,
+    "maxSearchFailures": 2
+  },
+  "corpusHash": "669005f2f335bfe15218a29ac29a3c8b5a55cb9edcb3d67343db9b82f4657e43",
+  "commit": "5f700f98070f836d4cfdbe3837dfd32c625ea39f",
+  "ranking": {
+    "recall": 1,
+    "precision": 1,
+    "mrr": 1
+  },
+  "turns": [
+    {
+      "message": "Preciso configurar um telefone de laboratório",
+      "answer": "Para configurar o telefone de laboratório, siga esses passos: [1]\n\n1. Consulte o IP do telefone no menu Status.\n2. Abra esse IP no navegador de um computador conectado à mesma rede.\n3. Faça login usando a senha padrão \"admin\".\n4. Ative a opção \"Account Active\" para \"YES\". [1]\n\nQuer que eu te ajude com algum desses passos?",
+      "sources": [
+        {
+          "documentId": "f49cd376-d7b4-4d12-9790-a424328bd503",
+          "versionId": "a0f994e9-c476-4427-9a4c-187621707618",
+          "versionNumber": 1,
+          "title": "Telefone de laboratório",
+          "ordinal": 0,
+          "excerpts": [
+            "Configuração do telefone de laboratório.",
+            "1. Consulte o IP no menu Status.",
+            "2. Abra o IP no navegador.",
+            "3. Use a senha padrão admin.",
+            "4. Ative Account Active: YES."
+          ]
+        }
+      ],
+      "states": [
+        {
+          "id": "df92292b-475f-4030-898c-f58dfd2f4d28",
+          "topic": "configuração de telefone de laboratório",
+          "support_preference": "adaptive"
+        }
+      ],
+      "capture": {
+        "agentMetrics": {
+          "steps": 4,
+          "searches": 1,
+          "repeatedSearches": 0,
+          "searchFailures": 0,
+          "toolCalls": 1,
+          "promptTokens": 5957,
+          "completionTokens": 317,
+          "durationMs": 14362,
+          "stopReason": "answered",
+          "readAttempts": 1,
+          "readsWithNewEvidence": 1,
+          "evidenceCount": 1,
+          "emptyReads": 0,
+          "duplicateReads": 0,
+          "readTimeouts": 0,
+          "unavailableReads": 0,
+          "inaccessibleReads": 0,
+          "stalledSteps": 0,
+          "clarificationRequests": 0,
+          "conflicts": 0,
+          "blockedWriteRetries": 0,
+          "verifierChecks": 1,
+          "verifierRejections": 0,
+          "recoverySearches": 0,
+          "literalFallbacks": 0,
+          "adaptiveRewrites": 0,
+          "nonclaimsRemoved": 0,
+          "unsupportedUnits": 0,
+          "supportPreference": "adaptive",
+          "semanticTurnStatus": "accepted",
+          "semanticRoute": "new",
+          "semanticIntent": "knowledge",
+          "semanticObservations": 1,
+          "selectionRequired": 0,
+          "conflictRecoveries": 0,
+          "clarificationChecks": 0,
+          "knowledgeSelectionAttempts": 0,
+          "knowledgeSelections": 0,
+          "knowledgeSelectionRejections": 0,
+          "knowledgeSelectionInvalidations": 0,
+          "selectedKnowledgeVersions": 0,
+          "verifierFailures": {}
+        },
+        "retrieval": [
+          {
+            "ranked": [
+              {
+                "versionId": "a0f994e9-c476-4427-9a4c-187621707618",
+                "ordinal": 0,
+                "score": 1.3229934687089215
+              }
+            ],
+            "metrics": {
+              "recall": 1,
+              "precision": 1,
+              "mrr": 1
+            },
+            "chunkMetrics": {
+              "recall": 1,
+              "precision": 1,
+              "mrr": 1
+            }
+          }
+        ],
+        "review": [
+          {
+            "candidate": "Para configurar o telefone de laboratório, siga esses passos:\n\n1. Consulte o IP do telefone no menu Status.\n2. Abra esse IP no navegador de um computador conectado à mesma rede.\n3. Faça login usando a senha padrão \"admin\".\n4. Ative a opção \"Account Active\" para \"YES\".\n\nQuer que eu te ajude com algum desses passos?",
+            "verdict": "supported",
+            "durationMs": 9820,
+            "promptTokens": 1291,
+            "completionTokens": 151,
+            "usageObserved": true
+          }
+        ]
+      },
+      "quality": {
+        "literalOverlap": 0.019230769230769232,
+        "repeatedLines": 0,
+        "boilerplate": false,
+        "escapedMarkdown": false,
+        "partialWarning": false,
+        "sentenceCount": 9
+      }
+    },
+    {
+      "message": "sim",
+      "answer": "Pra configurar o telefone de laboratório, você tem que: [1]\n\n1. Consultar o IP no menu Status do telefone.\n2. Abrir esse IP no navegador do seu computador (tem que estar na mesma rede).\n3. Fazer login com a senha padrão \"admin\".\n4. Ativar a opção \"Account Active\" para \"YES\". [1]\n\nQuer que eu te guie em algum desses passos?",
+      "sources": [
+        {
+          "documentId": "f49cd376-d7b4-4d12-9790-a424328bd503",
+          "versionId": "a0f994e9-c476-4427-9a4c-187621707618",
+          "versionNumber": 1,
+          "title": "Telefone de laboratório",
+          "ordinal": 0,
+          "excerpts": [
+            "Configuração do telefone de laboratório.",
+            "1. Consulte o IP no menu Status.",
+            "2. Abra o IP no navegador.",
+            "3. Use a senha padrão admin.",
+            "4. Ative Account Active: YES."
+          ]
+        }
+      ],
+      "states": [
+        {
+          "id": "df92292b-475f-4030-898c-f58dfd2f4d28",
+          "topic": "configuração de telefone de laboratório",
+          "support_preference": "adaptive"
+        }
+      ],
+      "capture": {
+        "agentMetrics": {
+          "steps": 4,
+          "searches": 1,
+          "repeatedSearches": 0,
+          "searchFailures": 0,
+          "toolCalls": 1,
+          "promptTokens": 6659,
+          "completionTokens": 326,
+          "durationMs": 7097,
+          "stopReason": "answered",
+          "readAttempts": 1,
+          "readsWithNewEvidence": 1,
+          "evidenceCount": 1,
+          "emptyReads": 0,
+          "duplicateReads": 0,
+          "readTimeouts": 0,
+          "unavailableReads": 0,
+          "inaccessibleReads": 0,
+          "stalledSteps": 0,
+          "clarificationRequests": 0,
+          "conflicts": 0,
+          "blockedWriteRetries": 0,
+          "verifierChecks": 1,
+          "verifierRejections": 0,
+          "recoverySearches": 0,
+          "literalFallbacks": 0,
+          "adaptiveRewrites": 0,
+          "nonclaimsRemoved": 0,
+          "unsupportedUnits": 0,
+          "supportPreference": "adaptive",
+          "semanticTurnStatus": "accepted",
+          "semanticRoute": "existing",
+          "semanticIntent": "knowledge",
+          "semanticObservations": 1,
+          "selectionRequired": 0,
+          "conflictRecoveries": 0,
+          "clarificationChecks": 0,
+          "knowledgeSelectionAttempts": 0,
+          "knowledgeSelections": 0,
+          "knowledgeSelectionRejections": 0,
+          "knowledgeSelectionInvalidations": 0,
+          "selectedKnowledgeVersions": 0,
+          "verifierFailures": {}
+        },
+        "retrieval": [
+          {
+            "ranked": [
+              {
+                "versionId": "a0f994e9-c476-4427-9a4c-187621707618",
+                "ordinal": 0,
+                "score": 1.651003877039614
+              }
+            ],
+            "metrics": {
+              "recall": 1,
+              "precision": 1,
+              "mrr": 1
+            },
+            "chunkMetrics": {
+              "recall": 1,
+              "precision": 1,
+              "mrr": 1
+            }
+          }
+        ],
+        "review": [
+          {
+            "candidate": "Pra configurar o telefone de laboratório, você tem que:\n\n1. Consultar o IP no menu Status do telefone.\n2. Abrir esse IP no navegador do seu computador (tem que estar na mesma rede).\n3. Fazer login com a senha padrão \"admin\".\n4. Ativar a opção \"Account Active\" para \"YES\".\n\nQuer que eu te guie em algum desses passos?",
+            "verdict": "supported",
+            "durationMs": 2912,
+            "promptTokens": 1429,
+            "completionTokens": 151,
+            "usageObserved": true
+          }
+        ]
+      },
+      "quality": {
+        "literalOverlap": 0,
+        "repeatedLines": 0,
+        "boilerplate": false,
+        "escapedMarkdown": false,
+        "partialWarning": false,
+        "sentenceCount": 9
+      }
+    },
+    {
+      "message": "não entendi a parte da senha",
+      "answer": "A senha padrão para acessar a configuração do telefone de laboratório é \"admin\". Você usa essa senha quando abrir o IP do telefone no navegador para fazer login. [1] Quer ajuda pra chegar nessa tela de login?",
+      "sources": [
+        {
+          "documentId": "f49cd376-d7b4-4d12-9790-a424328bd503",
+          "versionId": "a0f994e9-c476-4427-9a4c-187621707618",
+          "versionNumber": 1,
+          "title": "Telefone de laboratório",
+          "ordinal": 0,
+          "excerpts": [
+            "Use a senha padrão admin.",
+            "Abra o IP no navegador."
+          ]
+        }
+      ],
+      "states": [
+        {
+          "id": "df92292b-475f-4030-898c-f58dfd2f4d28",
+          "topic": "configuração de telefone de laboratório",
+          "support_preference": "adaptive"
+        }
+      ],
+      "capture": {
+        "agentMetrics": {
+          "steps": 4,
+          "searches": 1,
+          "repeatedSearches": 0,
+          "searchFailures": 0,
+          "toolCalls": 1,
+          "promptTokens": 7060,
+          "completionTokens": 207,
+          "durationMs": 7266,
+          "stopReason": "answered",
+          "readAttempts": 1,
+          "readsWithNewEvidence": 1,
+          "evidenceCount": 1,
+          "emptyReads": 0,
+          "duplicateReads": 0,
+          "readTimeouts": 0,
+          "unavailableReads": 0,
+          "inaccessibleReads": 0,
+          "stalledSteps": 0,
+          "clarificationRequests": 0,
+          "conflicts": 0,
+          "blockedWriteRetries": 0,
+          "verifierChecks": 1,
+          "verifierRejections": 0,
+          "recoverySearches": 0,
+          "literalFallbacks": 0,
+          "adaptiveRewrites": 0,
+          "nonclaimsRemoved": 0,
+          "unsupportedUnits": 0,
+          "supportPreference": "adaptive",
+          "semanticTurnStatus": "accepted",
+          "semanticRoute": "existing",
+          "semanticIntent": "clarify",
+          "semanticObservations": 1,
+          "selectionRequired": 0,
+          "conflictRecoveries": 0,
+          "clarificationChecks": 0,
+          "knowledgeSelectionAttempts": 0,
+          "knowledgeSelections": 0,
+          "knowledgeSelectionRejections": 0,
+          "knowledgeSelectionInvalidations": 0,
+          "selectedKnowledgeVersions": 0,
+          "verifierFailures": {}
+        },
+        "retrieval": [
+          {
+            "ranked": [
+              {
+                "versionId": "a0f994e9-c476-4427-9a4c-187621707618",
+                "ordinal": 0,
+                "score": 1.65652403460532
+              }
+            ],
+            "metrics": {
+              "recall": 1,
+              "precision": 1,
+              "mrr": 1
+            },
+            "chunkMetrics": {
+              "recall": 1,
+              "precision": 1,
+              "mrr": 1
+            }
+          }
+        ],
+        "review": [
+          {
+            "candidate": "A senha padrão para acessar a configuração do telefone de laboratório é \"admin\". Você usa essa senha quando abrir o IP do telefone no navegador para fazer login. Quer ajuda pra chegar nessa tela de login?",
+            "verdict": "supported",
+            "durationMs": 1590,
+            "promptTokens": 1403,
+            "completionTokens": 62,
+            "usageObserved": true
+          }
+        ]
+      },
+      "quality": {
+        "literalOverlap": 0,
+        "repeatedLines": 0,
+        "boilerplate": false,
+        "escapedMarkdown": false,
+        "partialWarning": false,
+        "sentenceCount": 3
+      }
+    },
+    {
+      "message": "a senha pode ser admin",
+      "answer": "Não consegui confirmar uma orientação aplicável com segurança. Podemos continuar se você informar o detalhe do ambiente ou do resultado observado que ainda falta.",
+      "sources": [],
+      "states": [
+        {
+          "id": "df92292b-475f-4030-898c-f58dfd2f4d28",
+          "topic": "configuração de telefone de laboratório",
+          "support_preference": "adaptive"
+        }
+      ],
+      "capture": {
+        "agentMetrics": {
+          "steps": 6,
+          "searches": 1,
+          "repeatedSearches": 0,
+          "searchFailures": 0,
+          "toolCalls": 1,
+          "promptTokens": 11860,
+          "completionTokens": 312,
+          "durationMs": 8938,
+          "stopReason": "unsafe_answer",
+          "readAttempts": 1,
+          "readsWithNewEvidence": 1,
+          "evidenceCount": 1,
+          "emptyReads": 0,
+          "duplicateReads": 0,
+          "readTimeouts": 0,
+          "unavailableReads": 0,
+          "inaccessibleReads": 0,
+          "stalledSteps": 0,
+          "clarificationRequests": 0,
+          "conflicts": 0,
+          "blockedWriteRetries": 0,
+          "verifierChecks": 2,
+          "verifierRejections": 2,
+          "recoverySearches": 0,
+          "literalFallbacks": 0,
+          "adaptiveRewrites": 0,
+          "nonclaimsRemoved": 0,
+          "unsupportedUnits": 0,
+          "supportPreference": "adaptive",
+          "semanticTurnStatus": "accepted",
+          "semanticRoute": "existing",
+          "semanticIntent": "clarify",
+          "semanticObservations": 1,
+          "selectionRequired": 0,
+          "conflictRecoveries": 0,
+          "clarificationChecks": 0,
+          "knowledgeSelectionAttempts": 0,
+          "knowledgeSelections": 0,
+          "knowledgeSelectionRejections": 0,
+          "knowledgeSelectionInvalidations": 0,
+          "selectedKnowledgeVersions": 0,
+          "verifierFailures": {
+            "invalid_reference": 2
+          },
+          "lastVerifierFailure": "invalid_reference"
+        },
+        "retrieval": [
+          {
+            "ranked": [
+              {
+                "versionId": "a0f994e9-c476-4427-9a4c-187621707618",
+                "ordinal": 0,
+                "score": 1.6218200809393388
+              }
+            ],
+            "metrics": {
+              "recall": 1,
+              "precision": 1,
+              "mrr": 1
+            },
+            "chunkMetrics": {
+              "recall": 1,
+              "precision": 1,
+              "mrr": 1
+            }
+          }
+        ],
+        "review": [
+          {
+            "candidate": "Sim, a senha padrão para acessar a configuração do telefone de laboratório é \"admin\". Pode usar essa senha para fazer login no navegador após abrir o IP do telefone.",
+            "verdict": "unsupported",
+            "reason": "invalid_reference",
+            "durationMs": 1784,
+            "promptTokens": 1401,
+            "completionTokens": 68,
+            "usageObserved": true
+          },
+          {
+            "candidate": "A senha padrão para acessar a configuração do telefone de laboratório é \"admin\". Você deve usar essa senha ao abrir o IP do telefone no navegador para fazer login. Quer ajuda para chegar nessa tela?",
+            "verdict": "unsupported",
+            "reason": "invalid_reference",
+            "durationMs": 1445,
+            "promptTokens": 1414,
+            "completionTokens": 68,
+            "usageObserved": true
+          }
+        ]
+      },
+      "quality": {
+        "literalOverlap": 0,
+        "repeatedLines": 0,
+        "boilerplate": false,
+        "escapedMarkdown": false,
+        "partialWarning": false,
+        "sentenceCount": 2
+      }
+    },
+    {
+      "message": "me dê o passo a passo completo",
+      "answer": "Claro — aqui está o passo a passo completo:\n\n1. Consulte o IP no menu Status.\n2. Abra o IP no navegador.\n3. Use a senha padrão admin.\n4. Ative Account Active: YES. [1]",
+      "sources": [
+        {
+          "documentId": "f49cd376-d7b4-4d12-9790-a424328bd503",
+          "versionId": "a0f994e9-c476-4427-9a4c-187621707618",
+          "versionNumber": 1,
+          "title": "Telefone de laboratório",
+          "ordinal": -1,
+          "excerpts": [
+            "Configuração do telefone de laboratório.\n1. Consulte o IP no menu Status.\n2. Abra o IP no navegador.\n3. Use a senha padrão admin.\n4. Ative Account Active: YES."
+          ]
+        }
+      ],
+      "states": [
+        {
+          "id": "df92292b-475f-4030-898c-f58dfd2f4d28",
+          "topic": "configuração de telefone de laboratório",
+          "support_preference": "complete"
+        }
+      ],
+      "capture": {
+        "agentMetrics": {
+          "steps": 6,
+          "searches": 1,
+          "repeatedSearches": 0,
+          "searchFailures": 0,
+          "toolCalls": 1,
+          "promptTokens": 12663,
+          "completionTokens": 581,
+          "durationMs": 17449,
+          "stopReason": "answered",
+          "readAttempts": 1,
+          "readsWithNewEvidence": 1,
+          "evidenceCount": 2,
+          "emptyReads": 0,
+          "duplicateReads": 0,
+          "readTimeouts": 0,
+          "unavailableReads": 0,
+          "inaccessibleReads": 0,
+          "stalledSteps": 0,
+          "clarificationRequests": 0,
+          "conflicts": 0,
+          "blockedWriteRetries": 0,
+          "verifierChecks": 2,
+          "verifierRejections": 1,
+          "recoverySearches": 0,
+          "literalFallbacks": 1,
+          "adaptiveRewrites": 0,
+          "nonclaimsRemoved": 0,
+          "unsupportedUnits": 0,
+          "supportPreference": "complete",
+          "semanticTurnStatus": "accepted",
+          "semanticRoute": "existing",
+          "semanticIntent": "knowledge",
+          "semanticObservations": 1,
+          "selectionRequired": 0,
+          "conflictRecoveries": 0,
+          "clarificationChecks": 0,
+          "knowledgeSelectionAttempts": 0,
+          "knowledgeSelections": 0,
+          "knowledgeSelectionRejections": 0,
+          "knowledgeSelectionInvalidations": 0,
+          "selectedKnowledgeVersions": 0,
+          "verifierFailures": {
+            "claim_shape": 1
+          },
+          "lastVerifierFailure": "claim_shape",
+          "fallbackReason": "model_rejected"
+        },
+        "retrieval": [
+          {
+            "ranked": [
+              {
+                "versionId": "a0f994e9-c476-4427-9a4c-187621707618",
+                "ordinal": 0,
+                "score": 1.6725478263890445
+              }
+            ],
+            "metrics": {
+              "recall": 1,
+              "precision": 1,
+              "mrr": 1
+            },
+            "chunkMetrics": {
+              "recall": 1,
+              "precision": 1,
+              "mrr": 1
+            }
+          }
+        ],
+        "review": [
+          {
+            "candidate": "O passo a passo completo para configurar o telefone de laboratório é:\n\n1. Consulte o IP do telefone no menu Status.\n2. Abra esse IP no navegador de um computador que esteja na mesma rede.\n3. Faça login usando a senha padrão \"admin\".\n4. Ative a opção \"Account Active\" para \"YES\".\n\nSe precisar, posso ajudar a detalhar algum desses passos. Quer?",
+            "verdict": "uncertain",
+            "reason": "claim_shape",
+            "durationMs": 3942,
+            "promptTokens": 1599,
+            "completionTokens": 189,
+            "usageObserved": true
+          },
+          {
+            "candidate": "Pra configurar o telefone de laboratório, primeiro veja o IP no menu Status do aparelho. Depois, abra esse IP no navegador do seu computador, que precisa estar na mesma rede. Quando pedir senha, use \"admin\". Por fim, ative a opção \"Account Active\" para \"YES\". Conseguiu chegar até essa tela de configuração?",
+            "verdict": "supported",
+            "durationMs": 3487,
+            "promptTokens": 1574,
+            "completionTokens": 124,
+            "usageObserved": true
+          }
+        ]
+      },
+      "quality": {
+        "literalOverlap": 0.6896551724137931,
+        "repeatedLines": 0,
+        "boilerplate": false,
+        "escapedMarkdown": false,
+        "partialWarning": false,
+        "sentenceCount": 9
+      }
+    }
+  ],
+  "complete": true,
+  "humanReview": "pending"
+}

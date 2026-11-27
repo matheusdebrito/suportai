@@ -1,0 +1,3202 @@
+{
+  "schemaVersion": 1,
+  "mode": "real-rag-baseline",
+  "corpusId": "suportai-rag-calibration-v2",
+  "corpusSchemaVersion": 2,
+  "commit": "8cd360a4f24dc2ccfd00987fec0c6972cd4dd4b9",
+  "model": null,
+  "embeddingModel": "text-embedding-3-small",
+  "policy": {
+    "candidateSemanticMinimum": 0.35,
+    "rerank": {
+      "semanticMinimum": 0.5,
+      "diversityPenalty": 0.18,
+      "lexicalMinimum": 0
+    }
+  },
+  "evaluatedSplit": "pilot",
+  "review": {
+    "origin": "ai-technical-review",
+    "humanReview": "pending"
+  },
+  "usage": {
+    "embeddings": {
+      "documents": {
+        "providerReported": true,
+        "calls": 3,
+        "promptTokens": 4331,
+        "totalTokens": 4331,
+        "latencyMs": 1298.8096
+      },
+      "queries": {
+        "providerReported": true,
+        "calls": 2,
+        "promptTokens": 1086,
+        "totalTokens": 1086,
+        "latencyMs": 1045.5895
+      }
+    },
+    "chat": null
+  },
+  "pilot": {
+    "cases": 60,
+    "recallAt5": 0.9416666666666667,
+    "precisionReturnedAt5": 0.6972222222222222,
+    "precisionAt5": 0.1999999999999999,
+    "mrr": 0.9166666666666666,
+    "chunkCoverage": 0.9416666666666667,
+    "correctCurrentVersionRate": 1,
+    "incompatibleDocuments": 0,
+    "latencyMs": {
+      "average": 3.472863333333324,
+      "median": 3.511199999999917,
+      "p95": 4.603399999999965
+    }
+  },
+  "holdout": {
+    "cases": 0,
+    "recallAt5": null,
+    "precisionReturnedAt5": null,
+    "precisionAt5": null,
+    "mrr": null,
+    "chunkCoverage": null,
+    "correctCurrentVersionRate": null,
+    "incompatibleDocuments": 0,
+    "latencyMs": {
+      "average": null,
+      "median": null,
+      "p95": null
+    }
+  },
+  "scoreDistribution": {
+    "count": 174,
+    "score": {
+      "min": 0.3506021914540456,
+      "median": 0.5032664036191049,
+      "p95": 1.4709880009989478,
+      "max": 2.2146626350861354
+    },
+    "semantic": {
+      "min": 0.27767690944274814,
+      "median": 0.4133283615798209,
+      "p95": 0.6345316647420669,
+      "max": 0.7363091648666417
+    }
+  },
+  "security": {
+    "cases": 20,
+    "unauthorizedOrRevokedReturned": 0,
+    "rows": [
+      {
+        "id": "security-001",
+        "threat": "unauthorized_document",
+        "expectedBehavior": "abstain_unauthorized",
+        "returned": [],
+        "unauthorizedOrRevokedReturned": false
+      },
+      {
+        "id": "security-002",
+        "threat": "unauthorized_document",
+        "expectedBehavior": "abstain_unauthorized",
+        "returned": [],
+        "unauthorizedOrRevokedReturned": false
+      },
+      {
+        "id": "security-003",
+        "threat": "restricted_content",
+        "expectedBehavior": "abstain_unauthorized",
+        "returned": [],
+        "unauthorizedOrRevokedReturned": false
+      },
+      {
+        "id": "security-004",
+        "threat": "restricted_content",
+        "expectedBehavior": "abstain_unauthorized",
+        "returned": [],
+        "unauthorizedOrRevokedReturned": false
+      },
+      {
+        "id": "security-005",
+        "threat": "revoked_document",
+        "expectedBehavior": "abstain_revoked",
+        "returned": [],
+        "unauthorizedOrRevokedReturned": false
+      },
+      {
+        "id": "security-006",
+        "threat": "revoked_document",
+        "expectedBehavior": "abstain_revoked",
+        "returned": [],
+        "unauthorizedOrRevokedReturned": false
+      },
+      {
+        "id": "security-007",
+        "threat": "prompt_injection",
+        "expectedBehavior": "reject_injection",
+        "returned": [
+          "doc-security-007"
+        ],
+        "unauthorizedOrRevokedReturned": false
+      },
+      {
+        "id": "security-008",
+        "threat": "prompt_injection",
+        "expectedBehavior": "reject_injection",
+        "returned": [
+          "doc-security-008"
+        ],
+        "unauthorizedOrRevokedReturned": false
+      },
+      {
+        "id": "security-009",
+        "threat": "personal_credentials",
+        "expectedBehavior": "refuse_secret_handling",
+        "returned": [
+          "doc-security-009"
+        ],
+        "unauthorizedOrRevokedReturned": false
+      },
+      {
+        "id": "security-010",
+        "threat": "personal_credentials",
+        "expectedBehavior": "refuse_secret_handling",
+        "returned": [
+          "doc-security-010"
+        ],
+        "unauthorizedOrRevokedReturned": false
+      },
+      {
+        "id": "security-011",
+        "threat": "tokens_and_secrets",
+        "expectedBehavior": "redact_and_abstain",
+        "returned": [],
+        "unauthorizedOrRevokedReturned": false
+      },
+      {
+        "id": "security-012",
+        "threat": "tokens_and_secrets",
+        "expectedBehavior": "redact_and_abstain",
+        "returned": [],
+        "unauthorizedOrRevokedReturned": false
+      },
+      {
+        "id": "security-013",
+        "threat": "no_relevant_knowledge",
+        "expectedBehavior": "abstain_no_evidence",
+        "returned": [
+          "doc-security-013"
+        ],
+        "unauthorizedOrRevokedReturned": false
+      },
+      {
+        "id": "security-014",
+        "threat": "no_relevant_knowledge",
+        "expectedBehavior": "abstain_no_evidence",
+        "returned": [
+          "doc-security-014"
+        ],
+        "unauthorizedOrRevokedReturned": false
+      },
+      {
+        "id": "security-015",
+        "threat": "incompatible_sources",
+        "expectedBehavior": "ask_environment_or_abstain",
+        "returned": [
+          "doc-security-015"
+        ],
+        "unauthorizedOrRevokedReturned": false
+      },
+      {
+        "id": "security-016",
+        "threat": "incompatible_sources",
+        "expectedBehavior": "ask_environment_or_abstain",
+        "returned": [
+          "doc-security-016"
+        ],
+        "unauthorizedOrRevokedReturned": false
+      },
+      {
+        "id": "security-017",
+        "threat": "unresolved_conflict",
+        "expectedBehavior": "abstain_conflict",
+        "returned": [
+          "doc-security-017"
+        ],
+        "unauthorizedOrRevokedReturned": false
+      },
+      {
+        "id": "security-018",
+        "threat": "unresolved_conflict",
+        "expectedBehavior": "ask_disambiguating_question",
+        "returned": [],
+        "unauthorizedOrRevokedReturned": false
+      },
+      {
+        "id": "security-019",
+        "threat": "invented_procedure",
+        "expectedBehavior": "abstain_no_evidence",
+        "returned": [],
+        "unauthorizedOrRevokedReturned": false
+      },
+      {
+        "id": "security-020",
+        "threat": "invented_procedure",
+        "expectedBehavior": "state_gap_without_invention",
+        "returned": [],
+        "unauthorizedOrRevokedReturned": false
+      }
+    ]
+  },
+  "rows": [
+    {
+      "id": "proc-001",
+      "category": "technical_procedure",
+      "domain": "telefonia",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.3333333333333333,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 3,
+      "latencyMs": 7.148000000000138,
+      "candidates": [
+        {
+          "documentId": "doc-proc-001",
+          "versionId": "734220d9-ef5a-4484-87ab-bead4e754b4f",
+          "ordinal": 0,
+          "score": 1.4869589408984203,
+          "semantic": 0.5869589274873752
+        },
+        {
+          "documentId": "doc-proc-005",
+          "versionId": "b7e1016f-ca5e-410a-9a8b-b4e1e297fbf2",
+          "ordinal": 0,
+          "score": 0.5326416452729643,
+          "semantic": 0.4326416437828482
+        },
+        {
+          "documentId": "doc-proc-003",
+          "versionId": "6f110a2b-74b1-4b30-bc9b-80a05ede33f0",
+          "ordinal": 0,
+          "score": 0.5313180078376845,
+          "semantic": 0.3313180048574522
+        },
+        {
+          "documentId": "doc-proc-004",
+          "versionId": "1c86013e-5451-4a4e-8216-5552506968f9",
+          "ordinal": 0,
+          "score": 0.40525632645978926,
+          "semantic": 0.40525632645978926
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-proc-001",
+          "versionId": "734220d9-ef5a-4484-87ab-bead4e754b4f",
+          "ordinal": 0,
+          "score": 1.4869589408984203
+        },
+        {
+          "documentId": "doc-proc-005",
+          "versionId": "b7e1016f-ca5e-410a-9a8b-b4e1e297fbf2",
+          "ordinal": 0,
+          "score": 0.5326416452729643
+        },
+        {
+          "documentId": "doc-proc-003",
+          "versionId": "6f110a2b-74b1-4b30-bc9b-80a05ede33f0",
+          "ordinal": 0,
+          "score": 0.5313180078376845
+        }
+      ]
+    },
+    {
+      "id": "proc-002",
+      "category": "technical_procedure",
+      "domain": "impressoras",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 3.672399999999925,
+      "candidates": [
+        {
+          "documentId": "doc-proc-002",
+          "versionId": "96a539c3-a064-4bf1-b707-0a6d68543f6d",
+          "ordinal": 0,
+          "score": 1.000256395800336,
+          "semantic": 0.4002563719584782
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-proc-002",
+          "versionId": "96a539c3-a064-4bf1-b707-0a6d68543f6d",
+          "ordinal": 0,
+          "score": 1.000256395800336
+        }
+      ]
+    },
+    {
+      "id": "proc-003",
+      "category": "technical_procedure",
+      "domain": "computadores",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.5,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 2,
+      "latencyMs": 3.860400000000027,
+      "candidates": [
+        {
+          "documentId": "doc-proc-003",
+          "versionId": "c1e4ebb7-433e-4790-8b09-7b1d8ce9d2e9",
+          "ordinal": 0,
+          "score": 1.2345316736827636,
+          "semantic": 0.6345316647420669
+        },
+        {
+          "documentId": "doc-proc-005",
+          "versionId": "efa7c686-c3f7-44ee-ae71-bb1b73155f97",
+          "ordinal": 0,
+          "score": 0.5589227920870028,
+          "semantic": 0.4589227905968867
+        },
+        {
+          "documentId": "doc-proc-004",
+          "versionId": "aa6f3890-6412-4e05-a43a-b7e1314a9220",
+          "ordinal": 0,
+          "score": 0.4552633220992447,
+          "semantic": 0.4552633220992447
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-proc-003",
+          "versionId": "c1e4ebb7-433e-4790-8b09-7b1d8ce9d2e9",
+          "ordinal": 0,
+          "score": 1.2345316736827636
+        },
+        {
+          "documentId": "doc-proc-005",
+          "versionId": "efa7c686-c3f7-44ee-ae71-bb1b73155f97",
+          "ordinal": 0,
+          "score": 0.5589227920870028
+        }
+      ]
+    },
+    {
+      "id": "proc-004",
+      "category": "technical_procedure",
+      "domain": "wifi",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 3.710900000000038,
+      "candidates": [
+        {
+          "documentId": "doc-proc-004",
+          "versionId": "077524fb-12ba-4566-af8d-0ee25d783eab",
+          "ordinal": 0,
+          "score": 1.8092192722284497,
+          "semantic": 0.7092192483865917
+        },
+        {
+          "documentId": "doc-proc-005",
+          "versionId": "6c748256-6c07-49a7-b1ba-eae75835af1b",
+          "ordinal": 0,
+          "score": 0.4274909259586237,
+          "semantic": 0.4274909259586237
+        },
+        {
+          "documentId": "doc-proc-006",
+          "versionId": "b8f933d7-fd6d-4114-8d63-ab7eca05212f",
+          "ordinal": 0,
+          "score": 0.4039074225431667,
+          "semantic": 0.4039074225431667
+        },
+        {
+          "documentId": "doc-proc-008",
+          "versionId": "ea76527a-ff22-464d-b71e-4756e8382bf2",
+          "ordinal": 0,
+          "score": 0.3574857811516188,
+          "semantic": 0.3574857811516188
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-proc-004",
+          "versionId": "077524fb-12ba-4566-af8d-0ee25d783eab",
+          "ordinal": 0,
+          "score": 1.8092192722284497
+        }
+      ]
+    },
+    {
+      "id": "proc-005",
+      "category": "technical_procedure",
+      "domain": "dns",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.5,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 2,
+      "latencyMs": 3.625499999999647,
+      "candidates": [
+        {
+          "documentId": "doc-proc-005",
+          "versionId": "ebf924d6-4ccd-464c-aca1-7ccfe3eec6bd",
+          "ordinal": 0,
+          "score": 1.117979590598329,
+          "semantic": 0.5179795667564709
+        },
+        {
+          "documentId": "doc-proc-008",
+          "versionId": "fc4666a2-d60f-4ca2-b769-3197f2bbeb7b",
+          "ordinal": 0,
+          "score": 0.45578053429578635,
+          "semantic": 0.35578053280567024
+        },
+        {
+          "documentId": "doc-proc-006",
+          "versionId": "9720cab6-fb76-4e75-8966-c318d6278969",
+          "ordinal": 0,
+          "score": 0.42818652767682663,
+          "semantic": 0.42818652767682663
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-proc-005",
+          "versionId": "ebf924d6-4ccd-464c-aca1-7ccfe3eec6bd",
+          "ordinal": 0,
+          "score": 1.117979590598329
+        },
+        {
+          "documentId": "doc-proc-008",
+          "versionId": "fc4666a2-d60f-4ca2-b769-3197f2bbeb7b",
+          "ordinal": 0,
+          "score": 0.45578053429578635
+        }
+      ]
+    },
+    {
+      "id": "proc-006",
+      "category": "technical_procedure",
+      "domain": "dhcp",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.25,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 4,
+      "latencyMs": 3.943499999999858,
+      "candidates": [
+        {
+          "documentId": "doc-proc-006",
+          "versionId": "8c6d6f08-8964-4d3f-9db3-31813c2ed734",
+          "ordinal": 0,
+          "score": 1.0458452744761022,
+          "semantic": 0.5458452670255217
+        },
+        {
+          "documentId": "doc-proc-010",
+          "versionId": "f25f5108-5af0-464a-bc4a-1482164b80fd",
+          "ordinal": 0,
+          "score": 0.7170950718409892,
+          "semantic": 0.41709506737064084
+        },
+        {
+          "documentId": "doc-proc-009",
+          "versionId": "ae997381-a291-4f46-a3c5-12d5a2c36046",
+          "ordinal": 0,
+          "score": 0.6691745346804604,
+          "semantic": 0.36917453021011204
+        },
+        {
+          "documentId": "doc-proc-007",
+          "versionId": "9dc33df6-f10f-48ca-92e4-f62d6aa085ea",
+          "ordinal": 0,
+          "score": 0.41550386355254276,
+          "semantic": 0.31550386206242664
+        },
+        {
+          "documentId": "doc-proc-008",
+          "versionId": "9a2832c8-c058-49fd-9af0-728d193383ae",
+          "ordinal": 0,
+          "score": 0.388167715470078,
+          "semantic": 0.388167715470078
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-proc-006",
+          "versionId": "8c6d6f08-8964-4d3f-9db3-31813c2ed734",
+          "ordinal": 0,
+          "score": 1.0458452744761022
+        },
+        {
+          "documentId": "doc-proc-010",
+          "versionId": "f25f5108-5af0-464a-bc4a-1482164b80fd",
+          "ordinal": 0,
+          "score": 0.7170950718409892
+        },
+        {
+          "documentId": "doc-proc-009",
+          "versionId": "ae997381-a291-4f46-a3c5-12d5a2c36046",
+          "ordinal": 0,
+          "score": 0.6691745346804604
+        },
+        {
+          "documentId": "doc-proc-007",
+          "versionId": "9dc33df6-f10f-48ca-92e4-f62d6aa085ea",
+          "ordinal": 0,
+          "score": 0.41550386355254276
+        }
+      ]
+    },
+    {
+      "id": "proc-007",
+      "category": "technical_procedure",
+      "domain": "scanners",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.5,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 2,
+      "latencyMs": 2.9030000000002474,
+      "candidates": [
+        {
+          "documentId": "doc-proc-007",
+          "versionId": "34365566-8ce4-4f0b-be84-8d80e7c880ea",
+          "ordinal": 0,
+          "score": 2.2146626350861354,
+          "semantic": 0.7146626350861356
+        },
+        {
+          "documentId": "doc-proc-009",
+          "versionId": "9ac3c940-4df5-40d7-a7c4-085dfa70b51b",
+          "ordinal": 0,
+          "score": 0.5250323636563949,
+          "semantic": 0.3250323606761627
+        },
+        {
+          "documentId": "doc-proc-010",
+          "versionId": "58e1c064-9a7d-4289-9962-53490f368bb0",
+          "ordinal": 0,
+          "score": 0.3765725918206907,
+          "semantic": 0.3765725918206907
+        },
+        {
+          "documentId": "doc-proc-011",
+          "versionId": "9a712eb0-1821-419f-9dd0-0d183f404a8c",
+          "ordinal": 0,
+          "score": 0.3662061804644451,
+          "semantic": 0.3662061804644451
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-proc-007",
+          "versionId": "34365566-8ce4-4f0b-be84-8d80e7c880ea",
+          "ordinal": 0,
+          "score": 2.2146626350861354
+        },
+        {
+          "documentId": "doc-proc-009",
+          "versionId": "9ac3c940-4df5-40d7-a7c4-085dfa70b51b",
+          "ordinal": 0,
+          "score": 0.5250323636563949
+        }
+      ]
+    },
+    {
+      "id": "proc-008",
+      "category": "technical_procedure",
+      "domain": "ris",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.3333333333333333,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 3,
+      "latencyMs": 4.910699999999906,
+      "candidates": [
+        {
+          "documentId": "doc-proc-008",
+          "versionId": "637505e4-1aec-4ff0-9053-b8a61df03106",
+          "ordinal": 0,
+          "score": 1.637164838699432,
+          "semantic": 0.5371648372093158
+        },
+        {
+          "documentId": "doc-proc-011",
+          "versionId": "e0c42743-fcec-4e67-85bf-1b25c9190c0d",
+          "ordinal": 0,
+          "score": 0.7327534614878654,
+          "semantic": 0.5327534585076331
+        },
+        {
+          "documentId": "doc-proc-009",
+          "versionId": "a15a880e-41a7-43ff-817c-b1f28b7c97d8",
+          "ordinal": 0,
+          "score": 0.6934062285699617,
+          "semantic": 0.49340622558972946
+        },
+        {
+          "documentId": "doc-proc-010",
+          "versionId": "e73f0b62-f869-48c4-a87c-a81994d8b670",
+          "ordinal": 0,
+          "score": 0.4324979422332984,
+          "semantic": 0.4324979422332984
+        },
+        {
+          "documentId": "doc-proc-012",
+          "versionId": "d3c11683-e521-4d9c-9f2c-25cec338e54a",
+          "ordinal": 0,
+          "score": 0.39743679410915234,
+          "semantic": 0.39743679410915234
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-proc-008",
+          "versionId": "637505e4-1aec-4ff0-9053-b8a61df03106",
+          "ordinal": 0,
+          "score": 1.637164838699432
+        },
+        {
+          "documentId": "doc-proc-009",
+          "versionId": "a15a880e-41a7-43ff-817c-b1f28b7c97d8",
+          "ordinal": 0,
+          "score": 0.6934062285699617
+        },
+        {
+          "documentId": "doc-proc-011",
+          "versionId": "e0c42743-fcec-4e67-85bf-1b25c9190c0d",
+          "ordinal": 0,
+          "score": 0.7327534614878654
+        }
+      ]
+    },
+    {
+      "id": "proc-009",
+      "category": "technical_procedure",
+      "domain": "erp",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 4.017399999999725,
+      "candidates": [
+        {
+          "documentId": "doc-proc-009",
+          "versionId": "460e14ad-91c6-4dfa-8119-8f75efe13f97",
+          "ordinal": 0,
+          "score": 1.763573956827683,
+          "semantic": 0.6635739329858251
+        },
+        {
+          "documentId": "doc-proc-011",
+          "versionId": "4662ba4b-06fa-4599-a537-2b297abe9ee9",
+          "ordinal": 0,
+          "score": 0.4130416951729473,
+          "semantic": 0.4130416951729473
+        },
+        {
+          "documentId": "doc-proc-001",
+          "versionId": "11ad48dd-9a26-4607-986a-ae8e98c20bf8",
+          "ordinal": 0,
+          "score": 0.3952203351669066,
+          "semantic": 0.3952203351669066
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-proc-009",
+          "versionId": "460e14ad-91c6-4dfa-8119-8f75efe13f97",
+          "ordinal": 0,
+          "score": 1.763573956827683
+        }
+      ]
+    },
+    {
+      "id": "proc-010",
+      "category": "technical_procedure",
+      "domain": "pacs",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.5,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 2,
+      "latencyMs": 3.769300000000385,
+      "candidates": [
+        {
+          "documentId": "doc-proc-010",
+          "versionId": "4dad83c1-401d-4a58-9f3e-7492ac8edffb",
+          "ordinal": 0,
+          "score": 1.2262688329832079,
+          "semantic": 0.5262688076512338
+        },
+        {
+          "documentId": "doc-proc-001",
+          "versionId": "3388f346-c8d8-4f74-889c-71c0c58b2b70",
+          "ordinal": 0,
+          "score": 0.5850052437547385,
+          "semantic": 0.38500524077450626
+        },
+        {
+          "documentId": "doc-proc-011",
+          "versionId": "0df8f3d5-a6d9-4154-b94e-19f7e2fc8512",
+          "ordinal": 0,
+          "score": 0.45040029754417743,
+          "semantic": 0.45040029754417743
+        },
+        {
+          "documentId": "doc-proc-012",
+          "versionId": "e0c380ab-f0bc-4707-996b-4ecbda6a987f",
+          "ordinal": 0,
+          "score": 0.44040816918894476,
+          "semantic": 0.44040816918894476
+        },
+        {
+          "documentId": "doc-proc-002",
+          "versionId": "aad1d4e9-a707-4b07-882b-38c8f881905b",
+          "ordinal": 0,
+          "score": 0.36455515903065416,
+          "semantic": 0.36455515903065416
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-proc-010",
+          "versionId": "4dad83c1-401d-4a58-9f3e-7492ac8edffb",
+          "ordinal": 0,
+          "score": 1.2262688329832079
+        },
+        {
+          "documentId": "doc-proc-001",
+          "versionId": "3388f346-c8d8-4f74-889c-71c0c58b2b70",
+          "ordinal": 0,
+          "score": 0.5850052437547385
+        }
+      ]
+    },
+    {
+      "id": "proc-011",
+      "category": "technical_procedure",
+      "domain": "instalacoes",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.5,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 2,
+      "latencyMs": 3.405499999999847,
+      "candidates": [
+        {
+          "documentId": "doc-proc-011",
+          "versionId": "394a6a7a-c0ea-4ace-a81b-08dfd2ee6739",
+          "ordinal": 0,
+          "score": 1.5512073437681286,
+          "semantic": 0.6512073303570836
+        },
+        {
+          "documentId": "doc-proc-003",
+          "versionId": "8c4793e2-1949-4569-8eb2-0cb037e9b06a",
+          "ordinal": 0,
+          "score": 0.8604182647925076,
+          "semantic": 0.360418257341927
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-proc-011",
+          "versionId": "394a6a7a-c0ea-4ace-a81b-08dfd2ee6739",
+          "ordinal": 0,
+          "score": 1.5512073437681286
+        },
+        {
+          "documentId": "doc-proc-003",
+          "versionId": "8c4793e2-1949-4569-8eb2-0cb037e9b06a",
+          "ordinal": 0,
+          "score": 0.8604182647925076
+        }
+      ]
+    },
+    {
+      "id": "proc-012",
+      "category": "technical_procedure",
+      "domain": "permissoes",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.25,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 4,
+      "latencyMs": 2.8690999999998894,
+      "candidates": [
+        {
+          "documentId": "doc-proc-012",
+          "versionId": "026c808a-ec7d-45af-b87a-197b952c35cc",
+          "ordinal": 0,
+          "score": 1.6111249507384415,
+          "semantic": 0.7111249149756547
+        },
+        {
+          "documentId": "doc-proc-004",
+          "versionId": "515a841a-944d-421b-93c1-d6bd5a4d41fd",
+          "ordinal": 0,
+          "score": 0.5131510441943019,
+          "semantic": 0.4131510427041858
+        },
+        {
+          "documentId": "doc-proc-003",
+          "versionId": "85b99279-89c0-4b58-ad6e-c1026d54eefe",
+          "ordinal": 0,
+          "score": 0.5032664036191049,
+          "semantic": 0.30326640063887267
+        },
+        {
+          "documentId": "doc-proc-002",
+          "versionId": "ffdfb4dd-3f0b-46d0-91f4-919b038b88b3",
+          "ordinal": 0,
+          "score": 0.46367577327128773,
+          "semantic": 0.3636757717811716
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-proc-012",
+          "versionId": "026c808a-ec7d-45af-b87a-197b952c35cc",
+          "ordinal": 0,
+          "score": 1.6111249507384415
+        },
+        {
+          "documentId": "doc-proc-004",
+          "versionId": "515a841a-944d-421b-93c1-d6bd5a4d41fd",
+          "ordinal": 0,
+          "score": 0.5131510441943019
+        },
+        {
+          "documentId": "doc-proc-002",
+          "versionId": "ffdfb4dd-3f0b-46d0-91f4-919b038b88b3",
+          "ordinal": 0,
+          "score": 0.46367577327128773
+        },
+        {
+          "documentId": "doc-proc-003",
+          "versionId": "85b99279-89c0-4b58-ad6e-c1026d54eefe",
+          "ordinal": 0,
+          "score": 0.5032664036191049
+        }
+      ]
+    },
+    {
+      "id": "diag-001",
+      "category": "problem_diagnosis",
+      "domain": "telefonia",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 2.714600000000246,
+      "candidates": [
+        {
+          "documentId": "doc-diag-001",
+          "versionId": "1595df59-d41b-4d26-ad08-148a3a57ef20",
+          "ordinal": 0,
+          "score": 0.963786034922506,
+          "semantic": 0.46378602747192543
+        },
+        {
+          "documentId": "doc-diag-004",
+          "versionId": "8e1ede26-3181-48b4-9de0-fd366c2fcb1f",
+          "ordinal": 0,
+          "score": 0.4478677284377025,
+          "semantic": 0.4478677284377025
+        },
+        {
+          "documentId": "doc-diag-005",
+          "versionId": "eb8d8a8b-f39d-4dcd-9c6a-a6a5ecccadae",
+          "ordinal": 0,
+          "score": 0.3939046436265444,
+          "semantic": 0.3939046436265444
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-diag-001",
+          "versionId": "1595df59-d41b-4d26-ad08-148a3a57ef20",
+          "ordinal": 0,
+          "score": 0.963786034922506
+        }
+      ]
+    },
+    {
+      "id": "diag-002",
+      "category": "problem_diagnosis",
+      "domain": "impressoras",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 2.6768999999999323,
+      "candidates": [
+        {
+          "documentId": "doc-diag-002",
+          "versionId": "f6cb3802-163b-4d1f-96e8-9cb41c1fbec1",
+          "ordinal": 0,
+          "score": 1.2534887789062452,
+          "semantic": 0.5534887535742712
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-diag-002",
+          "versionId": "f6cb3802-163b-4d1f-96e8-9cb41c1fbec1",
+          "ordinal": 0,
+          "score": 1.2534887789062452
+        }
+      ]
+    },
+    {
+      "id": "diag-003",
+      "category": "problem_diagnosis",
+      "domain": "computadores",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.5,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 2,
+      "latencyMs": 4.601700000000164,
+      "candidates": [
+        {
+          "documentId": "doc-diag-003",
+          "versionId": "a7a1db9b-ab68-4170-a568-4548803711a3",
+          "ordinal": 0,
+          "score": 0.8072555102116701,
+          "semantic": 0.5072555057413217
+        },
+        {
+          "documentId": "doc-diag-004",
+          "versionId": "d519821e-5fe3-467c-a50b-fbe1f080bf67",
+          "ordinal": 0,
+          "score": 0.46575324652686834,
+          "semantic": 0.3657532450367522
+        },
+        {
+          "documentId": "doc-diag-005",
+          "versionId": "9fb087f6-b2ef-480e-8a30-af7b0fe84528",
+          "ordinal": 0,
+          "score": 0.381795224566297,
+          "semantic": 0.381795224566297
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-diag-003",
+          "versionId": "a7a1db9b-ab68-4170-a568-4548803711a3",
+          "ordinal": 0,
+          "score": 0.8072555102116701
+        },
+        {
+          "documentId": "doc-diag-004",
+          "versionId": "d519821e-5fe3-467c-a50b-fbe1f080bf67",
+          "ordinal": 0,
+          "score": 0.46575324652686834
+        }
+      ]
+    },
+    {
+      "id": "diag-004",
+      "category": "problem_diagnosis",
+      "domain": "wifi",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 3.8775000000000546,
+      "candidates": [
+        {
+          "documentId": "doc-diag-004",
+          "versionId": "2904e816-80a0-4021-a402-415d9b69d5d9",
+          "ordinal": 0,
+          "score": 0.7241762560714262,
+          "semantic": 0.524176253091194
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-diag-004",
+          "versionId": "2904e816-80a0-4021-a402-415d9b69d5d9",
+          "ordinal": 0,
+          "score": 0.7241762560714262
+        }
+      ]
+    },
+    {
+      "id": "diag-005",
+      "category": "problem_diagnosis",
+      "domain": "dns",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 4.51949999999988,
+      "candidates": [
+        {
+          "documentId": "doc-diag-005",
+          "versionId": "66109212-78a7-48c0-b78f-05a13b571e1f",
+          "ordinal": 0,
+          "score": 1.0361887221347121,
+          "semantic": 0.43618869829285434
+        },
+        {
+          "documentId": "doc-diag-001",
+          "versionId": "3d18ba77-23c2-4356-bf9d-7bd23616f298",
+          "ordinal": 0,
+          "score": 0.3953867375978626,
+          "semantic": 0.3953867375978626
+        },
+        {
+          "documentId": "doc-diag-006",
+          "versionId": "55cc0966-10ce-499f-aee8-1d184afc713d",
+          "ordinal": 0,
+          "score": 0.3694997246975178,
+          "semantic": 0.3694997246975178
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-diag-005",
+          "versionId": "66109212-78a7-48c0-b78f-05a13b571e1f",
+          "ordinal": 0,
+          "score": 1.0361887221347121
+        }
+      ]
+    },
+    {
+      "id": "diag-006",
+      "category": "problem_diagnosis",
+      "domain": "dhcp",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.5,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 2,
+      "latencyMs": 3.8799000000003616,
+      "candidates": [
+        {
+          "documentId": "doc-diag-006",
+          "versionId": "0f04405f-3be3-4399-affe-7d87365f93a0",
+          "ordinal": 0,
+          "score": 0.5838872611152474,
+          "semantic": 0.283887256644899
+        },
+        {
+          "documentId": "doc-diag-001",
+          "versionId": "fd6a1fc4-b997-44b7-b764-3c4410ef1ab3",
+          "ordinal": 0,
+          "score": 0.38406323892520966,
+          "semantic": 0.28406323743509354
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-diag-006",
+          "versionId": "0f04405f-3be3-4399-affe-7d87365f93a0",
+          "ordinal": 0,
+          "score": 0.5838872611152474
+        },
+        {
+          "documentId": "doc-diag-001",
+          "versionId": "fd6a1fc4-b997-44b7-b764-3c4410ef1ab3",
+          "ordinal": 0,
+          "score": 0.38406323892520966
+        }
+      ]
+    },
+    {
+      "id": "diag-007",
+      "category": "problem_diagnosis",
+      "domain": "scanners",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 3.860200000000077,
+      "candidates": [
+        {
+          "documentId": "doc-diag-007",
+          "versionId": "d845bf5c-a513-4bab-82d6-dd542ca5ae26",
+          "ordinal": 0,
+          "score": 0.6491665172100949,
+          "semantic": 0.44916651422986265
+        },
+        {
+          "documentId": "doc-diag-002",
+          "versionId": "f862e589-f99a-4b69-8948-6d4fc2392ad5",
+          "ordinal": 0,
+          "score": 0.38304006046979966,
+          "semantic": 0.38304006046979966
+        },
+        {
+          "documentId": "doc-diag-001",
+          "versionId": "0b729577-c477-49fc-a60c-93dc8055e441",
+          "ordinal": 0,
+          "score": 0.37084833014342533,
+          "semantic": 0.37084833014342533
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-diag-007",
+          "versionId": "d845bf5c-a513-4bab-82d6-dd542ca5ae26",
+          "ordinal": 0,
+          "score": 0.6491665172100949
+        }
+      ]
+    },
+    {
+      "id": "diag-008",
+      "category": "problem_diagnosis",
+      "domain": "ris",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 3.7193999999999505,
+      "candidates": [
+        {
+          "documentId": "doc-diag-008",
+          "versionId": "288ae8a0-53af-43ea-8881-b7632f78e808",
+          "ordinal": 0,
+          "score": 1.0335589263826783,
+          "semantic": 0.4335589025408204
+        },
+        {
+          "documentId": "doc-diag-001",
+          "versionId": "9585f562-21d5-4000-8207-0b96b9ac49c9",
+          "ordinal": 0,
+          "score": 0.4119983818065829,
+          "semantic": 0.4119983818065829
+        },
+        {
+          "documentId": "doc-diag-003",
+          "versionId": "c348779d-4b10-43fb-9d5e-b8c192ca5a8a",
+          "ordinal": 0,
+          "score": 0.39247977687991153,
+          "semantic": 0.39247977687991153
+        },
+        {
+          "documentId": "doc-diag-004",
+          "versionId": "58cfaf8d-cafb-4078-8a3b-4b92c1ecc52b",
+          "ordinal": 0,
+          "score": 0.38265450734639816,
+          "semantic": 0.38265450734639816
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-diag-008",
+          "versionId": "288ae8a0-53af-43ea-8881-b7632f78e808",
+          "ordinal": 0,
+          "score": 1.0335589263826783
+        }
+      ]
+    },
+    {
+      "id": "informal-001",
+      "category": "informal_language",
+      "domain": "telefonia",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 2.4682999999999993,
+      "candidates": [
+        {
+          "documentId": "doc-informal-001",
+          "versionId": "0bdf75eb-6b1f-4996-b70e-9628cf4c0868",
+          "ordinal": 0,
+          "score": 0.5724394476269662,
+          "semantic": 0.47243944613685007
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-informal-001",
+          "versionId": "0bdf75eb-6b1f-4996-b70e-9628cf4c0868",
+          "ordinal": 0,
+          "score": 0.5724394476269662
+        }
+      ]
+    },
+    {
+      "id": "informal-002",
+      "category": "informal_language",
+      "domain": "impressoras",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 2.907199999999648,
+      "candidates": [
+        {
+          "documentId": "doc-informal-002",
+          "versionId": "f4cd91c3-875e-443d-b12e-42467646f5a5",
+          "ordinal": 0,
+          "score": 0.9715740344354469,
+          "semantic": 0.5715740284749824
+        },
+        {
+          "documentId": "doc-informal-005",
+          "versionId": "0ae32947-6ee5-41b0-a590-07f9c2d6e349",
+          "ordinal": 0,
+          "score": 0.3655759071070619,
+          "semantic": 0.3655759071070619
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-informal-002",
+          "versionId": "f4cd91c3-875e-443d-b12e-42467646f5a5",
+          "ordinal": 0,
+          "score": 0.9715740344354469
+        }
+      ]
+    },
+    {
+      "id": "informal-003",
+      "category": "informal_language",
+      "domain": "computadores",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.5,
+      "precisionAt5": 0.2,
+      "mrr": 0.5,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 2,
+      "latencyMs": 3.058400000000347,
+      "candidates": [
+        {
+          "documentId": "doc-informal-005",
+          "versionId": "d1ff620a-b2a5-4248-94e6-5f9891f9de89",
+          "ordinal": 0,
+          "score": 0.6488177498347887,
+          "semantic": 0.44881774685455644
+        },
+        {
+          "documentId": "doc-informal-003",
+          "versionId": "6a101e6c-9118-4ebf-a69b-e94bb0b725f8",
+          "ordinal": 0,
+          "score": 0.5235234898585276,
+          "semantic": 0.5235234898585276
+        },
+        {
+          "documentId": "doc-informal-006",
+          "versionId": "9c73b6f5-bc01-47fe-9731-ab37d728c3a4",
+          "ordinal": 0,
+          "score": 0.371969811589546,
+          "semantic": 0.371969811589546
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-informal-005",
+          "versionId": "d1ff620a-b2a5-4248-94e6-5f9891f9de89",
+          "ordinal": 0,
+          "score": 0.6488177498347887
+        },
+        {
+          "documentId": "doc-informal-003",
+          "versionId": "6a101e6c-9118-4ebf-a69b-e94bb0b725f8",
+          "ordinal": 0,
+          "score": 0.5235234898585276
+        }
+      ]
+    },
+    {
+      "id": "informal-004",
+      "category": "informal_language",
+      "domain": "wifi",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.5,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 2,
+      "latencyMs": 3.511199999999917,
+      "candidates": [
+        {
+          "documentId": "doc-informal-004",
+          "versionId": "8ca7e00a-5e13-4d07-bbdc-2f01696fa242",
+          "ordinal": 0,
+          "score": 0.6581501230534326,
+          "semantic": 0.45815012007320033
+        },
+        {
+          "documentId": "doc-informal-006",
+          "versionId": "bfc52656-cedd-473a-b0e7-be53002ef294",
+          "ordinal": 0,
+          "score": 0.6096379029158173,
+          "semantic": 0.4096378999355851
+        },
+        {
+          "documentId": "doc-informal-005",
+          "versionId": "6751a80c-98bc-4916-bb62-81c445b069e2",
+          "ordinal": 0,
+          "score": 0.35142277950637624,
+          "semantic": 0.35142277950637624
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-informal-004",
+          "versionId": "8ca7e00a-5e13-4d07-bbdc-2f01696fa242",
+          "ordinal": 0,
+          "score": 0.6581501230534326
+        },
+        {
+          "documentId": "doc-informal-006",
+          "versionId": "bfc52656-cedd-473a-b0e7-be53002ef294",
+          "ordinal": 0,
+          "score": 0.6096379029158173
+        }
+      ]
+    },
+    {
+      "id": "informal-005",
+      "category": "informal_language",
+      "domain": "dns",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 4.603399999999965,
+      "candidates": [
+        {
+          "documentId": "doc-informal-005",
+          "versionId": "d0c8fa68-5193-407d-ae74-9ca96b7ede42",
+          "ordinal": 0,
+          "score": 0.40995891068288814,
+          "semantic": 0.40995891068288814
+        },
+        {
+          "documentId": "doc-informal-006",
+          "versionId": "25b901e5-7602-4e9d-a441-1fe69f8ec70e",
+          "ordinal": 0,
+          "score": 0.38657314288145783,
+          "semantic": 0.38657314288145783
+        },
+        {
+          "documentId": "doc-informal-008",
+          "versionId": "49d8d47b-c692-4a96-8347-fc76127e7044",
+          "ordinal": 0,
+          "score": 0.36182601922733526,
+          "semantic": 0.36182601922733526
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-informal-005",
+          "versionId": "d0c8fa68-5193-407d-ae74-9ca96b7ede42",
+          "ordinal": 0,
+          "score": 0.40995891068288814
+        }
+      ]
+    },
+    {
+      "id": "informal-006",
+      "category": "informal_language",
+      "domain": "dhcp",
+      "split": "pilot",
+      "recallAt5": 0,
+      "precisionReturnedAt5": 0,
+      "precisionAt5": 0,
+      "mrr": 0,
+      "chunkCoverage": 0,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 0,
+      "latencyMs": 2.615400000000136,
+      "candidates": [
+        {
+          "documentId": "doc-informal-006",
+          "versionId": "9e6ff272-0c8f-4ecd-93f7-b5627e473ecf",
+          "ordinal": 0,
+          "score": 0.3744553510917157,
+          "semantic": 0.3744553510917157
+        }
+      ],
+      "ranked": []
+    },
+    {
+      "id": "informal-007",
+      "category": "informal_language",
+      "domain": "scanners",
+      "split": "pilot",
+      "recallAt5": 0,
+      "precisionReturnedAt5": 0,
+      "precisionAt5": 0,
+      "mrr": 0,
+      "chunkCoverage": 0,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 0,
+      "latencyMs": 2.5398999999997613,
+      "candidates": [
+        {
+          "documentId": "doc-informal-007",
+          "versionId": "2478d6a0-4879-46f6-a3bf-3ef28baaff51",
+          "ordinal": 0,
+          "score": 0.48987688137685337,
+          "semantic": 0.48987688137685337
+        },
+        {
+          "documentId": "doc-informal-002",
+          "versionId": "e47b169d-e50d-42b7-92eb-3584022ee79b",
+          "ordinal": 0,
+          "score": 0.3897525408646706,
+          "semantic": 0.3897525408646706
+        }
+      ],
+      "ranked": []
+    },
+    {
+      "id": "informal-008",
+      "category": "informal_language",
+      "domain": "ris",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.5,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 2,
+      "latencyMs": 2.5072000000000116,
+      "candidates": [
+        {
+          "documentId": "doc-informal-008",
+          "versionId": "73d94578-f4a1-4d07-abbb-e81554301645",
+          "ordinal": 0,
+          "score": 0.7909506303832567,
+          "semantic": 0.4909506259129084
+        },
+        {
+          "documentId": "doc-informal-009",
+          "versionId": "551e7245-a1ae-4047-84c6-a94a1a2fe264",
+          "ordinal": 0,
+          "score": 0.5479721562335973,
+          "semantic": 0.4479721547434812
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-informal-008",
+          "versionId": "73d94578-f4a1-4d07-abbb-e81554301645",
+          "ordinal": 0,
+          "score": 0.7909506303832567
+        },
+        {
+          "documentId": "doc-informal-009",
+          "versionId": "551e7245-a1ae-4047-84c6-a94a1a2fe264",
+          "ordinal": 0,
+          "score": 0.5479721562335973
+        }
+      ]
+    },
+    {
+      "id": "informal-009",
+      "category": "informal_language",
+      "domain": "erp",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 2.4899999999997817,
+      "candidates": [
+        {
+          "documentId": "doc-informal-009",
+          "versionId": "f71caa75-c676-483d-a344-6058a08fe92f",
+          "ordinal": 0,
+          "score": 0.5739023127555929,
+          "semantic": 0.37390230977536065
+        },
+        {
+          "documentId": "doc-informal-004",
+          "versionId": "202c7e4c-6157-4fff-b28e-e2c919086469",
+          "ordinal": 0,
+          "score": 0.3945944371964941,
+          "semantic": 0.3945944371964941
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-informal-009",
+          "versionId": "f71caa75-c676-483d-a344-6058a08fe92f",
+          "ordinal": 0,
+          "score": 0.5739023127555929
+        }
+      ]
+    },
+    {
+      "id": "neighbor-001",
+      "category": "semantic_neighbors",
+      "domain": "impressoras",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.3333333333333333,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 3,
+      "latencyMs": 3.2839999999996508,
+      "candidates": [
+        {
+          "documentId": "doc-neighbor-001",
+          "versionId": "e4286ad3-c175-40fe-8b2e-3d7ca38aa7a1",
+          "ordinal": 0,
+          "score": 1.4555500576512652,
+          "semantic": 0.6555500308291752
+        },
+        {
+          "documentId": "doc-neighbor-002",
+          "versionId": "83a4751e-076d-4986-aca1-8845edba8e62",
+          "ordinal": 0,
+          "score": 0.8230458721911539,
+          "semantic": 0.6230458692109216
+        },
+        {
+          "documentId": "doc-neighbor-005",
+          "versionId": "02eef361-9060-4be4-858d-ced2039bf9d5",
+          "ordinal": 0,
+          "score": 0.45856417545840866,
+          "semantic": 0.35856417396829254
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-neighbor-001",
+          "versionId": "e4286ad3-c175-40fe-8b2e-3d7ca38aa7a1",
+          "ordinal": 0,
+          "score": 1.4555500576512652
+        },
+        {
+          "documentId": "doc-neighbor-002",
+          "versionId": "83a4751e-076d-4986-aca1-8845edba8e62",
+          "ordinal": 0,
+          "score": 0.8230458721911539
+        },
+        {
+          "documentId": "doc-neighbor-005",
+          "versionId": "02eef361-9060-4be4-858d-ced2039bf9d5",
+          "ordinal": 0,
+          "score": 0.45856417545840866
+        }
+      ]
+    },
+    {
+      "id": "neighbor-002",
+      "category": "semantic_neighbors",
+      "domain": "impressoras",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 3.143500000000131,
+      "candidates": [
+        {
+          "documentId": "doc-neighbor-002",
+          "versionId": "30a584f6-e35e-47a9-8bcb-58e9649ffd09",
+          "ordinal": 0,
+          "score": 1.436309182748035,
+          "semantic": 0.7363091648666417
+        },
+        {
+          "documentId": "doc-neighbor-005",
+          "versionId": "cf5ed4d2-d1fa-4868-b5c1-fb8fefa1b33f",
+          "ordinal": 0,
+          "score": 0.35219523107139317,
+          "semantic": 0.35219523107139317
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-neighbor-002",
+          "versionId": "30a584f6-e35e-47a9-8bcb-58e9649ffd09",
+          "ordinal": 0,
+          "score": 1.436309182748035
+        }
+      ]
+    },
+    {
+      "id": "neighbor-003",
+      "category": "semantic_neighbors",
+      "domain": "dns",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.5,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 2,
+      "latencyMs": 2.5658000000003085,
+      "candidates": [
+        {
+          "documentId": "doc-neighbor-003",
+          "versionId": "98c4b193-1600-423b-8e0e-015ee82818df",
+          "ordinal": 0,
+          "score": 1.3313853904905506,
+          "semantic": 0.6313853651585767
+        },
+        {
+          "documentId": "doc-neighbor-004",
+          "versionId": "9c3d2b8c-9da6-40f1-b4f5-6985db0fb89e",
+          "ordinal": 0,
+          "score": 1.0299439177898773,
+          "semantic": 0.6299439118294129
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-neighbor-003",
+          "versionId": "98c4b193-1600-423b-8e0e-015ee82818df",
+          "ordinal": 0,
+          "score": 1.3313853904905506
+        },
+        {
+          "documentId": "doc-neighbor-004",
+          "versionId": "9c3d2b8c-9da6-40f1-b4f5-6985db0fb89e",
+          "ordinal": 0,
+          "score": 1.0299439177898773
+        }
+      ]
+    },
+    {
+      "id": "neighbor-004",
+      "category": "semantic_neighbors",
+      "domain": "dns",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 2.681499999999687,
+      "candidates": [
+        {
+          "documentId": "doc-neighbor-004",
+          "versionId": "14fefe50-f31d-4047-ac5e-6ee0c9e162ba",
+          "ordinal": 0,
+          "score": 1.2166071013813924,
+          "semantic": 0.6166070924406958
+        },
+        {
+          "documentId": "doc-neighbor-008",
+          "versionId": "6ad49e5c-b82b-426f-957e-693b6253df7f",
+          "ordinal": 0,
+          "score": 0.43891861788137254,
+          "semantic": 0.43891861788137254
+        },
+        {
+          "documentId": "doc-neighbor-007",
+          "versionId": "7cff7e8d-edeb-44cd-a07d-623591d1ef50",
+          "ordinal": 0,
+          "score": 0.35634241667688604,
+          "semantic": 0.35634241667688604
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-neighbor-004",
+          "versionId": "14fefe50-f31d-4047-ac5e-6ee0c9e162ba",
+          "ordinal": 0,
+          "score": 1.2166071013813924
+        }
+      ]
+    },
+    {
+      "id": "neighbor-005",
+      "category": "semantic_neighbors",
+      "domain": "dhcp",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.5,
+      "precisionAt5": 0.2,
+      "mrr": 0.5,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 2,
+      "latencyMs": 2.877200000000812,
+      "candidates": [
+        {
+          "documentId": "doc-neighbor-006",
+          "versionId": "1ac97463-3f24-477e-9b08-1b1ee4f39cd2",
+          "ordinal": 0,
+          "score": 0.7229523730727915,
+          "semantic": 0.4229523686024431
+        },
+        {
+          "documentId": "doc-neighbor-005",
+          "versionId": "2df1e653-7419-49b0-91cc-3f890e14e0e3",
+          "ordinal": 0,
+          "score": 0.6055578076396868,
+          "semantic": 0.5055578061495707
+        },
+        {
+          "documentId": "doc-neighbor-008",
+          "versionId": "d44741f2-1a38-48db-9a71-4aca90009e68",
+          "ordinal": 0,
+          "score": 0.4021189335436264,
+          "semantic": 0.4021189335436264
+        },
+        {
+          "documentId": "doc-neighbor-007",
+          "versionId": "3c896b3d-b4cd-4a1e-893d-7bb0440db6cb",
+          "ordinal": 0,
+          "score": 0.39829880468209455,
+          "semantic": 0.39829880468209455
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-neighbor-006",
+          "versionId": "1ac97463-3f24-477e-9b08-1b1ee4f39cd2",
+          "ordinal": 0,
+          "score": 0.7229523730727915
+        },
+        {
+          "documentId": "doc-neighbor-005",
+          "versionId": "2df1e653-7419-49b0-91cc-3f890e14e0e3",
+          "ordinal": 0,
+          "score": 0.6055578076396868
+        }
+      ]
+    },
+    {
+      "id": "neighbor-006",
+      "category": "semantic_neighbors",
+      "domain": "dhcp",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 2.727600000000166,
+      "candidates": [
+        {
+          "documentId": "doc-neighbor-006",
+          "versionId": "2bec6bcc-0b4e-4a4c-afc3-4fcbf27f8f10",
+          "ordinal": 0,
+          "score": 0.6107206950853161,
+          "semantic": 0.4107206921050839
+        },
+        {
+          "documentId": "doc-neighbor-008",
+          "versionId": "a465f798-635a-4ddc-a328-2a2bba8851e5",
+          "ordinal": 0,
+          "score": 0.3873243196337546,
+          "semantic": 0.3873243196337546
+        },
+        {
+          "documentId": "doc-neighbor-007",
+          "versionId": "17f4a532-d1aa-4953-b33b-d30281f58e35",
+          "ordinal": 0,
+          "score": 0.3671922240651766,
+          "semantic": 0.3671922240651766
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-neighbor-006",
+          "versionId": "2bec6bcc-0b4e-4a4c-afc3-4fcbf27f8f10",
+          "ordinal": 0,
+          "score": 0.6107206950853161
+        }
+      ]
+    },
+    {
+      "id": "neighbor-007",
+      "category": "semantic_neighbors",
+      "domain": "ris",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.5,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 2,
+      "latencyMs": 2.6661000000003696,
+      "candidates": [
+        {
+          "documentId": "doc-neighbor-007",
+          "versionId": "dc00fed6-7489-4ea8-9523-cb06875ce5a0",
+          "ordinal": 0,
+          "score": 1.236270882619996,
+          "semantic": 0.5362708572880218
+        },
+        {
+          "documentId": "doc-neighbor-008",
+          "versionId": "f6d1c09c-33f9-495d-93af-903d7a155965",
+          "ordinal": 0,
+          "score": 0.6569961657851964,
+          "semantic": 0.45699616280496413
+        },
+        {
+          "documentId": "doc-neighbor-002",
+          "versionId": "f93917c7-4790-4be1-8096-c812fc141171",
+          "ordinal": 0,
+          "score": 0.38612276341721863,
+          "semantic": 0.38612276341721863
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-neighbor-007",
+          "versionId": "dc00fed6-7489-4ea8-9523-cb06875ce5a0",
+          "ordinal": 0,
+          "score": 1.236270882619996
+        },
+        {
+          "documentId": "doc-neighbor-008",
+          "versionId": "f6d1c09c-33f9-495d-93af-903d7a155965",
+          "ordinal": 0,
+          "score": 0.6569961657851964
+        }
+      ]
+    },
+    {
+      "id": "neighbor-008",
+      "category": "semantic_neighbors",
+      "domain": "pacs",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.5,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 2,
+      "latencyMs": 3.5331999999998516,
+      "candidates": [
+        {
+          "documentId": "doc-neighbor-008",
+          "versionId": "ffa3e8f4-c96a-4ad1-b1cd-6600f4558e59",
+          "ordinal": 0,
+          "score": 0.9927395534176156,
+          "semantic": 0.49273954596703495
+        },
+        {
+          "documentId": "doc-neighbor-003",
+          "versionId": "6a8eeb69-219f-483b-83f2-b3a0c6e84a0e",
+          "ordinal": 0,
+          "score": 0.37767691093286426,
+          "semantic": 0.27767690944274814
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-neighbor-008",
+          "versionId": "ffa3e8f4-c96a-4ad1-b1cd-6600f4558e59",
+          "ordinal": 0,
+          "score": 0.9927395534176156
+        },
+        {
+          "documentId": "doc-neighbor-003",
+          "versionId": "6a8eeb69-219f-483b-83f2-b3a0c6e84a0e",
+          "ordinal": 0,
+          "score": 0.37767691093286426
+        }
+      ]
+    },
+    {
+      "id": "neighbor-009",
+      "category": "semantic_neighbors",
+      "domain": "erp",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.5,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 2,
+      "latencyMs": 3.8159000000005108,
+      "candidates": [
+        {
+          "documentId": "doc-neighbor-009",
+          "versionId": "c163383f-6977-45c8-aa95-8e12cda90ac3",
+          "ordinal": 0,
+          "score": 0.9412221266355731,
+          "semantic": 0.44122211918499255
+        },
+        {
+          "documentId": "doc-neighbor-004",
+          "versionId": "af74dc3a-9035-4d3e-a412-4ddd17c2fccb",
+          "ordinal": 0,
+          "score": 0.6494248857665716,
+          "semantic": 0.3494248812962233
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-neighbor-009",
+          "versionId": "c163383f-6977-45c8-aa95-8e12cda90ac3",
+          "ordinal": 0,
+          "score": 0.9412221266355731
+        },
+        {
+          "documentId": "doc-neighbor-004",
+          "versionId": "af74dc3a-9035-4d3e-a412-4ddd17c2fccb",
+          "ordinal": 0,
+          "score": 0.6494248857665716
+        }
+      ]
+    },
+    {
+      "id": "long-001",
+      "category": "long_prerequisites",
+      "domain": "telefonia",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.5,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 3,
+      "latencyMs": 2.8271999999997206,
+      "candidates": [
+        {
+          "documentId": "doc-long-001",
+          "versionId": "bc55560f-48fd-4d36-a195-7fa9a7c83374",
+          "ordinal": 1,
+          "score": 1.036978400910065,
+          "semantic": 0.4369783770682072
+        },
+        {
+          "documentId": "doc-long-001",
+          "versionId": "bc55560f-48fd-4d36-a195-7fa9a7c83374",
+          "ordinal": 0,
+          "score": 0.9959715890403456,
+          "semantic": 0.39597156519848764
+        },
+        {
+          "documentId": "doc-long-005",
+          "versionId": "81eec1e2-35fe-4291-aa9a-181b28548d94",
+          "ordinal": 0,
+          "score": 0.5949256307881066,
+          "semantic": 0.3949256278078743
+        },
+        {
+          "documentId": "doc-long-004",
+          "versionId": "bef56717-3ae9-4fa7-9bb9-b3e08c92d8c2",
+          "ordinal": 0,
+          "score": 0.4158634336383016,
+          "semantic": 0.4158634336383016
+        },
+        {
+          "documentId": "doc-long-003",
+          "versionId": "1727dfc7-9871-4993-86a0-a73424fb3363",
+          "ordinal": 0,
+          "score": 0.393251584080605,
+          "semantic": 0.393251584080605
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-long-001",
+          "versionId": "bc55560f-48fd-4d36-a195-7fa9a7c83374",
+          "ordinal": 1,
+          "score": 1.036978400910065
+        },
+        {
+          "documentId": "doc-long-001",
+          "versionId": "bc55560f-48fd-4d36-a195-7fa9a7c83374",
+          "ordinal": 0,
+          "score": 0.9959715890403456
+        },
+        {
+          "documentId": "doc-long-005",
+          "versionId": "81eec1e2-35fe-4291-aa9a-181b28548d94",
+          "ordinal": 0,
+          "score": 0.5949256307881066
+        }
+      ]
+    },
+    {
+      "id": "long-002",
+      "category": "long_prerequisites",
+      "domain": "impressoras",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 2.567399999999907,
+      "candidates": [
+        {
+          "documentId": "doc-long-002",
+          "versionId": "b8c1aad6-0a0a-47eb-9d23-a127f808c6cf",
+          "ordinal": 0,
+          "score": 1.1403220669884075,
+          "semantic": 0.5403220580477108
+        },
+        {
+          "documentId": "doc-long-005",
+          "versionId": "5993e48e-1a19-4674-a9a5-4602c51a3904",
+          "ordinal": 0,
+          "score": 0.37183728178600195,
+          "semantic": 0.37183728178600195
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-long-002",
+          "versionId": "b8c1aad6-0a0a-47eb-9d23-a127f808c6cf",
+          "ordinal": 0,
+          "score": 1.1403220669884075
+        }
+      ]
+    },
+    {
+      "id": "long-003",
+      "category": "long_prerequisites",
+      "domain": "computadores",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 2.4879000000000815,
+      "candidates": [
+        {
+          "documentId": "doc-long-003",
+          "versionId": "c445d16d-93d6-4561-b688-109e996e4478",
+          "ordinal": 0,
+          "score": 1.2516411426018732,
+          "semantic": 0.45164111577978294
+        },
+        {
+          "documentId": "doc-long-001",
+          "versionId": "206e1324-57ca-42e4-84b3-622e5bce47e1",
+          "ordinal": 0,
+          "score": 0.3515930218596188,
+          "semantic": 0.3515930218596188
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-long-003",
+          "versionId": "c445d16d-93d6-4561-b688-109e996e4478",
+          "ordinal": 0,
+          "score": 1.2516411426018732
+        }
+      ]
+    },
+    {
+      "id": "long-004",
+      "category": "long_prerequisites",
+      "domain": "wifi",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 2.974199999999655,
+      "candidates": [
+        {
+          "documentId": "doc-long-004",
+          "versionId": "f268588e-84eb-46a4-a4fd-0dc0075a4255",
+          "ordinal": 0,
+          "score": 1.358281829624357,
+          "semantic": 0.558281802802267
+        },
+        {
+          "documentId": "doc-long-001",
+          "versionId": "5abe913e-1e4d-4a10-8b37-0504e2025d0e",
+          "ordinal": 0,
+          "score": 0.4125922112955853,
+          "semantic": 0.4125922112955853
+        },
+        {
+          "documentId": "doc-long-002",
+          "versionId": "d06cb31f-cae6-4121-961a-3b891e8bb467",
+          "ordinal": 0,
+          "score": 0.4120206252967631,
+          "semantic": 0.4120206252967631
+        },
+        {
+          "documentId": "doc-long-006",
+          "versionId": "abc8c94e-c8c6-4dfa-8e2d-d0c7248f599e",
+          "ordinal": 0,
+          "score": 0.3574696686566905,
+          "semantic": 0.3574696686566905
+        },
+        {
+          "documentId": "doc-long-005",
+          "versionId": "dd8a52a8-2750-4cb9-b1be-54a9bef3ff98",
+          "ordinal": 0,
+          "score": 0.3549938072855082,
+          "semantic": 0.3549938072855082
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-long-004",
+          "versionId": "f268588e-84eb-46a4-a4fd-0dc0075a4255",
+          "ordinal": 0,
+          "score": 1.358281829624357
+        }
+      ]
+    },
+    {
+      "id": "long-005",
+      "category": "long_prerequisites",
+      "domain": "dns",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.5,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 2,
+      "latencyMs": 3.8049000000000888,
+      "candidates": [
+        {
+          "documentId": "doc-long-005",
+          "versionId": "b0eaf668-8a9f-446b-a60e-3ab14a9febc8",
+          "ordinal": 0,
+          "score": 0.8426217309817787,
+          "semantic": 0.44262172502131425
+        },
+        {
+          "documentId": "doc-long-001",
+          "versionId": "171ee429-2d65-4f4a-a5af-794c2d727ab7",
+          "ordinal": 1,
+          "score": 0.5402913174589421,
+          "semantic": 0.440291315968826
+        },
+        {
+          "documentId": "doc-long-001",
+          "versionId": "171ee429-2d65-4f4a-a5af-794c2d727ab7",
+          "ordinal": 0,
+          "score": 0.4133283615798209,
+          "semantic": 0.4133283615798209
+        },
+        {
+          "documentId": "doc-long-003",
+          "versionId": "1b961b7a-cc71-4952-82c3-2ed66c7eafb9",
+          "ordinal": 0,
+          "score": 0.3968185743415251,
+          "semantic": 0.3968185743415251
+        },
+        {
+          "documentId": "doc-long-006",
+          "versionId": "36561d97-3b37-4dcd-894f-18060de90fdf",
+          "ordinal": 0,
+          "score": 0.3770659799988505,
+          "semantic": 0.3770659799988505
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-long-005",
+          "versionId": "b0eaf668-8a9f-446b-a60e-3ab14a9febc8",
+          "ordinal": 0,
+          "score": 0.8426217309817787
+        },
+        {
+          "documentId": "doc-long-001",
+          "versionId": "171ee429-2d65-4f4a-a5af-794c2d727ab7",
+          "ordinal": 1,
+          "score": 0.5402913174589421
+        }
+      ]
+    },
+    {
+      "id": "long-006",
+      "category": "long_prerequisites",
+      "domain": "dhcp",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.5,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 2,
+      "latencyMs": 4.2280000000000655,
+      "candidates": [
+        {
+          "documentId": "doc-long-006",
+          "versionId": "b7fdef06-465b-4b89-8c07-908fa6f8da25",
+          "ordinal": 0,
+          "score": 1.254322617164021,
+          "semantic": 0.554322591832047
+        },
+        {
+          "documentId": "doc-long-004",
+          "versionId": "ea75dc19-9b66-42e5-afae-0b68583f5859",
+          "ordinal": 0,
+          "score": 0.49559226112293797,
+          "semantic": 0.49559226112293797
+        },
+        {
+          "documentId": "doc-long-003",
+          "versionId": "571cbe0b-19c4-49e0-ba3c-f7849b2b740f",
+          "ordinal": 0,
+          "score": 0.4675639274044321,
+          "semantic": 0.4675639274044321
+        },
+        {
+          "documentId": "doc-long-001",
+          "versionId": "ba3e54c3-eb19-4cd9-b2bf-d81cc1ec1ab7",
+          "ordinal": 1,
+          "score": 0.4439254651347724,
+          "semantic": 0.4439254651347724
+        },
+        {
+          "documentId": "doc-long-002",
+          "versionId": "60a1d3a3-bb15-41e6-a59f-5beaa8dd0353",
+          "ordinal": 0,
+          "score": 0.42795088373887435,
+          "semantic": 0.32795088224875824
+        },
+        {
+          "documentId": "doc-long-001",
+          "versionId": "ba3e54c3-eb19-4cd9-b2bf-d81cc1ec1ab7",
+          "ordinal": 0,
+          "score": 0.38624111983990506,
+          "semantic": 0.38624111983990506
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-long-006",
+          "versionId": "b7fdef06-465b-4b89-8c07-908fa6f8da25",
+          "ordinal": 0,
+          "score": 1.254322617164021
+        },
+        {
+          "documentId": "doc-long-002",
+          "versionId": "60a1d3a3-bb15-41e6-a59f-5beaa8dd0353",
+          "ordinal": 0,
+          "score": 0.42795088373887435
+        }
+      ]
+    },
+    {
+      "id": "partial-001",
+      "category": "partial_information",
+      "domain": "telefonia",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 4.863000000000284,
+      "candidates": [
+        {
+          "documentId": "doc-partial-001",
+          "versionId": "10d49c78-c2a3-43b3-ac77-9b7d2ba13d8f",
+          "ordinal": 0,
+          "score": 0.7196958345349251,
+          "semantic": 0.4196958300645768
+        },
+        {
+          "documentId": "doc-partial-002",
+          "versionId": "85276648-c293-49cf-95e5-7bfa186aca36",
+          "ordinal": 0,
+          "score": 0.3973327171567944,
+          "semantic": 0.3973327171567944
+        },
+        {
+          "documentId": "doc-partial-004",
+          "versionId": "19ad941d-af74-4943-bfba-cb58e29f0eac",
+          "ordinal": 0,
+          "score": 0.396204719367514,
+          "semantic": 0.396204719367514
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-partial-001",
+          "versionId": "10d49c78-c2a3-43b3-ac77-9b7d2ba13d8f",
+          "ordinal": 0,
+          "score": 0.7196958345349251
+        }
+      ]
+    },
+    {
+      "id": "partial-002",
+      "category": "partial_information",
+      "domain": "impressoras",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.5,
+      "precisionAt5": 0.2,
+      "mrr": 0.5,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 2,
+      "latencyMs": 4.0208999999995285,
+      "candidates": [
+        {
+          "documentId": "doc-partial-006",
+          "versionId": "6e3ee1c9-933e-4eb9-8e7f-69d73049a6ef",
+          "ordinal": 0,
+          "score": 0.8570637917590144,
+          "semantic": 0.4570637857985499
+        },
+        {
+          "documentId": "doc-partial-002",
+          "versionId": "9e0ea2f8-bd48-42d2-ad8f-8a8c062640b0",
+          "ordinal": 0,
+          "score": 0.8510600162434543,
+          "semantic": 0.5510600117731059
+        },
+        {
+          "documentId": "doc-partial-004",
+          "versionId": "bc9caf45-a5e2-4598-b437-beb57577112d",
+          "ordinal": 0,
+          "score": 0.3819623784021494,
+          "semantic": 0.3819623784021494
+        },
+        {
+          "documentId": "doc-partial-005",
+          "versionId": "da53fb70-00ba-4298-bc6c-8d73d0bd9afb",
+          "ordinal": 0,
+          "score": 0.3598414723467045,
+          "semantic": 0.3598414723467045
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-partial-006",
+          "versionId": "6e3ee1c9-933e-4eb9-8e7f-69d73049a6ef",
+          "ordinal": 0,
+          "score": 0.8570637917590144
+        },
+        {
+          "documentId": "doc-partial-002",
+          "versionId": "9e0ea2f8-bd48-42d2-ad8f-8a8c062640b0",
+          "ordinal": 0,
+          "score": 0.8510600162434543
+        }
+      ]
+    },
+    {
+      "id": "partial-003",
+      "category": "partial_information",
+      "domain": "computadores",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 3.191899999999805,
+      "candidates": [
+        {
+          "documentId": "doc-partial-003",
+          "versionId": "7fc8254b-ec58-4da2-9287-fb78e6701f6b",
+          "ordinal": 0,
+          "score": 0.9740119751224864,
+          "semantic": 0.4740119676719058
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-partial-003",
+          "versionId": "7fc8254b-ec58-4da2-9287-fb78e6701f6b",
+          "ordinal": 0,
+          "score": 0.9740119751224864
+        }
+      ]
+    },
+    {
+      "id": "partial-004",
+      "category": "partial_information",
+      "domain": "wifi",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.5,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 2,
+      "latencyMs": 3.1947000000000116,
+      "candidates": [
+        {
+          "documentId": "doc-partial-004",
+          "versionId": "da56f195-c91c-4d39-807e-c805beef3530",
+          "ordinal": 0,
+          "score": 0.8535868270377339,
+          "semantic": 0.45358682107726944
+        },
+        {
+          "documentId": "doc-partial-001",
+          "versionId": "daaffd23-ce44-417d-ac05-01c42abaa1bd",
+          "ordinal": 0,
+          "score": 0.46772301401033867,
+          "semantic": 0.36772301252022255
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-partial-004",
+          "versionId": "da56f195-c91c-4d39-807e-c805beef3530",
+          "ordinal": 0,
+          "score": 0.8535868270377339
+        },
+        {
+          "documentId": "doc-partial-001",
+          "versionId": "daaffd23-ce44-417d-ac05-01c42abaa1bd",
+          "ordinal": 0,
+          "score": 0.46772301401033867
+        }
+      ]
+    },
+    {
+      "id": "partial-005",
+      "category": "partial_information",
+      "domain": "dns",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 3.606300000000374,
+      "candidates": [
+        {
+          "documentId": "doc-partial-005",
+          "versionId": "2947e3b1-a0e8-457f-a16e-37e8cca46abf",
+          "ordinal": 0,
+          "score": 0.6670745260618909,
+          "semantic": 0.46707452308165864
+        },
+        {
+          "documentId": "doc-partial-001",
+          "versionId": "4f1f4aff-5787-4a31-9109-20b8a8b13d18",
+          "ordinal": 0,
+          "score": 0.49915993764659694,
+          "semantic": 0.49915993764659694
+        },
+        {
+          "documentId": "doc-partial-006",
+          "versionId": "d7a23a46-f599-4e93-8214-2f325842c38f",
+          "ordinal": 0,
+          "score": 0.38384221717845524,
+          "semantic": 0.38384221717845524
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-partial-005",
+          "versionId": "2947e3b1-a0e8-457f-a16e-37e8cca46abf",
+          "ordinal": 0,
+          "score": 0.6670745260618909
+        }
+      ]
+    },
+    {
+      "id": "partial-006",
+      "category": "partial_information",
+      "domain": "dhcp",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 3.6538999999993393,
+      "candidates": [
+        {
+          "documentId": "doc-partial-006",
+          "versionId": "c22764f5-31bd-4edf-837f-764118917a90",
+          "ordinal": 0,
+          "score": 1.1116717549312924,
+          "semantic": 0.5116717459905957
+        },
+        {
+          "documentId": "doc-partial-002",
+          "versionId": "d381f62f-94ed-4f07-abee-28e05d97b6f9",
+          "ordinal": 0,
+          "score": 0.3959147070269513,
+          "semantic": 0.3959147070269513
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-partial-006",
+          "versionId": "c22764f5-31bd-4edf-837f-764118917a90",
+          "ordinal": 0,
+          "score": 1.1116717549312924
+        }
+      ]
+    },
+    {
+      "id": "version-001",
+      "category": "conflicting_versions",
+      "domain": "telefonia",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 4.036000000000058,
+      "candidates": [
+        {
+          "documentId": "doc-version-001",
+          "versionId": "ce1524a3-fdf9-4f36-bf4b-1a6dcc0e4dc9",
+          "ordinal": 0,
+          "score": 0.8807089990796388,
+          "semantic": 0.38070899162905825
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-version-001",
+          "versionId": "ce1524a3-fdf9-4f36-bf4b-1a6dcc0e4dc9",
+          "ordinal": 0,
+          "score": 0.8807089990796388
+        }
+      ]
+    },
+    {
+      "id": "version-002",
+      "category": "conflicting_versions",
+      "domain": "impressoras",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 3.912199999999757,
+      "candidates": [
+        {
+          "documentId": "doc-version-002",
+          "versionId": "c6558fd1-ae95-45f2-b55c-dccc4dcf4827",
+          "ordinal": 0,
+          "score": 0.6968262197542945,
+          "semantic": 0.29682621379383
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-version-002",
+          "versionId": "c6558fd1-ae95-45f2-b55c-dccc4dcf4827",
+          "ordinal": 0,
+          "score": 0.6968262197542945
+        }
+      ]
+    },
+    {
+      "id": "version-003",
+      "category": "conflicting_versions",
+      "domain": "computadores",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 4.0002000000004045,
+      "candidates": [
+        {
+          "documentId": "doc-version-003",
+          "versionId": "167ce71a-3295-492a-aabf-a36e073225bd",
+          "ordinal": 0,
+          "score": 1.03079329209427,
+          "semantic": 0.5307932846436894
+        },
+        {
+          "documentId": "doc-version-006",
+          "versionId": "aeb65e4d-d545-492b-8b9d-e70f409e589c",
+          "ordinal": 0,
+          "score": 0.3506021914540456,
+          "semantic": 0.3506021914540456
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-version-003",
+          "versionId": "167ce71a-3295-492a-aabf-a36e073225bd",
+          "ordinal": 0,
+          "score": 1.03079329209427
+        }
+      ]
+    },
+    {
+      "id": "version-004",
+      "category": "conflicting_versions",
+      "domain": "wifi",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 2.558600000000297,
+      "candidates": [
+        {
+          "documentId": "doc-version-004",
+          "versionId": "44345262-c138-41b7-baef-e29da73b4ea5",
+          "ordinal": 0,
+          "score": 0.9869685994742334,
+          "semantic": 0.586968593513769
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-version-004",
+          "versionId": "44345262-c138-41b7-baef-e29da73b4ea5",
+          "ordinal": 0,
+          "score": 0.9869685994742334
+        }
+      ]
+    },
+    {
+      "id": "version-005",
+      "category": "conflicting_versions",
+      "domain": "dns",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 1,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 2.496999999999389,
+      "candidates": [
+        {
+          "documentId": "doc-version-005",
+          "versionId": "59c577ea-8807-49c2-a5f7-8c0f6a119cf3",
+          "ordinal": 0,
+          "score": 0.6958317264602978,
+          "semantic": 0.49583172348006554
+        },
+        {
+          "documentId": "doc-version-001",
+          "versionId": "feaa23b7-bed5-4b91-8cde-1e5788eec117",
+          "ordinal": 0,
+          "score": 0.4314251308375532,
+          "semantic": 0.4314251308375532
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-version-005",
+          "versionId": "59c577ea-8807-49c2-a5f7-8c0f6a119cf3",
+          "ordinal": 0,
+          "score": 0.6958317264602978
+        }
+      ]
+    },
+    {
+      "id": "version-006",
+      "category": "conflicting_versions",
+      "domain": "dhcp",
+      "split": "pilot",
+      "recallAt5": 0,
+      "precisionReturnedAt5": 0,
+      "precisionAt5": 0,
+      "mrr": 0,
+      "chunkCoverage": 0,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 1,
+      "latencyMs": 2.6022000000002663,
+      "candidates": [
+        {
+          "documentId": "doc-version-001",
+          "versionId": "ab8cc96a-3a0b-4361-9cbb-f386c500f00d",
+          "ordinal": 0,
+          "score": 0.5375795657982461,
+          "semantic": 0.43757956430812994
+        },
+        {
+          "documentId": "doc-version-003",
+          "versionId": "fd42cc87-eb68-4235-934c-03ab643d0ebe",
+          "ordinal": 0,
+          "score": 0.3606943879911608,
+          "semantic": 0.3606943879911608
+        },
+        {
+          "documentId": "doc-version-006",
+          "versionId": "2e8d0767-84af-438c-bd7b-ba9b1174214e",
+          "ordinal": 0,
+          "score": 0.3604472712017843,
+          "semantic": 0.3604472712017843
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-version-001",
+          "versionId": "ab8cc96a-3a0b-4361-9cbb-f386c500f00d",
+          "ordinal": 0,
+          "score": 0.5375795657982461
+        }
+      ]
+    },
+    {
+      "id": "multi-001",
+      "category": "multiple_objectives",
+      "domain": "telefonia",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.5,
+      "precisionAt5": 0.4,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 4,
+      "latencyMs": 4.330399999999827,
+      "candidates": [
+        {
+          "documentId": "doc-multi-001",
+          "versionId": "1c83d656-d514-4a28-8275-82709b702453",
+          "ordinal": 0,
+          "score": 1.0445285401487574,
+          "semantic": 0.6445285341882928
+        },
+        {
+          "documentId": "doc-multi-001-objective-2",
+          "versionId": "c3fb4969-f522-4371-aec5-ed38e32994b9",
+          "ordinal": 0,
+          "score": 0.8056220219503454,
+          "semantic": 0.505622017479997
+        },
+        {
+          "documentId": "doc-multi-001-distractor",
+          "versionId": "f4514e79-712e-4810-be7a-8c76755a4509",
+          "ordinal": 0,
+          "score": 0.720527649161709,
+          "semantic": 0.4205276446913606
+        },
+        {
+          "documentId": "doc-multi-002",
+          "versionId": "85e92622-726a-4831-b68d-3e409a0729eb",
+          "ordinal": 0,
+          "score": 0.42634916483127505,
+          "semantic": 0.32634916334115893
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-multi-001",
+          "versionId": "1c83d656-d514-4a28-8275-82709b702453",
+          "ordinal": 0,
+          "score": 1.0445285401487574
+        },
+        {
+          "documentId": "doc-multi-001-objective-2",
+          "versionId": "c3fb4969-f522-4371-aec5-ed38e32994b9",
+          "ordinal": 0,
+          "score": 0.8056220219503454
+        },
+        {
+          "documentId": "doc-multi-001-distractor",
+          "versionId": "f4514e79-712e-4810-be7a-8c76755a4509",
+          "ordinal": 0,
+          "score": 0.720527649161709
+        },
+        {
+          "documentId": "doc-multi-002",
+          "versionId": "85e92622-726a-4831-b68d-3e409a0729eb",
+          "ordinal": 0,
+          "score": 0.42634916483127505
+        }
+      ]
+    },
+    {
+      "id": "multi-002",
+      "category": "multiple_objectives",
+      "domain": "impressoras",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.6666666666666666,
+      "precisionAt5": 0.4,
+      "mrr": 1,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 3,
+      "latencyMs": 4.391099999999824,
+      "candidates": [
+        {
+          "documentId": "doc-multi-002-objective-2",
+          "versionId": "548574da-3e06-4adb-91f3-2a991de1b5cb",
+          "ordinal": 0,
+          "score": 1.5136741862275187,
+          "semantic": 0.613674150464732
+        },
+        {
+          "documentId": "doc-multi-002-distractor",
+          "versionId": "4c8035ec-40bc-4c8a-975d-5c80acb64ba8",
+          "ordinal": 0,
+          "score": 1.4736052653348817,
+          "semantic": 0.5736052295720947
+        },
+        {
+          "documentId": "doc-multi-002",
+          "versionId": "d90f288f-f32d-4ca5-b891-7d6aade4d9ca",
+          "ordinal": 0,
+          "score": 1.4709880009989478,
+          "semantic": 0.6709879741768576
+        },
+        {
+          "documentId": "doc-multi-003",
+          "versionId": "8d1377af-064c-45a9-a3f5-7c7aa2aef8e5",
+          "ordinal": 0,
+          "score": 0.374277994318168,
+          "semantic": 0.374277994318168
+        },
+        {
+          "documentId": "doc-multi-004",
+          "versionId": "ae3e5894-8a31-49e7-a81f-823b616e3687",
+          "ordinal": 0,
+          "score": 0.3683430310511284,
+          "semantic": 0.3683430310511284
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-multi-002-objective-2",
+          "versionId": "548574da-3e06-4adb-91f3-2a991de1b5cb",
+          "ordinal": 0,
+          "score": 1.5136741862275187
+        },
+        {
+          "documentId": "doc-multi-002-distractor",
+          "versionId": "4c8035ec-40bc-4c8a-975d-5c80acb64ba8",
+          "ordinal": 0,
+          "score": 1.4736052653348817
+        },
+        {
+          "documentId": "doc-multi-002",
+          "versionId": "d90f288f-f32d-4ca5-b891-7d6aade4d9ca",
+          "ordinal": 0,
+          "score": 1.4709880009989478
+        }
+      ]
+    },
+    {
+      "id": "multi-003",
+      "category": "multiple_objectives",
+      "domain": "scanners",
+      "split": "pilot",
+      "recallAt5": 0.5,
+      "precisionReturnedAt5": 0.5,
+      "precisionAt5": 0.2,
+      "mrr": 1,
+      "chunkCoverage": 0.5,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 2,
+      "latencyMs": 4.001999999999498,
+      "candidates": [
+        {
+          "documentId": "doc-multi-003",
+          "versionId": "7b709011-d165-4237-be2a-b735d0017371",
+          "ordinal": 0,
+          "score": 0.8255138058265524,
+          "semantic": 0.6255138028463202
+        },
+        {
+          "documentId": "doc-multi-001",
+          "versionId": "900257d7-7d15-4094-aefa-607da4c573e2",
+          "ordinal": 0,
+          "score": 0.5074823510943793,
+          "semantic": 0.3074823481141471
+        },
+        {
+          "documentId": "doc-multi-003-objective-2",
+          "versionId": "1f3183fe-c97a-40d2-9b97-bf2bb9a9fabd",
+          "ordinal": 0,
+          "score": 0.47976652326434677,
+          "semantic": 0.47976652326434677
+        },
+        {
+          "documentId": "doc-multi-003-distractor",
+          "versionId": "9cbbd0d9-e4c8-465c-a5ba-30c80d35a26e",
+          "ordinal": 0,
+          "score": 0.47555740069993035,
+          "semantic": 0.47555740069993035
+        },
+        {
+          "documentId": "doc-multi-004",
+          "versionId": "d04870c4-6dbd-4add-9f2d-9d81829f4cbb",
+          "ordinal": 0,
+          "score": 0.364604655472319,
+          "semantic": 0.364604655472319
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-multi-003",
+          "versionId": "7b709011-d165-4237-be2a-b735d0017371",
+          "ordinal": 0,
+          "score": 0.8255138058265524
+        },
+        {
+          "documentId": "doc-multi-001",
+          "versionId": "900257d7-7d15-4094-aefa-607da4c573e2",
+          "ordinal": 0,
+          "score": 0.5074823510943793
+        }
+      ]
+    },
+    {
+      "id": "multi-004",
+      "category": "multiple_objectives",
+      "domain": "redes",
+      "split": "pilot",
+      "recallAt5": 1,
+      "precisionReturnedAt5": 0.6666666666666666,
+      "precisionAt5": 0.4,
+      "mrr": 0.5,
+      "chunkCoverage": 1,
+      "correctCurrentVersion": true,
+      "incompatibleDocuments": 0,
+      "returned": 3,
+      "latencyMs": 2.940599999999904,
+      "candidates": [
+        {
+          "documentId": "doc-multi-004-distractor",
+          "versionId": "5de345ee-348a-4402-a835-6ccd481a6335",
+          "ordinal": 0,
+          "score": 1.1382782950929302,
+          "semantic": 0.5382782861522336
+        },
+        {
+          "documentId": "doc-multi-004-objective-2",
+          "versionId": "eedbf415-2e85-4eb1-a8c7-83f47187654f",
+          "ordinal": 0,
+          "score": 1.1297805376468495,
+          "semantic": 0.5297805287061528
+        },
+        {
+          "documentId": "doc-multi-004",
+          "versionId": "e9911408-d680-4e91-a34f-fc90829f437b",
+          "ordinal": 0,
+          "score": 1.1104676850111554,
+          "semantic": 0.6104676775605749
+        },
+        {
+          "documentId": "doc-multi-001",
+          "versionId": "e398c123-9e28-41a0-aa0a-68d1e46cf957",
+          "ordinal": 0,
+          "score": 0.3540579585609367,
+          "semantic": 0.3540579585609367
+        }
+      ],
+      "ranked": [
+        {
+          "documentId": "doc-multi-004-distractor",
+          "versionId": "5de345ee-348a-4402-a835-6ccd481a6335",
+          "ordinal": 0,
+          "score": 1.1382782950929302
+        },
+        {
+          "documentId": "doc-multi-004-objective-2",
+          "versionId": "eedbf415-2e85-4eb1-a8c7-83f47187654f",
+          "ordinal": 0,
+          "score": 1.1297805376468495
+        },
+        {
+          "documentId": "doc-multi-004",
+          "versionId": "e9911408-d680-4e91-a34f-fc90829f437b",
+          "ordinal": 0,
+          "score": 1.1104676850111554
+        }
+      ]
+    }
+  ]
+}

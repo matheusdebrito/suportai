@@ -1,0 +1,15 @@
+{
+  "turns": 5,
+  "episodes": 1,
+  "continuity": 1,
+  "falseAcceptances": 0,
+  "falseRejections": 0,
+  "degradedFallbacks": 0,
+  "unnecessaryWarnings": 0,
+  "repeatedQuestions": 0,
+  "unauthorizedSources": 0,
+  "secretLeaks": 0,
+  "indirectAnswers": 0,
+  "inappropriateSteps": 0,
+  "incompleteProcedures": 0
+}

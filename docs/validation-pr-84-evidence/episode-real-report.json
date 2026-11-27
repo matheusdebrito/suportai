@@ -1,0 +1,183 @@
+{
+  "mode": "real-http",
+  "model": "gpt-4.1-mini",
+  "embeddingModel": "text-embedding-3-small",
+  "temperature": 0.2,
+  "limits": {
+    "maxSteps": 8,
+    "maxSearches": 5,
+    "maxToolsPerStep": 4,
+    "maxSources": 12,
+    "maxElapsedMs": 60000,
+    "maxTokensPerCall": 1800,
+    "maxCompletionTokens": 9000,
+    "maxTotalTokens": 40000,
+    "maxRepeatedSearches": 2,
+    "maxSearchFailures": 2
+  },
+  "corpusHash": "669005f2f335bfe15218a29ac29a3c8b5a55cb9edcb3d67343db9b82f4657e43",
+  "commit": "036f2fa7f64ce1204ccdd5af0a3042d1d55554a6",
+  "ranking": {
+    "recall": 1,
+    "precision": 1,
+    "mrr": 1
+  },
+  "turns": [
+    {
+      "message": "Preciso configurar um telefone de laboratório",
+      "answer": "Primeiro, pega o IP do telefone no menu Status dele. [1] Conseguiu ver o IP?",
+      "sources": [
+        {
+          "documentId": "fbe6b1c0-f662-437f-8878-c083a61e806a",
+          "versionId": "cbb56cf3-2c3d-42bb-aa25-68294db67b15",
+          "versionNumber": 1,
+          "title": "Telefone de laboratório",
+          "ordinal": 0,
+          "excerpts": [
+            "Configuração do telefone de laboratório.\n1. Consulte o IP no menu Status."
+          ]
+        }
+      ],
+      "states": [
+        {
+          "id": "42a55c53-3cb5-4a78-9a19-29554d39c0d5",
+          "topic": "telefone de laboratório",
+          "support_preference": "guided"
+        }
+      ],
+      "quality": {
+        "literalOverlap": 0,
+        "repeatedLines": 0,
+        "boilerplate": false,
+        "escapedMarkdown": false,
+        "partialWarning": false,
+        "sentenceCount": 2
+      }
+    },
+    {
+      "message": "sim",
+      "answer": "Abriu o IP no navegador e conseguiu entrar com a senha \"admin\"? [1]",
+      "sources": [
+        {
+          "documentId": "fbe6b1c0-f662-437f-8878-c083a61e806a",
+          "versionId": "cbb56cf3-2c3d-42bb-aa25-68294db67b15",
+          "versionNumber": 1,
+          "title": "Telefone de laboratório",
+          "ordinal": 0,
+          "excerpts": [
+            "2. Abra o IP no navegador.\n3. Use a senha padrão admin."
+          ]
+        }
+      ],
+      "states": [
+        {
+          "id": "42a55c53-3cb5-4a78-9a19-29554d39c0d5",
+          "topic": "telefone de laboratório",
+          "support_preference": "guided"
+        }
+      ],
+      "quality": {
+        "literalOverlap": 0,
+        "repeatedLines": 0,
+        "boilerplate": false,
+        "escapedMarkdown": false,
+        "partialWarning": false,
+        "sentenceCount": 2
+      }
+    },
+    {
+      "message": "não entendi a parte da senha",
+      "answer": "Depois de pegar o IP, abre ele no navegador e tenta entrar com a senha padrão \"admin\". [1] Conseguiu acessar essa tela de configuração?",
+      "sources": [
+        {
+          "documentId": "fbe6b1c0-f662-437f-8878-c083a61e806a",
+          "versionId": "cbb56cf3-2c3d-42bb-aa25-68294db67b15",
+          "versionNumber": 1,
+          "title": "Telefone de laboratório",
+          "ordinal": 0,
+          "excerpts": [
+            "Abra o IP no navegador.\n3. Use a senha padrão admin."
+          ]
+        }
+      ],
+      "states": [
+        {
+          "id": "42a55c53-3cb5-4a78-9a19-29554d39c0d5",
+          "topic": "telefone de laboratório",
+          "support_preference": "guided"
+        }
+      ],
+      "quality": {
+        "literalOverlap": 0,
+        "repeatedLines": 0,
+        "boilerplate": false,
+        "escapedMarkdown": false,
+        "partialWarning": false,
+        "sentenceCount": 2
+      }
+    },
+    {
+      "message": "a senha pode ser admin",
+      "answer": "Use a senha padrão admin. [1]",
+      "sources": [
+        {
+          "documentId": "fbe6b1c0-f662-437f-8878-c083a61e806a",
+          "versionId": "cbb56cf3-2c3d-42bb-aa25-68294db67b15",
+          "versionNumber": 1,
+          "title": "Telefone de laboratório",
+          "ordinal": 0,
+          "excerpts": [
+            "Use a senha padrão admin."
+          ]
+        }
+      ],
+      "states": [
+        {
+          "id": "42a55c53-3cb5-4a78-9a19-29554d39c0d5",
+          "topic": "telefone de laboratório",
+          "support_preference": "guided"
+        }
+      ],
+      "quality": {
+        "literalOverlap": 1,
+        "repeatedLines": 0,
+        "boilerplate": false,
+        "escapedMarkdown": false,
+        "partialWarning": false,
+        "sentenceCount": 2
+      }
+    },
+    {
+      "message": "me dê o passo a passo completo",
+      "answer": "Claro — aqui está o passo a passo completo:\n\n1. Consulte o IP no menu Status.\n2. Abra o IP no navegador.\n3. Use a senha padrão admin.\n4. Ative Account Active: YES. [1]",
+      "sources": [
+        {
+          "documentId": "fbe6b1c0-f662-437f-8878-c083a61e806a",
+          "versionId": "cbb56cf3-2c3d-42bb-aa25-68294db67b15",
+          "versionNumber": 1,
+          "title": "Telefone de laboratório",
+          "ordinal": -1,
+          "excerpts": [
+            "Configuração do telefone de laboratório.\n1. Consulte o IP no menu Status.\n2. Abra o IP no navegador.\n3. Use a senha padrão admin.\n4. Ative Account Active: YES."
+          ]
+        }
+      ],
+      "states": [
+        {
+          "id": "42a55c53-3cb5-4a78-9a19-29554d39c0d5",
+          "topic": "telefone de laboratório",
+          "support_preference": "complete"
+        }
+      ],
+      "quality": {
+        "literalOverlap": 0.6896551724137931,
+        "repeatedLines": 0,
+        "boilerplate": false,
+        "escapedMarkdown": false,
+        "partialWarning": false,
+        "sentenceCount": 9
+      }
+    }
+  ],
+  "humanReview": "pending"
+}

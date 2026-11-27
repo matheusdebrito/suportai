@@ -1,8 +1,23 @@
+import {captureCalibrationCase} from './calibration-capture.js';
+import {createEpisodeCapture,type TurnCapture} from './episode-harness.js';
+import {expandedEpisodes,semanticSelectionEpisodes,semanticArchitectureEpisodes} from './episode-fixtures.js';
+import {benchmarkEntailment,entailmentCases} from './grounding-entailment-benchmark.js';
+import {supplementalEpisodeChecks,SUPPLEMENTAL_QUALITY_CONTRACT} from './episode-regression-expectations.js';
+import {chunks} from './knowledge.js';
+
 import {after,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import type OpenAI from 'openai';
 import {respond} from './agent.js';
+import {client,embedText} from './llm.js';
+import {interpretSemanticTurn,type SemanticTurn} from './semantic-turn.js';
+import {searchKnowledge} from './retrieval.js';
+import {completeProcedureChecks,episodeQuality,retrievalMetrics} from './episode-quality.js';
+import {writeFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import {resolveAgentLimits} from './agent-budget.js';
+import {AGENT_GENERATION_TEMPERATURE} from './agent.js';
 import {pool,query,transaction} from './db.js';
 import {buildApp} from './server.js';
 import {hashToken,type Actor} from './security.js';
@@ -90,6 +105,256 @@ if(!process.env.TEST_DATABASE_URL){
       await query('DELETE FROM documents WHERE id=ANY($1::uuid[])',[[printerSource.document,wifiSource.document]]);
       await query('DELETE FROM users WHERE id=$1',[actor.id]);
     }
+  });
+
+  test('phone episode keeps the persisted investigation through short and focused follow-ups',async()=>{
+    const {actor,headers}=await createSession();
+    const seen:(InvestigationDraft|undefined)[]=[];
+    const app=await buildApp({agentResponder:async(_a,_c,_m,_h,_p,_s,options)=>{
+      seen.push(options?.investigation);
+      return {answer:'Resposta sintética.',sources:[],pendingActions:[]};
+    }});
+    try{
+      const created=await app.inject({method:'POST',url:'/conversations',headers});
+      assert.equal(created.statusCode,200);
+      const {id}=created.json<{id:string}>();
+      const send=async(message:string)=>{
+        const r=await app.inject({method:'POST',url:`/conversations/${id}/messages`,headers,payload:{message}});
+        assert.equal(r.statusCode,200,r.body);
+      };
+      await send('Preciso configurar um telefone');
+      await send('Obrigado');
+      await send('sim');
+      await send('Não entendi a parte da senha');
+      await send('A senha pode ser admin');
+      await send('Me dê o passo a passo completo');
+      const records=await query('SELECT id,topic,support_preference FROM investigations WHERE conversation_id=$1',[id]);
+      assert.equal(records.rowCount,1);
+      assert.equal(records.rows[0].topic,'telefone');
+      assert.equal(records.rows[0].support_preference,'complete');
+      assert.equal(seen.at(-1)?.topic,'telefone');
+      await send('e depois?');
+      assert.equal(seen.at(-1)?.supportPreference,'complete');
+    }finally{await app.close();await query('DELETE FROM users WHERE id=$1',[actor.id]);}
+  });
+
+  test('independent synthetic retrieval calibration corpus',{skip:process.env.RUN_REAL_EPISODES!=='1',timeout:360000},async()=>{
+    assert.ok(client);
+    const {actor}=await createSession();
+    const fixtures=[
+      {id:'phone',title:'Telefone de laboratório',article:'Consulte o endereço IP no menu Status e configure a conta SIP.',query:'configurar ramal no telefone',split:'pilot' as const},
+      {id:'printer',title:'Impressora de etiquetas',article:'Calibre a impressora de etiquetas pelo botão Feed com a tampa fechada.',query:'calibrar impressora de etiquetas',split:'pilot' as const},
+      {id:'wifi',title:'Rede sem fio de visitantes',article:'Selecione a rede Visitantes e abra o portal de acesso.',query:'conectar wifi de visitantes',split:'holdout' as const},
+      {id:'scanner',title:'Digitalizador de documentos',article:'Selecione resolução de 300 DPI e formato PDF no aplicativo do scanner.',query:'digitalizar documento em PDF',split:'holdout' as const}
+    ];
+    const created:Awaited<ReturnType<typeof createPublishedSource>>[]=[];
+    try{
+      for(const fixture of fixtures){
+        const source=await createPublishedSource(actor.id,'SHARED');created.push(source);
+        await query('UPDATE documents SET title=$2 WHERE id=$1',[source.document,fixture.title]);
+        await query('UPDATE document_versions SET content=$2 WHERE id=$1',[source.version,fixture.article]);
+        const embedding=await embedText(fixture.article);assert.ok(embedding);
+        await query('INSERT INTO knowledge_chunks(version_id,ordinal,content,embedding) VALUES($1,0,$2,$3::vector)',[source.version,fixture.article,JSON.stringify(embedding)]);
+      }
+      const allowed=new Set(created.map(x=>x.version));
+      const cases=[];
+      for(const [i,fixture] of fixtures.entries())cases.push(await captureCalibrationCase(actor,{id:fixture.id,query:fixture.query,split:fixture.split,expected:[created[i].version]},allowed,true));
+      if(process.env.CALIBRATION_REPORT_PATH)writeFileSync(process.env.CALIBRATION_REPORT_PATH,JSON.stringify(cases,null,2));
+      assert.equal(cases.length,fixtures.length);
+    }finally{
+      for(const source of created)await query('DELETE FROM documents WHERE id=$1',[source.document]);
+      await query('DELETE FROM users WHERE id=$1',[actor.id]);
+    }
+  });
+
+  test('independent real textual entailment challenge',{skip:process.env.RUN_REAL_EPISODES!=='1',timeout:180000},async()=>{
+    assert.ok(client,'External AI authorization is required');
+    const report=await benchmarkEntailment(client);
+    writeFileSync(process.env.ENTAILMENT_REPORT_PATH||'entailment-report.json',JSON.stringify({
+      ...report,commit:process.env.EVALUATION_COMMIT||null,model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',
+      caseHash:createHash('sha256').update(JSON.stringify(entailmentCases)).digest('hex'),humanReview:'pending'
+    },null,2));
+    assert.equal(report.complete,true);
+    assert.deepEqual(report.metrics,{cases:entailmentCases.length,falseAcceptances:0,falseRejections:0,unavailable:0});
+  });
+
+  test('real model phone episode with actual retrieval',{skip:process.env.RUN_REAL_EPISODES!=='1',timeout:360000},async()=>{
+    assert.ok(client,'External AI must be explicitly authorized and configured');
+    const {actor,headers}=await createSession();
+    const source=await createPublishedSource(actor.id,'SHARED');
+    const article='Configuração do telefone de laboratório.\n1. Consulte o IP no menu Status.\n2. Abra o IP no navegador.\n3. Use a senha padrão admin.\n4. Ative Account Active: YES.';
+    const capture=createEpisodeCapture(()=>[source.version],()=>new Set([source.version]),()=>[source.version+':0']);
+    const app=await buildApp({agentResponder:capture.agentResponder,turnInterpreter:(input,budget)=>interpretSemanticTurn(client,input,budget)});
+    try{
+      await query('UPDATE documents SET title=$2 WHERE id=$1',[source.document,'Telefone de laboratório']);
+      await query('UPDATE document_versions SET content=$2 WHERE id=$1',[source.version,article]);
+      const embedding=await embedText(article);
+      assert.ok(embedding,'Real evaluation requires fixture embedding');
+      await query('INSERT INTO knowledge_chunks(version_id,ordinal,content,embedding) VALUES($1,0,$2,$3::vector)',[source.version,article,JSON.stringify(embedding)]);
+
+      const conversation=await openConversation(app,headers);
+      const retrieved=await searchKnowledge(actor,'configurar telefone de laboratório');
+      const ranking=retrievalMetrics([source.version],retrieved.map(x=>x.versionId));
+      const turns:{message:string;answer:string;sources:{versionId:string;ordinal:number}[];states:{id:string;topic:string;support_preference:string}[];capture:TurnCapture|null;quality:ReturnType<typeof episodeQuality>}[]=[];
+      const supplementalFailures=()=>turns.flatMap((turn,i)=>supplementalEpisodeChecks('phone',i+1,turn.answer,turn.capture?.agentMetrics.supportPreference).map(check=>'phone:'+(i+1)+':'+check));
+      const writeReport=()=>writeFileSync(process.env.EPISODE_REPORT_PATH||'episode-real-report.json',JSON.stringify({mode:'real-http',architecture:'semantic_turn_v1',model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',embeddingModel:process.env.OPENAI_EMBED_MODEL||'text-embedding-3-small',temperature:AGENT_GENERATION_TEMPERATURE,limits:resolveAgentLimits(),corpusHash:createHash('sha256').update(article).digest('hex'),commit:process.env.EVALUATION_COMMIT||null,ranking,turns,qualityContract:SUPPLEMENTAL_QUALITY_CONTRACT,supplementalFailures:supplementalFailures(),expectedTurnCount:5,complete:turns.length===5,humanReview:'pending'},null,2));
+      const previous:string[]=[];
+      for(const message of ['Preciso configurar um telefone de laboratório','sim','não entendi a parte da senha','a senha pode ser admin','me dê o passo a passo completo']){
+        const response=await postTurn(app,headers,conversation,message);
+        assert.equal(response.statusCode,200,response.body);
+        const result=response.json<{answer:string;sources:{versionId:string;ordinal:number}[]}>();
+        assert.ok(result.sources.every(sourceRef=>sourceRef.versionId===source.version),'Unexpected source in isolated synthetic episode');
+        const states=await query('SELECT id,topic,support_preference FROM investigations WHERE conversation_id=$1',[conversation]);
+        const observed=capture.take();
+        turns.push({message,answer:result.answer,sources:result.sources,states:states.rows.map(row=>({id:String(row.id),topic:String(row.topic),support_preference:String(row.support_preference)})),capture:observed??null,quality:episodeQuality(result.answer,article,previous)});
+        writeReport();
+        // Collect every HTTP turn; assert capture completeness after the episode.
+        previous.push(result.answer);
+      }
+      assert.equal(ranking.recall,1);
+      assert.equal(turns.length,5);
+       assert.ok(turns.every(t=>t.capture?.agentMetrics.semanticTurnStatus==='accepted'),'Every phone turn must invoke the agent and accept semantic interpretation');
+      assert.ok(turns.every(t=>t.states.length===1&&t.states[0].id===turns[0].states[0].id));
+      assert.ok(turns[3].sources.length>0,'Password answer must cite evidence');
+      assert.ok(turns[4].sources.length>0,'Complete procedure must cite evidence');
+       assert.deepEqual(completeProcedureChecks(turns[4].answer,turns[4].sources,turns[4].capture?.agentMetrics.supportPreference,turns[4].capture?.agentMetrics.completeProcedureVerified===true),[]);
+       assert.ok(turns[1].capture?.agentMetrics.stopReason==='answered'||turns[1].capture?.agentMetrics.stopReason==='clarified','Confirmation must not end in a generic unsafe/budget failure');
+      assert.equal(turns.at(-1)?.states[0].support_preference,'complete');
+      assert.deepEqual(supplementalFailures(),[]);
+    }finally{await app.close();await query('DELETE FROM documents WHERE id=$1',[source.document]);await query('DELETE FROM users WHERE id=$1',[actor.id]);}
+  });
+
+  test('expanded real HTTP support episode matrix',{skip:process.env.RUN_REAL_EPISODES!=='1',timeout:900000},async()=>{
+    assert.ok(client,'External AI authorization is required');
+    const episodes:{id:string;turns:unknown[]}[]=[],failures:string[]=[],supplementalFailures:string[]=[];
+    const evaluationCorpus=[...expandedEpisodes,...semanticSelectionEpisodes,...semanticArchitectureEpisodes];
+    for(const fixture of evaluationCorpus){
+      const {actor,headers}=await createSession();
+      const docs=new Map<string,{document:string;version:string;article:string;ordinals:number[]}>();
+      const allowed=new Set<string>();
+      let expected:string[]=[],expectedChunks:string[]=[];
+      const capture=createEpisodeCapture(()=>expected,()=>allowed,()=>expectedChunks);
+      const app=await buildApp({agentResponder:capture.agentResponder,turnInterpreter:(input,budget)=>interpretSemanticTurn(client,input,budget)});
+      const turns:unknown[]=[],previous:string[]=[];
+      const investigationByDoc=new Map<string,string>();
+      try{
+        for(const doc of fixture.documents){
+          const source=await createPublishedSource(actor.id,doc.restricted?'RESTRICTED':'SHARED');
+          const pieces=chunks(doc.article),ordinals=pieces.map((_,i)=>i);
+          docs.set(doc.id,{...source,article:doc.article,ordinals});
+          if(!doc.restricted)allowed.add(source.version);
+          await query('UPDATE documents SET title=$2 WHERE id=$1',[source.document,doc.title]);
+          await query('UPDATE document_versions SET content=$2 WHERE id=$1',[source.version,doc.article]);
+          for(const [ordinal,content] of pieces.entries()){
+            const embedding=await embedText(content);assert.ok(embedding);
+            await query('INSERT INTO knowledge_chunks(version_id,ordinal,content,embedding) VALUES($1,$2,$3,$4::vector)',[source.version,ordinal,content,JSON.stringify(embedding)]);
+          }
+        }
+        const conversation=await openConversation(app,headers);
+        let lastId:string|undefined;
+        for(const turn of fixture.turns){
+          if(turn.archiveBefore){
+            const doc=docs.get(turn.archiveBefore)!;
+            await query('UPDATE documents SET archived_at=now() WHERE id=$1',[doc.document]);
+            allowed.delete(doc.version);
+          }
+          const target=turn.expectedDocument?docs.get(turn.expectedDocument):undefined;
+          expected=target?[target.version]:[];expectedChunks=target?target.ordinals.map(o=>target.version+':'+o):[];
+          const response=await postTurn(app,headers,conversation,turn.message);
+          const observed=capture.take();
+          assert.equal(response.statusCode,200,response.body);
+          const result=response.json<{id:string;answer:string;sources:{versionId:string;ordinal:number}[]}>();
+          const saved=await query('SELECT investigation_id FROM messages WHERE id=$1',[result.id]);
+          const investigationId=saved.rows[0]?.investigation_id as string|undefined;
+          const checks:string[]=[];
+          if(result.sources.some(source=>!expected.includes(source.versionId)))checks.push('unexpected_final_source');
+          if(target&&!turn.mayClarify&&!result.sources.length)checks.push('missing_expected_source');
+          if(turn.complete&&target)checks.push(...completeProcedureChecks(result.answer,result.sources,observed?.agentMetrics.supportPreference,observed?.agentMetrics.completeProcedureVerified===true));
+          if((turn.forbidden??[]).some(marker=>result.answer.includes(marker)))checks.push('forbidden_content');
+          if((turn.required??[]).some(marker=>!result.answer.includes(marker)))checks.push('missing_required_value');
+          if(turn.mustClarify&&(observed?.agentMetrics.stopReason!=='clarified'||result.sources.length!==0||!result.answer.trim().endsWith('?')))checks.push('missing_safe_clarification');
+          if(!observed&&!turn.mayClarify)checks.push('missing_agent_capture');
+          if(observed&&observed.agentMetrics.semanticTurnStatus!=='accepted')checks.push('semantic_interpretation_missing');
+          if(turn.expectedMode&&observed?.agentMetrics.supportPreference!==turn.expectedMode)checks.push('wrong_support_mode');
+          if(turn.expectedRoute&&observed?.agentMetrics.semanticRoute!==turn.expectedRoute)checks.push('wrong_semantic_route');
+          if(turn.context==='same'&&lastId&&investigationId!==lastId)checks.push('investigation_changed');
+          if(turn.context==='new'&&(!investigationId||(lastId&&investigationId===lastId)))checks.push('investigation_not_switched');
+          if(turn.context==='resume'&&turn.expectedDocument&&investigationId!==investigationByDoc.get(turn.expectedDocument))checks.push('investigation_not_resumed');
+          if(turn.expectedDocument&&investigationId&&!investigationByDoc.has(turn.expectedDocument))investigationByDoc.set(turn.expectedDocument,investigationId);
+          if(investigationId)lastId=investigationId;
+          const supplementalChecks=supplementalEpisodeChecks(fixture.id,turns.length+1,result.answer,observed?.agentMetrics.supportPreference);
+          supplementalFailures.push(...supplementalChecks.map(check=>fixture.id+':'+(turns.length+1)+':'+check));
+          turns.push({message:turn.message,answer:result.answer,sources:result.sources,investigationId,capture:observed??null,supplementalChecks,
+            quality:episodeQuality(result.answer,target?.article??'',previous),checks});
+          previous.push(result.answer);
+          failures.push(...checks.map(check=>fixture.id+':'+turns.length+':'+check));
+        }
+      }catch(error){failures.push(fixture.id+':'+(error instanceof Error?error.name:'error'));}
+      finally{
+        episodes.push({id:fixture.id,turns});
+        await app.close();
+        for(const doc of docs.values())await query('DELETE FROM documents WHERE id=$1',[doc.document]);
+        await query('DELETE FROM users WHERE id=$1',[actor.id]);
+        writeFileSync(process.env.EXPANDED_EPISODE_REPORT_PATH||'episode-expanded-report.json',JSON.stringify({
+          mode:'real-http-expanded',commit:process.env.EVALUATION_COMMIT||null,
+          model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',embeddingModel:process.env.OPENAI_EMBED_MODEL||'text-embedding-3-small',
+          temperature:AGENT_GENERATION_TEMPERATURE,limits:resolveAgentLimits(),corpusHash:createHash('sha256').update(JSON.stringify(evaluationCorpus)).digest('hex'),
+          baseMatrixHash:createHash('sha256').update(JSON.stringify(expandedEpisodes)).digest('hex'),
+          architecture:'semantic_turn_v1',
+          episodes,failures,qualityContract:SUPPLEMENTAL_QUALITY_CONTRACT,supplementalFailures,expectedEpisodeCount:evaluationCorpus.length,expectedTurnCount:evaluationCorpus.reduce((sum,e)=>sum+e.turns.length,0),
+          complete:episodes.length===evaluationCorpus.length&&episodes.every((e,i)=>e.turns.length===evaluationCorpus[i].turns.length),humanReview:'pending'},null,2));
+      }
+    }
+    assert.equal(episodes.length,evaluationCorpus.length);
+    assert.ok(episodes.every((e,i)=>e.turns.length===evaluationCorpus[i].turns.length),'Expanded evaluation must collect every declared turn');
+    assert.deepEqual(failures,[]);
+    assert.deepEqual(supplementalFailures,[]);
+  });
+
+  test('HTTP semantic routing persists user observations and isolates unrelated investigations',async()=>{
+    const {actor,headers}=await createSession();
+    const seen:{history:string[];state?:InvestigationDraft;semantic?:SemanticTurn}[]=[];
+    const app=await buildApp({
+      turnInterpreter:async(input,budget)=>{
+        const message=input.message;
+        const decision:SemanticTurn={route:'new',investigationId:null,topic:'impressora',intent:'knowledge',mode:'guided',focused:false,
+          query:'diagnosticar fila de impressão',equipment:null,environment:null,observations:[{kind:'fact',quote:message,result:null}]};
+        if(message==='Só dá papel em branco.'){
+          decision.route='existing';decision.investigationId=input.subjects.find(s=>s.topic==='impressora')!.id;decision.topic=null;
+          decision.mode='inherit';
+        }else if(message==='E a rede de visitantes, como emito o acesso?'){
+          decision.topic='rede visitante';decision.query='emitir acesso temporário rede visitante';decision.mode='adaptive';decision.observations=[];
+        }else if(message==='Aquela fila de antes, acho que ela travou.'){
+          decision.route='existing';decision.investigationId=input.subjects.find(s=>s.topic==='impressora')!.id;decision.topic=null;
+          decision.query='diagnosticar fila de impressão travada';decision.mode='inherit';
+          decision.observations=[{kind:'hypothesis',quote:'acho que ela travou',result:null}];
+        }
+        const fake={chat:{completions:{create:async()=>({choices:[{message:{content:JSON.stringify(decision)},finish_reason:'stop'}]})}}} as unknown as OpenAI;
+        return interpretSemanticTurn(fake,input,budget);
+      },
+      agentResponder:async(_actor,_conversation,_message,history,_provider,_search,options)=>{
+        seen.push({history:history.map(m=>m.content),state:options?.investigation,semantic:options?.semantic});
+        assert.equal(options?.budget?.steps,1);
+        return {answer:'Resposta sintética.',sources:[],pendingActions:[]};
+      }
+    });
+    try{
+      const conversation=await openConversation(app,headers);
+      for(const message of ['O trabalho da fila âmbar saiu errado.','Só dá papel em branco.','E a rede de visitantes, como emito o acesso?','Aquela fila de antes, acho que ela travou.']){
+        const response=await postTurn(app,headers,conversation,message);assert.equal(response.statusCode,200,response.body);
+      }
+      const rows=await query('SELECT id,topic FROM investigations WHERE conversation_id=$1',[conversation]);
+      const printerId=rows.rows.find(row=>row.topic==='impressora')?.id;
+      const wifiId=rows.rows.find(row=>row.topic==='rede visitante')?.id;
+      assert.ok(printerId&&wifiId);assert.notEqual(printerId,wifiId);
+      assert.equal(seen[1].state?.topic,'impressora');assert.deepEqual(seen[2].history,[]);
+      assert.equal(seen[3].state?.topic,'impressora');assert.ok(seen[3].history.every(m=>!m.includes('rede de visitantes')));
+      assert.equal(seen[2].semantic?.query,'emitir acesso temporário rede visitante');
+      const stored=await readInvestigationState(actor,conversation,printerId);
+      assert.deepEqual(stored?.reportedFacts,['O trabalho da fila âmbar saiu errado.','Só dá papel em branco.']);
+      assert.deepEqual(stored?.hypotheses,['acho que ela travou']);assert.equal(stored?.supportPreference,'guided');
+      assert.deepEqual((await readInvestigationState(actor,conversation,wifiId))?.reportedFacts,[]);
+    }finally{await app.close();await query('DELETE FROM users WHERE id=$1',[actor.id]);}
   });
 
   test('chat hides a reply derived from a source after that source is archived',async()=>{

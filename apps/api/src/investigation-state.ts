@@ -6,6 +6,7 @@ import type {PoolClient} from 'pg';
 
 export type InvestigationDraft={
   topic:string;
+  supportPreference?:'adaptive'|'guided'|'complete';
   equipmentOrSystem?:string|null;
   environment?:string|null;
   reportedFacts:string[];
@@ -49,9 +50,9 @@ const visibleInvestigation=`i.user_id=$1 AND i.conversation_id=$2 AND i.auth_rev
       AND NOT EXISTS (SELECT 1 ${visibleInvestigationVersions('$1')} AND v.id=src.version_id)
   )`;
 
-export type InvestigationSubject=Pick<InvestigationState,'id'|'topic'|'equipmentOrSystem'>;
+export type InvestigationSubject=Pick<InvestigationState,'id'|'topic'|'equipmentOrSystem'|'environment'|'supportPreference'>;
 export async function listInvestigationSubjects(actor:Actor,conversationId:string):Promise<InvestigationSubject[]>{
-  const result=await pool.query<InvestigationSubject>(`SELECT i.id,i.topic,i.equipment_or_system AS "equipmentOrSystem"
+  const result=await pool.query<InvestigationSubject>(`SELECT i.id,i.topic,i.equipment_or_system AS "equipmentOrSystem",i.environment,i.support_preference AS "supportPreference"
     FROM investigations i JOIN users u ON u.id=i.user_id WHERE ${visibleInvestigation}
     ORDER BY i.last_activity_at DESC,i.id DESC LIMIT 40`,[actor.id,conversationId,actor.auth_revision,actor.role]);
   return result.rows;
@@ -59,7 +60,7 @@ export async function listInvestigationSubjects(actor:Actor,conversationId:strin
 
 export async function readInvestigationState(actor:Actor,conversationId:string,id:string):Promise<InvestigationState|null>{
   const result=await pool.query<InvestigationState>(`SELECT i.id,i.revision,i.last_activity_at AS "lastActivityAt",
-    i.topic,i.equipment_or_system AS "equipmentOrSystem",i.environment,
+    i.topic,i.equipment_or_system AS "equipmentOrSystem",i.environment,i.support_preference AS "supportPreference",
     COALESCE(notes.facts,'{}') AS "reportedFacts",COALESCE(notes.hypotheses,'{}') AS hypotheses,
     COALESCE(notes.questions,'{}') AS "openQuestions",COALESCE(notes.tests,'[]') AS tests,
     ARRAY(SELECT src.version_id FROM investigation_sources src
@@ -91,10 +92,10 @@ export async function saveInvestigationState(
   ];
   const sourceVersionIds=draft.sourceVersionIds.map(id=>id.toLowerCase());
   const state={...draft,sourceVersionIds,equipmentOrSystem:draft.equipmentOrSystem??null,
-    environment:draft.environment??null,tests};
+    environment:draft.environment??null,supportPreference:draft.supportPreference??'adaptive',tests};
   const details=[state.equipmentOrSystem,state.environment];
   const notes=groups.flatMap(({kind,entries})=>entries.map(({content,result},index)=>({kind,position:index+1,content,result})));
-  if(!draft.topic.trim() || draft.topic.length>160 || details.some(value=>value!==null && value.length>160) ||
+  if(!['adaptive','guided','complete'].includes(state.supportPreference)||!draft.topic.trim() || draft.topic.length>160 || details.some(value=>value!==null && value.length>160) ||
      groups.some(group=>group.entries.length>12) || notes.some(note=>!note.content.trim() || note.content.length>400 ||
        (note.result!==null && (!note.result.trim() || note.result.length>400))) ||
      sourceVersionIds.length>12 || sourceVersionIds.some(id=>!validDocumentId(id)) ||
@@ -132,15 +133,15 @@ export async function saveInvestigationState(
       if(visible.rowCount!==requiredSources.length)return {status:'source_unavailable'};
     }
 
-    const fields=[state.topic,state.equipmentOrSystem,state.environment];
+    const fields=[state.topic,state.equipmentOrSystem,state.environment,state.supportPreference];
     const saved=update
-      ? await client.query<InvestigationMetadata>(`UPDATE investigations i SET topic=$6,equipment_or_system=$7,environment=$8,
+      ? await client.query<InvestigationMetadata>(`UPDATE investigations i SET topic=$6,equipment_or_system=$7,environment=$8,support_preference=$9,
           revision=i.revision+1,last_activity_at=clock_timestamp()
           WHERE i.user_id=$1 AND i.conversation_id=$2 AND i.auth_revision=$3 AND i.id=$4 AND i.revision=$5
             AND ${activeInvestigation} RETURNING id,revision,last_activity_at AS "lastActivityAt"`,
         [...scope,update.expectedRevision,...fields])
-      : await client.query<InvestigationMetadata>(`INSERT INTO investigations(user_id,conversation_id,auth_revision,topic,equipment_or_system,environment,last_activity_at,id)
-          VALUES($1,$2,$3,$4,$5,$6,clock_timestamp(),COALESCE($7::uuid,gen_random_uuid())) RETURNING id,revision,last_activity_at AS "lastActivityAt"`,
+      : await client.query<InvestigationMetadata>(`INSERT INTO investigations(user_id,conversation_id,auth_revision,topic,equipment_or_system,environment,support_preference,last_activity_at,id)
+          VALUES($1,$2,$3,$4,$5,$6,$7,clock_timestamp(),COALESCE($8::uuid,gen_random_uuid())) RETURNING id,revision,last_activity_at AS "lastActivityAt"`,
         [actor.id,conversationId,actor.auth_revision,...fields,target?.id??null]);
     const metadata=saved.rows[0];
     if(!metadata)return {status:'not_found'};

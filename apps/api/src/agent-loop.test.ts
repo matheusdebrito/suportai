@@ -129,7 +129,7 @@ test('unresolved source conflicts stop before relaying an operational choice',as
  const model=fakeModel([
   {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'orientação DNS'},'q1')]},
   {role:'assistant',content:'Use o primeiro procedimento imediatamente.'},
-  {role:'assistant',content:'{"verdict":"conflict"}'}
+  {role:'assistant',content:'{"verdict":"conflict","claims":[]}'}
  ],[]);
  const output=await respond(actor,randomUUID(),'Qual procedimento de DNS aplico?',[],model,async()=>[source,conflicting],{verifyEvidence:true});
  assert.equal(output.metrics?.stopReason,'source_conflict');
@@ -201,4 +201,21 @@ test('clarification ends immediately and reports only numeric execution metadata
  assert.equal(output.metrics?.clarificationRequests,1);
  assert.equal(output.answer,'Qual é o equipamento afetado?');
  assert.equal(typeof output.metrics?.durationMs,'number');
+});
+
+
+test('offline empty retrieval preserves the explicit no-evidence response used by the browser flow',async()=>{
+ const result=await respond(actor,randomUUID(),'Qual o procedimento de DNS?',[],null,async()=>[]);
+ assert.equal(result.metrics?.stopReason,'no_evidence');
+ assert.equal(result.metrics?.emptyReads,1);
+ assert.match(result.answer,/Não encontrei um procedimento confirmado no cérebro/);
+ assert.deepEqual(result.sources,[]);
+});
+test('offline retrieval never dumps unrelated or conflicting source excerpts',async()=>{
+ const unrelated:Source={...source,title:'Manual fictício DNS',content:'Procedimento sintético exclusivo de DNS.'};
+ const result=await respond(actor,randomUUID(),'Qual o procedimento de VPN?',[],null,async()=>[unrelated]);
+ assert.equal(result.metrics?.stopReason,'no_evidence');
+ assert.match(result.answer,/não foi possível confirmar uma orientação segura/i);
+ assert.doesNotMatch(result.answer,/Procedimento sintético exclusivo/);
+ assert.deepEqual(result.sources,[]);
 });

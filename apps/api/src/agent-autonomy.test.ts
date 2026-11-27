@@ -45,6 +45,18 @@ test('social tool cannot smuggle unsourced operational instructions',async()=>{
  assert.match(result.answer,/localizar um procedimento publicado/i);
  assert.doesNotMatch(result.answer,/Desative o antivírus/);
 });
+test('social tool cannot answer a focused technical value without retrieval',async()=>{
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('respond_social',{text:'A senha padrão costuma ser admin.'},'social')]},
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'senha telefone'},'search')]},
+  {role:'assistant',content:'Use a senha padrão admin.'},
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[{unit:1,kind:'current',refs:[{evidence:1,quote:'Use a senha padrão admin.'}]}]})}
+ ],[]);
+ const phone:Source={...source,title:'Telefone',content:'Use a senha padrão admin.'};
+ const result=await respond(actor,randomUUID(),'Qual a senha do telefone?',[],model,async()=>[phone],{verifyEvidence:true});
+ assert.match(result.answer,/admin/);
+ assert.equal(result.sources[0]?.versionId,phone.versionId);
+});
 test('older investigation context is preserved as untrusted structured memory',async()=>{
  const history=[
   {role:'user' as const,content:'A impressora é uma Zebra ZD230.'},
@@ -99,9 +111,9 @@ test('rejected synthesis never leaks invented instructions and falls back to an 
  const model=scripted([
   {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'ZD230 calibração'},'q1')]},
   {role:'assistant',content:'Reinicie o serviço antes de qualquer verificação.'},
-  {role:'assistant',content:'{"verdict":"unsupported"}'},
+  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'},
   {role:'assistant',content:'Reinicie o serviço antes de qualquer verificação.'},
-  {role:'assistant',content:'{"verdict":"unsupported"}'}
+  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'}
  ],calls);
  const result=await respond(actor,randomUUID(),'Qual o procedimento da ZD230?',[],model,
   async()=>[source],{verifyEvidence:true});
@@ -113,7 +125,25 @@ test('rejected synthesis never leaks invented instructions and falls back to an 
  assert.equal(result.sources[0]?.versionId,source.versionId);
  assert.match(result.answer,/trecho original/);
  assert.doesNotMatch(result.answer,/Reinicie o serviço antes/i);
- assert.equal(calls[2].response_format.type,'json_object');
+ assert.equal(calls[2].response_format.type,'json_schema');
+});
+test('RIS how-to recovers an authorized inline checklist after verifier rejection',async()=>{
+ const ris:Source={...source,title:'Habilitar Alteração de guia',
+  content:'Para habilitar a alteração de guia no RIS - [ ] pesquisar o paciente - [ ] engrenagem - [ ] cadastros - [ ] convênio'};
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'habilitar guia RIS'},'q')]},
+  {role:'assistant',content:'Altere uma configuração não documentada.'},
+  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'},
+  {role:'assistant',content:'Use outro sistema.'},
+  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'}
+ ],[]);
+ const result=await respond(actor,randomUUID(),'como eu habilito uma guia no ris?',[],model,async()=>[ris],{verifyEvidence:true});
+ assert.equal(result.metrics?.stopReason,'answered');
+ assert.equal(result.metrics?.literalFallbacks,1);
+ assert.equal(result.sources[0]?.versionId,ris.versionId);
+ assert.match(result.answer,/Habilitar Alteração de guia/);
+ assert.match(result.answer,/\n- pesquisar o paciente\n- engrenagem\n- cadastros\n- convênio/);
+ assert.doesNotMatch(result.answer,/configuração não documentada|outro sistema/);
 });
 test('independent verifier accepts a grounded answer when supported',async()=>{
  const calls:any[]=[];
@@ -152,7 +182,7 @@ test('verified partial response omits unsupported independent claim',async()=>{
  const model=scripted([
   {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'ZD230 calibração'},'q')]},
   {role:'assistant',content:'Verifique o alinhamento antes da calibração na ZD230. Reinicie o servidor.'},
-  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[{unit:1,kind:'current',refs:[{evidence:1,quote:source.content}]},{unit:2,kind:'omitted',refs:[]}]})}
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[{unit:1,kind:'current',refs:[{evidence:1,quote:source.content}]},{unit:2,kind:'unsupported',refs:[]}]})}
  ],[]);
  const result=await respond(actor,randomUUID(),'Qual o procedimento da ZD230?',[],model,async()=>[source],{verifyEvidence:true});
  assert.match(result.answer,/alinhamento/);assert.doesNotMatch(result.answer,/Reinicie o servidor/);assert.match(result.answer,/parte verificada/);
@@ -163,7 +193,7 @@ test('independent verifier rejection triggers bounded grounded rewrite',async()=
  const model=scripted([
   {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'calibração ZD230'},'q')]},
   {role:'assistant',content:'Reinicie o servidor.'},
-  {role:'assistant',content:'{"verdict":"unsupported"}'},
+  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'},
   {role:'assistant',content:'Verifique o alinhamento antes da calibração na ZD230.'},
   {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[{unit:1,kind:'current',refs:[{evidence:1,quote:source.content}]}]})}
  ],[]);
@@ -197,21 +227,22 @@ test('generic phone setup after unknown model returns verified documented operat
  assert.equal(result.sources[0]?.versionId,phoneSource.versionId);
 });
 
-test('generic phone setup recovers a literal scoped procedure after two verifier rejections',async()=>{
+test('generic phone setup recovers a guided first stage after two verifier rejections',async()=>{
  const phone:Source={...source,title:'Configuração de telefone fixo Grandstream',content:'# Ver o IP\nSegure o botão central.\nStatus > Network Status > IPV4\n# Configurar SIP\nAbra Accounts > General Settings.\nAccount Active: YES\nSIP Server: sip.example.test'};
  const queries:string[]=[];
  const model=scripted([
   {role:'assistant',content:null,tool_calls:[tool('ask_clarification',{question:'Qual a marca do telefone?'},'q')]},
   {role:'assistant',content:'Reinicie o servidor.'},
-  {role:'assistant',content:'{"verdict":"unsupported"}'},
+  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'},
   {role:'assistant',content:'Configure uma porta não documentada.'},
-  {role:'assistant',content:'{"verdict":"unsupported"}'}
+  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'}
  ],[]);
  const result=await respond(actor,randomUUID(),'Preciso configurar um telefone fixo',[],model,async(_actor,q)=>{queries.push(q);return [phone];},{verifyEvidence:true});
  assert.equal(result.metrics?.literalFallbacks,1);
  assert.equal(result.metrics?.verifierChecks,2);
- assert.match(result.answer,/Grandstream/);assert.match(result.answer,/Network Status/);
- assert.match(result.answer,/Account Active: YES/);assert.doesNotMatch(result.answer,/Reinicie o servidor|porta não documentada/);
+ assert.match(result.answer,/Vamos por etapas/);assert.match(result.answer,/Network Status/);
+ assert.match(result.answer,/Conseguiu concluir essa etapa/);
+ assert.doesNotMatch(result.answer,/Account Active: YES|trecho original|Reinicie o servidor|porta não documentada/);
  assert.equal(result.sources[0]?.versionId,phone.versionId);
 });
 test('recovery search can add a missing procedure before re-verification',async()=>{
@@ -220,7 +251,7 @@ test('recovery search can add a missing procedure before re-verification',async(
  const model=scripted([
   {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'calibração'},'q')]},
   {role:'assistant',content:'Use o painel.'},
-  {role:'assistant',content:'{"verdict":"unsupported"}'},
+  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'},
   {role:'assistant',content:'A calibração deve ser feita pelo painel.'},
   {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[{unit:1,kind:'current',refs:[{evidence:2,quote:extra.content}]}]})}
  ],[]);
@@ -244,17 +275,145 @@ test('verified guided response includes next action and a neutral progress quest
  assert.equal((result.answer.match(/\[1\]/g)??[]).length,1);
  assert.doesNotMatch(result.answer,/Abra a interface web/);
 });
-test('guided request reformulates an oversized article dump before verification',async()=>{
+test('guided request reformulates a multi-stage answer before verification',async()=>{
  const phone:Source={...source,title:'Configurar telefone',content:'Segure o botão central. Acesse Status > Network Status > IPV4.'};
  const calls:any[]=[];
  const model=scripted([
   {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'configurar telefone'},'q')]},
-  {role:'assistant',content:'Orientações do manual.\n'.repeat(10)},
+  {role:'assistant',content:'Segure o botão central. Acesse o menu Status. Abra o navegador. Ative a conta. Conseguiu concluir?'},
   {role:'assistant',content:'Segure o botão central. Conseguiu identificar o endereço?'},
   {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[{unit:1,kind:'current',refs:[{evidence:1,quote:'Segure o botão central.'}]},{unit:2,kind:'question',refs:[]}]})}
  ],calls);
  const result=await respond(actor,randomUUID(),'Preciso configurar um telefone',[],model,async()=>[phone],{verifyEvidence:true});
  assert.equal(result.metrics?.adaptiveRewrites,1);assert.equal(result.metrics?.stopReason,'answered');
  assert.match(result.answer,/Conseguiu identificar/);
- assert.doesNotMatch(result.answer,/Orientações do manual/);
+ assert.doesNotMatch(result.answer,/Abra o navegador|Ative a conta/);
+});
+test('focused password follow-up receives an explicit natural concise-answer policy',async()=>{
+ const phone:Source={...source,title:'Configurar telefone',content:'Na interface web, use o usuário admin. As senhas documentadas são fixture-primary ou admin.'};
+ const calls:any[]=[];
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'senha interface telefone'},'q')]},
+  {role:'assistant',content:'As opções de senha são fixture-primary ou admin. O usuário é admin.'},
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[
+   {unit:1,kind:'current',refs:[{evidence:1,quote:'As senhas documentadas são fixture-primary ou admin.'}]},
+   {unit:2,kind:'current',refs:[{evidence:1,quote:'Na interface web, use o usuário admin.'}]}
+  ]})},
+  {role:'assistant',content:JSON.stringify({u1:'entailed',u2:'entailed'})}
+ ],calls);
+ const result=await respond(actor,randomUUID(),'Qual a senha para acessar a interface do telefone?',[
+  {role:'user',content:'Preciso configurar um telefone.'},
+  {role:'assistant',content:'Conseguiu abrir a interface web?'}
+ ],model,async()=>[phone],{verifyEvidence:true,semantic:{route:'standalone',investigationId:null,topic:null,intent:'knowledge',mode:'adaptive',focused:false,
+  query:'senha interface telefone',equipment:null,environment:null,observations:[]}});
+ const system=String(calls[0].messages[0].content);
+ assert.match(system,/PEDIDO PONTUAL/);
+ assert.match(system,/uma ou duas frases naturais/);
+ assert.match(system,/Não recapitule o artigo ou o procedimento/);
+ assert.match(result.answer,/fixture-primary/);
+ assert.doesNotMatch(result.answer,/procedimento|segundo a documentação|conforme a fonte/i);
+});
+test('focused confirmation recovers one exact authorized value after an invalid verifier reference',async()=>{
+ const phone:Source={...source,title:'Configurar telefone',content:'Use a senha padrão admin.'};
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'senha telefone'},'q')]},
+  {role:'assistant',content:'Sim, a senha padrão é admin.'},
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[
+   {unit:1,kind:'current',refs:[{evidence:1,quote:'A senha padrão é admin.'}]}
+  ]})},
+  // Structural recovery now also runs in focused mode. Simulate an
+  // unresolvable indexed reference, then a failed rewritten candidate;
+  // the safe exact-value fallback must still be available.
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:{
+   u1:{kind:'current',refs:['unknown-span']}
+  }})},
+  {role:'assistant',content:'A senha padrão para o telefone é admin.'},
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[
+   {unit:1,kind:'current',refs:[{evidence:1,quote:'Senha padrão: admin.'}]}
+  ]})}
+ ],[]);
+ const result=await respond(actor,randomUUID(),'A senha pode ser admin?',[],model,async()=>[phone],{
+  verifyEvidence:true,semantic:{route:'existing',investigationId:randomUUID(),topic:null,intent:'clarify',mode:'adaptive',focused:false,
+   query:'senha telefone',equipment:null,environment:null,observations:[]}
+ });
+ assert.equal(result.answer,'Use a senha padrão admin. [1]');
+ assert.equal(result.sources[0]?.versionId,phone.versionId);
+ assert.equal(result.metrics?.literalFallbacks,1);
+ assert.equal(result.metrics?.verifierRepairs,1);
+ assert.equal(result.metrics?.verifierChecks,3);
+ assert.equal(result.metrics?.verifierFailures?.schema_invalid,1);
+ assert.equal(result.metrics?.fallbackReason,'invalid_reference');
+});
+test('complete follow-up ignores sensitive words from history when recovering the full procedure',async()=>{
+ const phone:Source={...source,title:'Configurar telefone',ordinal:-1,completeDocument:true,content:'# Ver o IP\n- Segurar o botão central.\n- Status > Network Status > IPV4\n# Configurar SIP\n- Acessar ACCOUNTS > GENERAL SETTINGS\n- Account Active: YES'};
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'passo a passo telefone'},'q')]},
+  {role:'assistant',content:'Orientação não confirmada.'},
+  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'},
+  {role:'assistant',content:'Outra orientação não confirmada.'},
+  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'}
+ ],[]);
+ const result=await respond(actor,randomUUID(),'Sim. Me dê o passo a passo completo',[
+  {role:'user',content:'Não entendi a parte da senha.'},
+  {role:'assistant',content:'A senha documentada pode ser admin.'}
+ ],model,async()=>[phone],{verifyEvidence:true});
+ assert.equal(result.metrics?.supportPreference,'complete');
+ assert.match(result.answer,/passo a passo completo/i);
+ assert.match(result.answer,/Segure o botão central/);
+ assert.match(result.answer,/Account Active: YES/);
+ assert.doesNotMatch(result.answer,/Informe o equipamento|trecho original/);
+});
+
+test('complete mode removes an unnecessary progress question without substituting unreviewed content',async()=>{
+ const phone:Source={...source,title:'Configurar telefone',ordinal:-1,completeDocument:true,
+  content:'Configurar telefone\n1. Consulte o IP no menu Status.\n2. Abra o IP no navegador.'};
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'procedimento completo telefone'},'q')]},
+  {role:'assistant',content:'Consulte o IP no menu Status. Abra o IP no navegador. Conseguiu concluir essa etapa?'},
+  {role:'assistant',content:JSON.stringify({verdict:'supported',coverage:'complete',issue:'none',claims:{
+   u1:{kind:'current',refs:['e1s2']},
+   u2:{kind:'current',refs:['e1s3']},
+   u3:{kind:'question',refs:[]}
+  }})}
+ ],[]);
+ const result=await respond(actor,randomUUID(),'Me dê o passo a passo completo',[],model,async()=>[phone],{verifyEvidence:true,
+  investigation:{topic:'Configurar telefone',supportPreference:'adaptive',reportedFacts:[],hypotheses:[],openQuestions:[],tests:[],sourceVersionIds:[]},
+  semantic:{route:'existing',investigationId:randomUUID(),topic:null,intent:'knowledge',mode:'adaptive',focused:false,query:'procedimento completo',equipment:null,environment:null,observations:[]}});
+ assert.equal(result.metrics?.supportPreference,'complete');
+ assert.equal(result.metrics?.completeProcedureVerified,true);
+ assert.equal(result.metrics?.literalFallbacks,0);
+ assert.match(result.answer,/Consulte o IP/);
+ assert.match(result.answer,/Abra o IP no navegador/);
+ assert.doesNotMatch(result.answer,/Conseguiu concluir/);
+});
+
+
+test('provider transport failure after retrieval uses only deterministic authorized evidence',async()=>{
+ let calls=0;
+ const provider={chat:{completions:{create:async()=>{
+  if(++calls===1)return {choices:[{message:{role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'ZD230 calibração'},'q')]}}]};
+  throw new Error('synthetic transport failure');
+ }}}} as unknown as OpenAI;
+ const result=await respond(actor,randomUUID(),'Qual o procedimento da ZD230?',[],provider,async()=>[source],{verifyEvidence:true});
+ assert.equal(result.metrics?.fallbackReason,'provider_failure');
+ assert.equal(result.metrics?.literalFallbacks,1);
+ assert.equal(result.sources[0]?.versionId,source.versionId);
+ assert.match(result.answer,/alinhamento/i);
+});
+
+
+test('an authorized access-only note is reduced before a model can expose unrelated fields',async()=>{
+ const voucher:Source={...source,title:'Gerar voucher Wi-Fi',content:'IP: 192.0.2.40  login: conta-fixture  senha: valor-fixture'};
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'gerar voucher wifi'},'q')]},
+  {role:'assistant',content:'Use o IP 192.0.2.40, o login conta-fixture e a senha valor-fixture.'}
+ ],[]);
+ const result=await respond(actor,randomUUID(),'como eu gero um voucher wifi?',[],model,async()=>[voucher],{verifyEvidence:true});
+ assert.equal(result.metrics?.verifierChecks,0);
+ assert.equal(result.metrics?.literalFallbacks,1);
+ assert.equal(result.sources[0]?.versionId,voucher.versionId);
+ assert.deepEqual(result.sources[0]?.excerpts,['IP: 192.0.2.40']);
+ assert.match(result.answer,/192\.0\.2\.40/);
+ assert.match(result.answer,/não descreve as etapas/);
+ assert.doesNotMatch(result.answer,/conta-fixture|valor-fixture/);
 });

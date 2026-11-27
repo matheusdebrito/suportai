@@ -1,3 +1,5 @@
+import {AGENT_GENERATION_TEMPERATURE} from './agent.js';
+import {resolveAgentLimits} from './agent-budget.js';
 import OpenAI from 'openai';
 import {randomUUID} from 'node:crypto';
 import {respond,type AgentOutput} from './agent.js';
@@ -466,7 +468,7 @@ export interface RealEvaluationRecord{
   caseId:string;
   model:string;
   modelVersion:string;
-  config:{temperature:number;maxTokens:number;topP:number};
+  config:{temperature:number;maxTokensPerCall:number;topP:null;verifierTemperature:number};
   latencyMs:number;
   promptTokens:number;
   completionTokens:number;
@@ -504,7 +506,7 @@ export async function executeSyntheticEvaluation(provider:OpenAI){
 export async function executeRealEvaluation(provider:OpenAI,options:RealEvaluationOptions={}){
   const cases=options.cases??(syntheticCases.filter(c=>c.split==='validation'));
   const modelVersion=options.modelVersion??(process.env.OPENAI_CHAT_MODEL||'unknown');
-  const config={temperature:0.1,maxTokens:2000,topP:0.95};
+  const config={temperature:AGENT_GENERATION_TEMPERATURE,maxTokensPerCall:resolveAgentLimits().maxTokensPerCall,topP:null,verifierTemperature:0};
   const records:RealEvaluationRecord[]=[];
   let totalPromptTokens=0;
   let totalCompletionTokens=0;

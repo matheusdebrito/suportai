@@ -1,0 +1,119 @@
+{
+  "mode": "real-http",
+  "architecture": "semantic_turn_v1",
+  "model": "gpt-4.1-mini",
+  "embeddingModel": "text-embedding-3-small",
+  "temperature": 0.2,
+  "limits": {
+    "maxSteps": 8,
+    "maxSearches": 5,
+    "maxToolsPerStep": 4,
+    "maxSources": 12,
+    "maxElapsedMs": 60000,
+    "maxTokensPerCall": 1800,
+    "maxCompletionTokens": 9000,
+    "maxTotalTokens": 40000,
+    "maxRepeatedSearches": 2,
+    "maxSearchFailures": 2
+  },
+  "corpusHash": "669005f2f335bfe15218a29ac29a3c8b5a55cb9edcb3d67343db9b82f4657e43",
+  "commit": "21a5f050ddfe28f0b10e8a646fe28b196fb94c3c",
+  "ranking": {
+    "recall": 1,
+    "precision": 1,
+    "mrr": 1
+  },
+  "turns": [
+    {
+      "message": "Preciso configurar um telefone de laboratório",
+      "answer": "Qual é a marca e modelo do telefone de laboratório que você precisa configurar?",
+      "sources": [],
+      "states": [
+        {
+          "id": "ad27baa7-23e7-4e5d-966e-a9da8a77cfc3",
+          "topic": "configuração de telefone de laboratório",
+          "support_preference": "adaptive"
+        }
+      ],
+      "capture": {
+        "agentMetrics": {
+          "steps": 3,
+          "searches": 0,
+          "repeatedSearches": 0,
+          "searchFailures": 0,
+          "toolCalls": 0,
+          "promptTokens": 2711,
+          "completionTokens": 103,
+          "durationMs": 2880,
+          "stopReason": "clarified",
+          "readAttempts": 0,
+          "readsWithNewEvidence": 0,
+          "evidenceCount": 0,
+          "emptyReads": 0,
+          "duplicateReads": 0,
+          "readTimeouts": 0,
+          "unavailableReads": 0,
+          "inaccessibleReads": 0,
+          "stalledSteps": 0,
+          "clarificationRequests": 1,
+          "conflicts": 0,
+          "blockedWriteRetries": 0,
+          "verifierChecks": 0,
+          "verifierRejections": 0,
+          "recoverySearches": 0,
+          "literalFallbacks": 0,
+          "adaptiveRewrites": 0,
+          "nonclaimsRemoved": 0,
+          "unsupportedUnits": 0,
+          "supportPreference": "adaptive",
+          "semanticTurnStatus": "accepted",
+          "semanticRoute": "new",
+          "semanticIntent": "clarify",
+          "semanticObservations": 1,
+          "selectionRequired": 0,
+          "conflictRecoveries": 0,
+          "clarificationChecks": 1,
+          "knowledgeSelectionAttempts": 0,
+          "knowledgeSelections": 0,
+          "knowledgeSelectionRejections": 0,
+          "knowledgeSelectionInvalidations": 0,
+          "selectedKnowledgeVersions": 0,
+          "verifierFailures": {}
+        },
+        "retrieval": [],
+        "review": []
+      },
+      "quality": {
+        "literalOverlap": 0,
+        "repeatedLines": 0,
+        "boilerplate": false,
+        "escapedMarkdown": false,
+        "partialWarning": false,
+        "sentenceCount": 1
+      }
+    },
+    {
+      "message": "sim",
+      "answer": "Não consegui interpretar o contexto desta mensagem com segurança. Pode informar qual assunto deseja consultar?",
+      "sources": [],
+      "states": [
+        {
+          "id": "ad27baa7-23e7-4e5d-966e-a9da8a77cfc3",
+          "topic": "configuração de telefone de laboratório",
+          "support_preference": "adaptive"
+        }
+      ],
+      "capture": null,
+      "quality": {
+        "literalOverlap": 0,
+        "repeatedLines": 0,
+        "boilerplate": false,
+        "escapedMarkdown": false,
+        "partialWarning": false,
+        "sentenceCount": 2
+      }
+    }
+  ],
+  "complete": false,
+  "humanReview": "pending"
+}

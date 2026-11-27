@@ -1,0 +1,2797 @@
+{
+  "mode": "real-http-expanded",
+  "commit": "0ba546be2c1fd7f3708efcf466da5f5ec5d3d593",
+  "model": "gpt-4.1-mini",
+  "embeddingModel": "text-embedding-3-small",
+  "temperature": 0.2,
+  "limits": {
+    "maxSteps": 8,
+    "maxSearches": 5,
+    "maxToolsPerStep": 4,
+    "maxSources": 12,
+    "maxElapsedMs": 60000,
+    "maxTokensPerCall": 1800,
+    "maxCompletionTokens": 9000,
+    "maxTotalTokens": 40000,
+    "maxRepeatedSearches": 2,
+    "maxSearchFailures": 2
+  },
+  "corpusHash": "379ad8ab8512f5c6506583951029d3ec04ecad7b00c00596aebed16e86f07474",
+  "baseMatrixHash": "49c7d6ae2d240297c1ac8197dd3e25f4740619f2b7fa074fa0abeeac056ff728",
+  "architecture": "semantic_turn_v1",
+  "episodes": [
+    {
+      "id": "printer-negative-progress",
+      "turns": [
+        {
+          "message": "Preciso configurar uma impressora de etiquetas de laboratório",
+          "answer": "Para configurar a impressora de etiquetas de laboratório, primeiro confirme que ela pertence ao laboratório de testes. Depois, confira o alinhamento da etiqueta e feche a tampa. Para calibrar, pressione o botão Feed e veja se a etiqueta avançou corretamente. [1] Quer que eu te ajude com mais algum passo?",
+          "sources": [
+            {
+              "documentId": "74f8f26a-0acd-4e09-9a08-160739f7342d",
+              "versionId": "defa08cd-ae88-4806-b5a5-243a51a90917",
+              "versionNumber": 1,
+              "title": "Impressora de etiquetas de laboratório",
+              "ordinal": 0,
+              "excerpts": [
+                "Antes da calibração, confirme que a impressora pertence ao laboratório de testes.",
+                "1. Confira o alinhamento da etiqueta.\n2. Feche a tampa.",
+                "3. Pressione Feed.\n4. Confirme se a etiqueta avançou."
+              ]
+            }
+          ],
+          "investigationId": "aed87d3d-5148-4519-bdb8-772f0aba4484",
+          "capture": {
+            "agentMetrics": {
+              "steps": 4,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 1,
+              "promptTokens": 6070,
+              "completionTokens": 290,
+              "durationMs": 5801,
+              "stopReason": "answered",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 1,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 1,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "adaptive",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "new",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 0,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 0,
+              "knowledgeSelections": 0,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 0,
+              "verifierFailures": {}
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "defa08cd-ae88-4806-b5a5-243a51a90917",
+                    "ordinal": 0,
+                    "score": 1.451374870341084
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "Para configurar a impressora de etiquetas de laboratório, primeiro confirme que ela pertence ao laboratório de testes. Depois, confira o alinhamento da etiqueta e feche a tampa. Para calibrar, pressione o botão Feed e veja se a etiqueta avançou corretamente. Quer que eu te ajude com mais algum passo?",
+                "verdict": "supported",
+                "durationMs": 1524,
+                "promptTokens": 1304,
+                "completionTokens": 120,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0.022222222222222223,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 4
+          },
+          "checks": []
+        },
+        {
+          "message": "não consegui",
+          "answer": "Não consegui concluir a análise automática. Segue somente um trecho autorizado da documentação, sem confirmar sua aplicação ou a completude do procedimento.\n\nImpressora de etiquetas de laboratório [1]\n\nAntes da calibração, confirme que a impressora pertence ao laboratório de testes.\n# Etapa inicial\n1. Confira o alinhamento da etiqueta.\n2. Feche a tampa.\n# Calibração\n3. Pressione Feed.\n4. Confirme se a etiqueta avançou.",
+          "sources": [
+            {
+              "documentId": "74f8f26a-0acd-4e09-9a08-160739f7342d",
+              "versionId": "defa08cd-ae88-4806-b5a5-243a51a90917",
+              "versionNumber": 1,
+              "title": "Impressora de etiquetas de laboratório",
+              "ordinal": 0,
+              "excerpts": [
+                "Antes da calibração, confirme que a impressora pertence ao laboratório de testes.\n# Etapa inicial\n1. Confira o alinhamento da etiqueta.\n2. Feche a tampa.\n# Calibração\n3. Pressione Feed.\n4. Confirme se a etiqueta avançou."
+              ]
+            }
+          ],
+          "investigationId": "aed87d3d-5148-4519-bdb8-772f0aba4484",
+          "capture": {
+            "agentMetrics": {
+              "steps": 6,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 1,
+              "promptTokens": 11127,
+              "completionTokens": 403,
+              "durationMs": 8423,
+              "stopReason": "answered",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 1,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 2,
+              "verifierRejections": 2,
+              "recoverySearches": 0,
+              "literalFallbacks": 1,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "adaptive",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "existing",
+              "semanticIntent": "clarify",
+              "semanticObservations": 1,
+              "selectionRequired": 0,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 0,
+              "knowledgeSelections": 0,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 0,
+              "verifierFailures": {
+                "claim_shape": 2
+              },
+              "lastVerifierFailure": "claim_shape",
+              "fallbackReason": "claim_shape"
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "defa08cd-ae88-4806-b5a5-243a51a90917",
+                    "ordinal": 0,
+                    "score": 1.4513546192737188
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "Você já conferiu se a impressora é do laboratório de testes, alinhou a etiqueta, fechou a tampa e apertou o botão Feed para calibrar? Se sim, o que exatamente não funcionou? Assim posso ajudar melhor.",
+                "verdict": "uncertain",
+                "reason": "claim_shape",
+                "durationMs": 1451,
+                "promptTokens": 1418,
+                "completionTokens": 81,
+                "usageObserved": true
+              },
+              {
+                "candidate": "Você já confirmou que a impressora é do laboratório de testes? Depois, alinhou a etiqueta e fechou a tampa? E ao apertar o botão Feed, a etiqueta avançou? Me conta o que rolou em cada passo.",
+                "verdict": "uncertain",
+                "reason": "claim_shape",
+                "durationMs": 1733,
+                "promptTokens": 1425,
+                "completionTokens": 120,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0.5423728813559322,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 11
+          },
+          "checks": []
+        },
+        {
+          "message": "agora a tampa está fechada",
+          "answer": "A tampa está fechada, certo? Agora aperta o botão Feed para a impressora tentar calibrar. Depois me diz se a etiqueta andou ou não. [1]",
+          "sources": [
+            {
+              "documentId": "74f8f26a-0acd-4e09-9a08-160739f7342d",
+              "versionId": "defa08cd-ae88-4806-b5a5-243a51a90917",
+              "versionNumber": 1,
+              "title": "Impressora de etiquetas de laboratório",
+              "ordinal": 0,
+              "excerpts": [
+                "Feche a tampa.",
+                "Pressione Feed.",
+                "Confirme se a etiqueta avançou."
+              ]
+            }
+          ],
+          "investigationId": "aed87d3d-5148-4519-bdb8-772f0aba4484",
+          "capture": {
+            "agentMetrics": {
+              "steps": 6,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 1,
+              "promptTokens": 11645,
+              "completionTokens": 348,
+              "durationMs": 7444,
+              "stopReason": "answered",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 1,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 2,
+              "verifierRejections": 1,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "adaptive",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "existing",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 0,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 0,
+              "knowledgeSelections": 0,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 0,
+              "verifierFailures": {
+                "claim_shape": 1
+              },
+              "lastVerifierFailure": "claim_shape"
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "defa08cd-ae88-4806-b5a5-243a51a90917",
+                    "ordinal": 0,
+                    "score": 1.6158251592953916
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "Agora que a tampa está fechada, o próximo passo é pressionar o botão Feed na impressora para calibrar. Depois, veja se a etiqueta avançou corretamente. Me avisa o que aconteceu aí.",
+                "verdict": "uncertain",
+                "reason": "claim_shape",
+                "durationMs": 1199,
+                "promptTokens": 1441,
+                "completionTokens": 71,
+                "usageObserved": true
+              },
+              {
+                "candidate": "A tampa está fechada, certo? Agora aperta o botão Feed para a impressora tentar calibrar. Depois me diz se a etiqueta andou ou não.",
+                "verdict": "supported",
+                "durationMs": 1517,
+                "promptTokens": 1432,
+                "completionTokens": 87,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 4
+          },
+          "checks": []
+        },
+        {
+          "message": "me dê o passo a passo completo",
+          "answer": "O passo a passo completo para configurar a impressora de etiquetas de laboratório é: [1]\n\n1. Confirme que a impressora pertence ao laboratório de testes.\n2. Confira o alinhamento da etiqueta.\n3. Feche a tampa da impressora.\n4. Pressione o botão Feed para calibrar.\n5. Verifique se a etiqueta avançou corretamente. [1]\n\nSe a etiqueta não avançar, pode ser necessário ajustar o alinhamento ou verificar se a etiqueta está colocada corretamente. [1] Quer ajuda com algum desses passos?",
+          "sources": [
+            {
+              "documentId": "74f8f26a-0acd-4e09-9a08-160739f7342d",
+              "versionId": "defa08cd-ae88-4806-b5a5-243a51a90917",
+              "versionNumber": 1,
+              "title": "Impressora de etiquetas de laboratório",
+              "ordinal": -1,
+              "excerpts": [
+                "Antes da calibração, confirme que a impressora pertence ao laboratório de testes.\n# Etapa inicial\n1. Confira o alinhamento da etiqueta.\n2. Feche a tampa.\n# Calibração\n3. Pressione Feed.\n4. Confirme se a etiqueta avançou.",
+                "Antes da calibração, confirme que a impressora pertence ao laboratório de testes.",
+                "1. Confira o alinhamento da etiqueta.",
+                "2. Feche a tampa.",
+                "3. Pressione Feed.",
+                "4. Confirme se a etiqueta avançou.",
+                "Confirme se a etiqueta avançou."
+              ]
+            }
+          ],
+          "investigationId": "aed87d3d-5148-4519-bdb8-772f0aba4484",
+          "capture": {
+            "agentMetrics": {
+              "steps": 4,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 1,
+              "promptTokens": 7620,
+              "completionTokens": 495,
+              "durationMs": 8152,
+              "stopReason": "answered",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 2,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 1,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "complete",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "existing",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 0,
+              "selectionRequired": 0,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 0,
+              "knowledgeSelections": 0,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 0,
+              "verifierFailures": {}
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "defa08cd-ae88-4806-b5a5-243a51a90917",
+                    "ordinal": 0,
+                    "score": 1.4917947325955971
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "O passo a passo completo para configurar a impressora de etiquetas de laboratório é:\n\n1. Confirme que a impressora pertence ao laboratório de testes.\n2. Confira o alinhamento da etiqueta.\n3. Feche a tampa da impressora.\n4. Pressione o botão Feed para calibrar.\n5. Verifique se a etiqueta avançou corretamente.\n\nSe a etiqueta não avançar, pode ser necessário ajustar o alinhamento ou verificar se a etiqueta está colocada corretamente. Quer ajuda com algum desses passos?",
+                "verdict": "supported",
+                "durationMs": 3229,
+                "promptTokens": 1637,
+                "completionTokens": 268,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0.08450704225352113,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 12
+          },
+          "checks": []
+        }
+      ]
+    },
+    {
+      "id": "ris-erp-switch-resume",
+      "turns": [
+        {
+          "message": "Preciso configurar o RIS de laboratório",
+          "answer": "Pra configurar o RIS de laboratório, começa pesquisando o paciente fictício, depois clica na engrenagem, vai em cadastros e por fim em convênio pra habilitar a alteração de guia. [1] Quer ajuda pra seguir esses passos?",
+          "sources": [
+            {
+              "documentId": "2f6d942a-3732-408c-80e3-de2ee2dc6310",
+              "versionId": "baac4d3a-af60-45f6-903d-29632d43ccef",
+              "versionNumber": 1,
+              "title": "RIS de laboratório",
+              "ordinal": 0,
+              "excerpts": [
+                "Para habilitar a alteração de guia no RIS de laboratório - [ ] pesquisar o paciente fictício - [ ] engrenagem - [ ] cadastros - [ ] convênio"
+              ]
+            }
+          ],
+          "investigationId": "4dcef1cb-2141-4567-b6e0-6c0cde4265b2",
+          "capture": {
+            "agentMetrics": {
+              "steps": 6,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 2,
+              "promptTokens": 10779,
+              "completionTokens": 296,
+              "durationMs": 6787,
+              "stopReason": "answered",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 2,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 1,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "guided",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "new",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 1,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 1,
+              "knowledgeSelections": 1,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 1,
+              "knowledgeSufficiency": "sufficient",
+              "verifierFailures": {}
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "baac4d3a-af60-45f6-903d-29632d43ccef",
+                    "ordinal": 0,
+                    "score": 1.1579980749632361
+                  },
+                  {
+                    "versionId": "4dbe2eb1-255a-447e-92fd-4304d1bbff8e",
+                    "ordinal": 0,
+                    "score": 0.8096221214311493
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "Pra configurar o RIS de laboratório, começa pesquisando o paciente fictício, depois clica na engrenagem, vai em cadastros e por fim em convênio pra habilitar a alteração de guia. Quer ajuda pra seguir esses passos?",
+                "verdict": "supported",
+                "durationMs": 1043,
+                "promptTokens": 1344,
+                "completionTokens": 66,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": []
+        },
+        {
+          "message": "me passe tudo",
+          "answer": "Não consegui confirmar uma orientação aplicável com segurança. Podemos continuar se você informar o detalhe do ambiente ou do resultado observado que ainda falta.",
+          "sources": [],
+          "investigationId": "4dcef1cb-2141-4567-b6e0-6c0cde4265b2",
+          "capture": {
+            "agentMetrics": {
+              "steps": 8,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 2,
+              "promptTokens": 17226,
+              "completionTokens": 748,
+              "durationMs": 12127,
+              "stopReason": "unsafe_answer",
+              "readAttempts": 2,
+              "readsWithNewEvidence": 2,
+              "evidenceCount": 3,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 2,
+              "verifierRejections": 2,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "complete",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "existing",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 1,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 1,
+              "knowledgeSelections": 1,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 1,
+              "knowledgeSufficiency": "sufficient",
+              "verifierFailures": {
+                "claim_shape": 1,
+                "invalid_reference": 1
+              },
+              "lastVerifierFailure": "invalid_reference"
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "baac4d3a-af60-45f6-903d-29632d43ccef",
+                    "ordinal": 0,
+                    "score": 1.230551146193959
+                  },
+                  {
+                    "versionId": "4dbe2eb1-255a-447e-92fd-4304d1bbff8e",
+                    "ordinal": 0,
+                    "score": 0.8958280235172735
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "Pra configurar o RIS de laboratório e habilitar a alteração de guia, faça assim:\n\n1. Pesquise o paciente fictício.\n2. Clique na engrenagem de configurações.\n3. Vá em \"Cadastros\".\n4. Selecione \"Convênio\".\n5. Habilite a alteração de guia.\n\nEsse é o passo principal documentado. Se quiser, posso ajudar a detalhar cada etapa ou ver outras configurações do RIS. Quer?",
+                "verdict": "uncertain",
+                "reason": "claim_shape",
+                "durationMs": 2559,
+                "promptTokens": 1663,
+                "completionTokens": 251,
+                "usageObserved": true
+              },
+              {
+                "candidate": "Pra configurar o RIS de laboratório e permitir alteração de guia, primeiro pesquise o paciente fictício. Depois, acesse a engrenagem de configurações, vá em cadastros e escolha convênio para habilitar essa opção. Quer que eu te ajude a encontrar onde fica isso no sistema?",
+                "verdict": "unsupported",
+                "reason": "invalid_reference",
+                "durationMs": 1650,
+                "promptTokens": 1587,
+                "completionTokens": 110,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": [
+            "missing_expected_source",
+            "missing_complete_document"
+          ]
+        },
+        {
+          "message": "Agora sobre ERP de laboratório",
+          "answer": "No ERP de laboratório, você pode acessar o inventário de teste abrindo o menu Estoque e consultando o inventário de teste. [1]\n\nNão consegui confirmar todos os detalhes nas fontes. O texto acima é apenas a parte verificada.",
+          "sources": [
+            {
+              "documentId": "2ac88a7a-5637-4ae8-9daf-8ac0f6108576",
+              "versionId": "4dbe2eb1-255a-447e-92fd-4304d1bbff8e",
+              "versionNumber": 1,
+              "title": "ERP de laboratório",
+              "ordinal": 0,
+              "excerpts": [
+                "Somente no ERP de laboratório.\n1. Abra o menu Estoque.\n2. Consulte o inventário de teste."
+              ]
+            }
+          ],
+          "investigationId": "71271847-2b4c-487c-8d6f-d44c2d9e8051",
+          "capture": {
+            "agentMetrics": {
+              "steps": 6,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 2,
+              "promptTokens": 10721,
+              "completionTokens": 282,
+              "durationMs": 7158,
+              "stopReason": "answered",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 2,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 1,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 1,
+              "supportPreference": "adaptive",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "new",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 1,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 1,
+              "knowledgeSelections": 1,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 1,
+              "knowledgeSufficiency": "sufficient",
+              "verifierFailures": {}
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "4dbe2eb1-255a-447e-92fd-4304d1bbff8e",
+                    "ordinal": 0,
+                    "score": 2.3097180429251414
+                  },
+                  {
+                    "versionId": "baac4d3a-af60-45f6-903d-29632d43ccef",
+                    "ordinal": 0,
+                    "score": 0.839862954796238
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "No ERP de laboratório, você pode acessar o inventário de teste abrindo o menu Estoque e consultando o inventário de teste. Quer que eu te ajude com mais alguma coisa sobre o ERP de laboratório?",
+                "verdict": "supported",
+                "durationMs": 1283,
+                "promptTokens": 1326,
+                "completionTokens": 68,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": true,
+            "sentenceCount": 3
+          },
+          "checks": []
+        },
+        {
+          "message": "me dê o procedimento completo",
+          "answer": "Não consegui concluir a análise automática. Segue somente um trecho autorizado da documentação, sem confirmar sua aplicação ou a completude do procedimento.\n\nERP de laboratório [1]\n\nSomente no ERP de laboratório.\n1. Abra o menu Estoque.\n2. Consulte o inventário de teste.",
+          "sources": [
+            {
+              "documentId": "2ac88a7a-5637-4ae8-9daf-8ac0f6108576",
+              "versionId": "4dbe2eb1-255a-447e-92fd-4304d1bbff8e",
+              "versionNumber": 1,
+              "title": "ERP de laboratório",
+              "ordinal": -1,
+              "excerpts": [
+                "Somente no ERP de laboratório.\n1. Abra o menu Estoque.\n2. Consulte o inventário de teste."
+              ]
+            }
+          ],
+          "investigationId": "71271847-2b4c-487c-8d6f-d44c2d9e8051",
+          "capture": {
+            "agentMetrics": {
+              "steps": 7,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 3,
+              "promptTokens": 14459,
+              "completionTokens": 441,
+              "durationMs": 10445,
+              "stopReason": "answered",
+              "readAttempts": 2,
+              "readsWithNewEvidence": 2,
+              "evidenceCount": 3,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 1,
+              "verifierRejections": 1,
+              "recoverySearches": 0,
+              "literalFallbacks": 1,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "complete",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "existing",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 0,
+              "selectionRequired": 1,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 1,
+              "knowledgeSelections": 1,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 1,
+              "knowledgeSufficiency": "sufficient",
+              "verifierFailures": {
+                "claim_shape": 1
+              },
+              "lastVerifierFailure": "claim_shape",
+              "fallbackReason": "claim_shape"
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "4dbe2eb1-255a-447e-92fd-4304d1bbff8e",
+                    "ordinal": 0,
+                    "score": 1.2825983885733367
+                  },
+                  {
+                    "versionId": "baac4d3a-af60-45f6-903d-29632d43ccef",
+                    "ordinal": 0,
+                    "score": 0.8455308661569381
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "O procedimento completo disponível para ERP de laboratório é:\n\n1. Abra o menu Estoque.\n2. Consulte o inventário de teste.\n\nEsse é o conteúdo documentado que temos. Se precisar de algo mais específico ou detalhado, me avisa!",
+                "verdict": "uncertain",
+                "reason": "claim_shape",
+                "durationMs": 2343,
+                "promptTokens": 1547,
+                "completionTokens": 159,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0.32432432432432434,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 7
+          },
+          "checks": []
+        },
+        {
+          "message": "Voltando ao RIS de laboratório",
+          "answer": "Pra habilitar a alteração de guia no RIS de laboratório, você precisa pesquisar o paciente fictício, depois acessar a engrenagem, ir em cadastros e por fim em convênio. [1] Quer ajuda pra começar por algum desses passos?",
+          "sources": [
+            {
+              "documentId": "2f6d942a-3732-408c-80e3-de2ee2dc6310",
+              "versionId": "baac4d3a-af60-45f6-903d-29632d43ccef",
+              "versionNumber": 1,
+              "title": "RIS de laboratório",
+              "ordinal": 0,
+              "excerpts": [
+                "Para habilitar a alteração de guia no RIS de laboratório - [ ] pesquisar o paciente fictício - [ ] engrenagem - [ ] cadastros - [ ] convênio"
+              ]
+            }
+          ],
+          "investigationId": "4dcef1cb-2141-4567-b6e0-6c0cde4265b2",
+          "capture": {
+            "agentMetrics": {
+              "steps": 8,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 2,
+              "promptTokens": 16982,
+              "completionTokens": 446,
+              "durationMs": 9974,
+              "stopReason": "answered",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 2,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 2,
+              "verifierRejections": 1,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "guided",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "existing",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 1,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 1,
+              "knowledgeSelections": 1,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 1,
+              "knowledgeSufficiency": "sufficient",
+              "verifierFailures": {
+                "claim_shape": 1
+              },
+              "lastVerifierFailure": "claim_shape"
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "baac4d3a-af60-45f6-903d-29632d43ccef",
+                    "ordinal": 0,
+                    "score": 1.230551146193959
+                  },
+                  {
+                    "versionId": "4dbe2eb1-255a-447e-92fd-4304d1bbff8e",
+                    "ordinal": 0,
+                    "score": 0.8958280235172735
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "Pra configurar o RIS de laboratório e habilitar a alteração de guia, faça assim: pesquise o paciente fictício, clique na engrenagem, vá em cadastros e depois em convênio. Esses são os passos básicos que tenho. Quer que eu te ajude a fazer algum deles?",
+                "verdict": "uncertain",
+                "reason": "claim_shape",
+                "durationMs": 1205,
+                "promptTokens": 1532,
+                "completionTokens": 66,
+                "usageObserved": true
+              },
+              {
+                "candidate": "Pra habilitar a alteração de guia no RIS de laboratório, você precisa pesquisar o paciente fictício, depois acessar a engrenagem, ir em cadastros e por fim em convênio. Quer ajuda pra começar por algum desses passos?",
+                "verdict": "supported",
+                "durationMs": 1232,
+                "promptTokens": 1512,
+                "completionTokens": 66,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0.125,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": []
+        },
+        {
+          "message": "me dê o passo a passo completo",
+          "answer": "Não consegui confirmar uma orientação aplicável com segurança. Podemos continuar se você informar o detalhe do ambiente ou do resultado observado que ainda falta.",
+          "sources": [],
+          "investigationId": "4dcef1cb-2141-4567-b6e0-6c0cde4265b2",
+          "capture": {
+            "agentMetrics": {
+              "steps": 8,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 2,
+              "promptTokens": 17957,
+              "completionTokens": 887,
+              "durationMs": 14285,
+              "stopReason": "unsafe_answer",
+              "readAttempts": 2,
+              "readsWithNewEvidence": 2,
+              "evidenceCount": 3,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 2,
+              "verifierRejections": 2,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "complete",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "existing",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 0,
+              "selectionRequired": 1,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 1,
+              "knowledgeSelections": 1,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 1,
+              "knowledgeSufficiency": "sufficient",
+              "verifierFailures": {
+                "claim_shape": 1,
+                "invalid_reference": 1
+              },
+              "lastVerifierFailure": "invalid_reference"
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "baac4d3a-af60-45f6-903d-29632d43ccef",
+                    "ordinal": 0,
+                    "score": 1.718982915897969
+                  },
+                  {
+                    "versionId": "4dbe2eb1-255a-447e-92fd-4304d1bbff8e",
+                    "ordinal": 0,
+                    "score": 0.8643548264351103
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "O passo a passo completo para habilitar a alteração de guia no RIS de laboratório é:\n\n1. Pesquise o paciente fictício.\n2. Clique na engrenagem (configurações).\n3. Vá em Cadastros.\n4. Selecione Convênio.\n\nEsses são os passos para habilitar essa função no RIS. Se precisar, posso ajudar a detalhar algum deles. Quer?",
+                "verdict": "uncertain",
+                "reason": "claim_shape",
+                "durationMs": 2985,
+                "promptTokens": 1665,
+                "completionTokens": 276,
+                "usageObserved": true
+              },
+              {
+                "candidate": "Pra habilitar a alteração de guia no RIS de laboratório, você precisa:\n\n1. Pesquisar o paciente fictício.\n2. Ir na engrenagem (configurações).\n3. Entrar em Cadastros.\n4. Selecionar Convênio.\n\nQuer que eu te ajude a começar por algum desses passos?",
+                "verdict": "unsupported",
+                "reason": "invalid_reference",
+                "durationMs": 2509,
+                "promptTokens": 1636,
+                "completionTokens": 219,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 1,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": [
+            "missing_expected_source",
+            "missing_complete_document"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "focused-scanner-and-mode",
+      "turns": [
+        {
+          "message": "Preciso preparar um digitalizador de laboratório",
+          "answer": "Para preparar o digitalizador de laboratório, siga esses passos: abra o aplicativo de digitalização, escolha o menu Digitalizar, configure a resolução para 300 DPI e o formato para PDF. [1] Quer que eu te ajude com mais alguma coisa?",
+          "sources": [
+            {
+              "documentId": "652b6602-8c47-4355-9693-ec4bc7227b62",
+              "versionId": "414b261e-350d-4892-bf5b-48d59044e098",
+              "versionNumber": 1,
+              "title": "Digitalizador de laboratório",
+              "ordinal": 0,
+              "excerpts": [
+                "# Preparação\n1. Abra o aplicativo de digitalização.\n2. Escolha o menu Digitalizar.\n# Configuração\n3. Resolução: 300 DPI.\n4. Formato: PDF."
+              ]
+            }
+          ],
+          "investigationId": "7548c438-9924-45ab-ba32-faace7e0e4e5",
+          "capture": {
+            "agentMetrics": {
+              "steps": 4,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 1,
+              "promptTokens": 5971,
+              "completionTokens": 224,
+              "durationMs": 5293,
+              "stopReason": "answered",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 1,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 1,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "adaptive",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "new",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 0,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 0,
+              "knowledgeSelections": 0,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 0,
+              "verifierFailures": {}
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "414b261e-350d-4892-bf5b-48d59044e098",
+                    "ordinal": 0,
+                    "score": 0.9694243030266346
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "Para preparar o digitalizador de laboratório, siga esses passos: abra o aplicativo de digitalização, escolha o menu Digitalizar, configure a resolução para 300 DPI e o formato para PDF. Quer que eu te ajude com mais alguma coisa?",
+                "verdict": "supported",
+                "durationMs": 1262,
+                "promptTokens": 1246,
+                "completionTokens": 75,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": []
+        },
+        {
+          "message": "em qual menu?",
+          "answer": "O menu para preparar o digitalizador de laboratório é o menu \"Digitalizar\" dentro do aplicativo de digitalização. [1]",
+          "sources": [
+            {
+              "documentId": "652b6602-8c47-4355-9693-ec4bc7227b62",
+              "versionId": "414b261e-350d-4892-bf5b-48d59044e098",
+              "versionNumber": 1,
+              "title": "Digitalizador de laboratório",
+              "ordinal": 0,
+              "excerpts": [
+                "1. Abra o aplicativo de digitalização.\n2. Escolha o menu Digitalizar."
+              ]
+            }
+          ],
+          "investigationId": "7548c438-9924-45ab-ba32-faace7e0e4e5",
+          "capture": {
+            "agentMetrics": {
+              "steps": 4,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 1,
+              "promptTokens": 6669,
+              "completionTokens": 176,
+              "durationMs": 4859,
+              "stopReason": "answered",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 1,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 1,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "adaptive",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "existing",
+              "semanticIntent": "clarify",
+              "semanticObservations": 1,
+              "selectionRequired": 0,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 0,
+              "knowledgeSelections": 0,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 0,
+              "verifierFailures": {}
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "414b261e-350d-4892-bf5b-48d59044e098",
+                    "ordinal": 0,
+                    "score": 1.0829336198904649
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "O menu para preparar o digitalizador de laboratório é o menu \"Digitalizar\" dentro do aplicativo de digitalização.",
+                "verdict": "supported",
+                "durationMs": 971,
+                "promptTokens": 1358,
+                "completionTokens": 49,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": []
+        },
+        {
+          "message": "me guie uma etapa por vez",
+          "answer": "Vamos começar: primeiro, abra o aplicativo de digitalização no computador ou no equipamento do laboratório. Me avisa quando fizer isso pra eu te passar o próximo passo. [1]",
+          "sources": [
+            {
+              "documentId": "652b6602-8c47-4355-9693-ec4bc7227b62",
+              "versionId": "414b261e-350d-4892-bf5b-48d59044e098",
+              "versionNumber": 1,
+              "title": "Digitalizador de laboratório",
+              "ordinal": 0,
+              "excerpts": [
+                "# Preparação\n1. Abra o aplicativo de digitalização."
+              ]
+            }
+          ],
+          "investigationId": "7548c438-9924-45ab-ba32-faace7e0e4e5",
+          "capture": {
+            "agentMetrics": {
+              "steps": 4,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 1,
+              "promptTokens": 6784,
+              "completionTokens": 195,
+              "durationMs": 4969,
+              "stopReason": "answered",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 1,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 1,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "guided",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "existing",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 0,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 0,
+              "knowledgeSelections": 0,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 0,
+              "verifierFailures": {}
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "414b261e-350d-4892-bf5b-48d59044e098",
+                    "ordinal": 0,
+                    "score": 1.002249991955323
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "Vamos começar: primeiro, abra o aplicativo de digitalização no computador ou no equipamento do laboratório. Me avisa quando fizer isso pra eu te passar o próximo passo.",
+                "verdict": "supported",
+                "durationMs": 953,
+                "promptTokens": 1392,
+                "completionTokens": 43,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 3
+          },
+          "checks": []
+        },
+        {
+          "message": "me passe tudo",
+          "answer": "Para preparar o digitalizador de laboratório, siga essas etapas: [1]\n\n1. Abra o aplicativo de digitalização.\n2. Escolha o menu \"Digitalizar\".\n3. Configure a resolução para 300 DPI.\n4. Configure o formato para PDF. [1]\n\nQuer que eu te guie passo a passo?",
+          "sources": [
+            {
+              "documentId": "652b6602-8c47-4355-9693-ec4bc7227b62",
+              "versionId": "414b261e-350d-4892-bf5b-48d59044e098",
+              "versionNumber": 1,
+              "title": "Digitalizador de laboratório",
+              "ordinal": -1,
+              "excerpts": [
+                "# Preparação\n1. Abra o aplicativo de digitalização.",
+                "1. Abra o aplicativo de digitalização.",
+                "2. Escolha o menu Digitalizar.",
+                "3. Resolução: 300 DPI.",
+                "4. Formato: PDF."
+              ]
+            }
+          ],
+          "investigationId": "7548c438-9924-45ab-ba32-faace7e0e4e5",
+          "capture": {
+            "agentMetrics": {
+              "steps": 4,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 1,
+              "promptTokens": 7207,
+              "completionTokens": 317,
+              "durationMs": 6608,
+              "stopReason": "answered",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 2,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 1,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "complete",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "existing",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 0,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 0,
+              "knowledgeSelections": 0,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 0,
+              "verifierFailures": {}
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "414b261e-350d-4892-bf5b-48d59044e098",
+                    "ordinal": 0,
+                    "score": 0.9694243030266346
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "Para preparar o digitalizador de laboratório, siga essas etapas:\n\n1. Abra o aplicativo de digitalização.\n2. Escolha o menu \"Digitalizar\".\n3. Configure a resolução para 300 DPI.\n4. Configure o formato para PDF.\n\nQuer que eu te guie passo a passo?",
+                "verdict": "supported",
+                "durationMs": 2149,
+                "promptTokens": 1550,
+                "completionTokens": 157,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0.16216216216216217,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 9
+          },
+          "checks": []
+        }
+      ]
+    },
+    {
+      "id": "revoked-procedure",
+      "turns": [
+        {
+          "message": "Preciso configurar o roteador de laboratório",
+          "answer": "Para configurar o roteador de laboratório, comece abrindo o painel de testes e use o marcador FIXTURE-ROUTER-ALPHA. [1] Quer que eu te guie passo a passo a partir daí?",
+          "sources": [
+            {
+              "documentId": "8a584ae4-efae-4b92-b1d4-8b861b4d6d56",
+              "versionId": "35bae269-ff28-44d3-bb5e-a7e68e73ab5d",
+              "versionNumber": 1,
+              "title": "Roteador de laboratório",
+              "ordinal": 0,
+              "excerpts": [
+                "# Configuração do roteador de laboratório\n1. Abra o painel de testes.\n2. Use o marcador FIXTURE-ROUTER-ALPHA."
+              ]
+            }
+          ],
+          "investigationId": "baedc4cf-3356-486a-81b3-206f524ee056",
+          "capture": {
+            "agentMetrics": {
+              "steps": 4,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 1,
+              "promptTokens": 5946,
+              "completionTokens": 204,
+              "durationMs": 4591,
+              "stopReason": "answered",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 1,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 1,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "adaptive",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "new",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 0,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 0,
+              "knowledgeSelections": 0,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 0,
+              "verifierFailures": {}
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "35bae269-ff28-44d3-bb5e-a7e68e73ab5d",
+                    "ordinal": 0,
+                    "score": 1.3369410392251835
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "Para configurar o roteador de laboratório, comece abrindo o painel de testes e use o marcador FIXTURE-ROUTER-ALPHA. Quer que eu te guie passo a passo a partir daí?",
+                "verdict": "supported",
+                "durationMs": 1079,
+                "promptTokens": 1229,
+                "completionTokens": 63,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": []
+        },
+        {
+          "message": "me dê o passo a passo completo",
+          "answer": "Não encontrei fontes publicadas e autorizadas para confirmar esse procedimento. Uma orientação sem essas fontes seria apenas uma hipótese da IA, não um procedimento interno validado. Informe o sistema, o ambiente ou mais detalhes para que eu possa tentar uma busca mais específica.",
+          "sources": [],
+          "investigationId": "baedc4cf-3356-486a-81b3-206f524ee056",
+          "capture": {
+            "agentMetrics": {
+              "steps": 3,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 1,
+              "promptTokens": 4883,
+              "completionTokens": 175,
+              "durationMs": 3710,
+              "stopReason": "no_evidence",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 0,
+              "evidenceCount": 0,
+              "emptyReads": 1,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 0,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "complete",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "existing",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 0,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 0,
+              "knowledgeSelections": 0,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 0,
+              "verifierFailures": {}
+            },
+            "retrieval": [
+              {
+                "ranked": [],
+                "metrics": {
+                  "recall": null,
+                  "precision": 0,
+                  "mrr": 0
+                },
+                "chunkMetrics": {
+                  "recall": null,
+                  "precision": 0,
+                  "mrr": 0
+                }
+              }
+            ],
+            "review": []
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 3
+          },
+          "checks": []
+        }
+      ]
+    },
+    {
+      "id": "restricted-knowledge",
+      "turns": [
+        {
+          "message": "Preciso configurar o console restrito de laboratório",
+          "answer": "Não encontrei fontes publicadas e autorizadas para confirmar esse procedimento. Uma orientação sem essas fontes seria apenas uma hipótese da IA, não um procedimento interno validado. Informe o sistema, o ambiente ou mais detalhes para que eu possa tentar uma busca mais específica.",
+          "sources": [],
+          "investigationId": "8bee7e61-8589-4687-a890-97ed516299f8",
+          "capture": {
+            "agentMetrics": {
+              "steps": 6,
+              "searches": 2,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 2,
+              "promptTokens": 8507,
+              "completionTokens": 184,
+              "durationMs": 5990,
+              "stopReason": "no_evidence",
+              "readAttempts": 2,
+              "readsWithNewEvidence": 0,
+              "evidenceCount": 0,
+              "emptyReads": 2,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 1,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 0,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "adaptive",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "new",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 0,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 1,
+              "knowledgeSelectionAttempts": 0,
+              "knowledgeSelections": 0,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 0,
+              "verifierFailures": {}
+            },
+            "retrieval": [
+              {
+                "ranked": [],
+                "metrics": {
+                  "recall": null,
+                  "precision": 0,
+                  "mrr": 0
+                },
+                "chunkMetrics": {
+                  "recall": null,
+                  "precision": 0,
+                  "mrr": 0
+                }
+              },
+              {
+                "ranked": [],
+                "metrics": {
+                  "recall": null,
+                  "precision": 0,
+                  "mrr": 0
+                },
+                "chunkMetrics": {
+                  "recall": null,
+                  "precision": 0,
+                  "mrr": 0
+                }
+              }
+            ],
+            "review": []
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 3
+          },
+          "checks": []
+        },
+        {
+          "message": "me dê o passo a passo completo",
+          "answer": "Não encontrei fontes publicadas e autorizadas para confirmar esse procedimento. Uma orientação sem essas fontes seria apenas uma hipótese da IA, não um procedimento interno validado. Informe o sistema, o ambiente ou mais detalhes para que eu possa tentar uma busca mais específica.",
+          "sources": [],
+          "investigationId": "8bee7e61-8589-4687-a890-97ed516299f8",
+          "capture": {
+            "agentMetrics": {
+              "steps": 3,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 1,
+              "promptTokens": 4972,
+              "completionTokens": 155,
+              "durationMs": 3492,
+              "stopReason": "no_evidence",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 0,
+              "evidenceCount": 0,
+              "emptyReads": 1,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 0,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "complete",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "existing",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 0,
+              "selectionRequired": 0,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 0,
+              "knowledgeSelections": 0,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 0,
+              "verifierFailures": {}
+            },
+            "retrieval": [
+              {
+                "ranked": [],
+                "metrics": {
+                  "recall": null,
+                  "precision": 0,
+                  "mrr": 0
+                },
+                "chunkMetrics": {
+                  "recall": null,
+                  "precision": 0,
+                  "mrr": 0
+                }
+              }
+            ],
+            "review": []
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 1,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 3
+          },
+          "checks": []
+        }
+      ]
+    },
+    {
+      "id": "semantic-controller-disambiguation",
+      "turns": [
+        {
+          "message": "Preciso configurar o acesso temporário de visitantes",
+          "answer": "Ainda não consegui distinguir os conhecimentos aplicáveis. Qual é o contexto específico do procedimento que você precisa?",
+          "sources": [],
+          "investigationId": "fa466c14-52a2-44a3-a572-94dfd382025e",
+          "capture": {
+            "agentMetrics": {
+              "steps": 6,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 1,
+              "promptTokens": 9810,
+              "completionTokens": 223,
+              "durationMs": 5979,
+              "stopReason": "clarified",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 2,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 1,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 0,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "guided",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "new",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 2,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 1,
+              "knowledgeSelectionAttempts": 0,
+              "knowledgeSelections": 0,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 0,
+              "verifierFailures": {}
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "29b87790-76f2-47ad-bf4c-9a4191b79394",
+                    "ordinal": 0,
+                    "score": 1.0923170831830604
+                  },
+                  {
+                    "versionId": "d09f1572-2cfa-4e17-a783-8cee7d71a0f7",
+                    "ordinal": 0,
+                    "score": 0.7363825532187152
+                  }
+                ],
+                "metrics": {
+                  "recall": null,
+                  "precision": 0,
+                  "mrr": 0
+                },
+                "chunkMetrics": {
+                  "recall": null,
+                  "precision": 0,
+                  "mrr": 0
+                }
+              }
+            ],
+            "review": []
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": []
+        },
+        {
+          "message": "Agora estou usando o controlador Verde.",
+          "answer": "Para configurar o acesso temporário de visitantes no controlador Verde, abra a área \"Rede de convidados\" e selecione \"Novo acesso temporário\". Depois, confirme o acesso. [1] Quer que eu te ajude com mais algum detalhe?",
+          "sources": [
+            {
+              "documentId": "339776da-89a4-4115-9e69-81d5f1359bb6",
+              "versionId": "29b87790-76f2-47ad-bf4c-9a4191b79394",
+              "versionNumber": 1,
+              "title": "Credenciais temporárias para visitantes — controlador Verde",
+              "ordinal": 0,
+              "excerpts": [
+                "Somente para o controlador Verde. Abra a área Rede de convidados e selecione Novo acesso temporário.",
+                "Confirme o acesso."
+              ]
+            }
+          ],
+          "investigationId": "fa466c14-52a2-44a3-a572-94dfd382025e",
+          "capture": {
+            "agentMetrics": {
+              "steps": 5,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 2,
+              "promptTokens": 9311,
+              "completionTokens": 272,
+              "durationMs": 5832,
+              "stopReason": "answered",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 2,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 1,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "guided",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "existing",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 0,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 1,
+              "knowledgeSelections": 1,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 1,
+              "knowledgeSufficiency": "sufficient",
+              "verifierFailures": {}
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "29b87790-76f2-47ad-bf4c-9a4191b79394",
+                    "ordinal": 0,
+                    "score": 1.786344171801277
+                  },
+                  {
+                    "versionId": "d09f1572-2cfa-4e17-a783-8cee7d71a0f7",
+                    "ordinal": 0,
+                    "score": 1.0985097021472199
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "Para configurar o acesso temporário de visitantes no controlador Verde, abra a área \"Rede de convidados\" e selecione \"Novo acesso temporário\". Depois, confirme o acesso. Quer que eu te ajude com mais algum detalhe?",
+                "verdict": "supported",
+                "durationMs": 1346,
+                "promptTokens": 1515,
+                "completionTokens": 76,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 3
+          },
+          "checks": []
+        }
+      ]
+    },
+    {
+      "id": "access-note-incomplete",
+      "turns": [
+        {
+          "message": "Como eu gero um voucher Wi-Fi de laboratório?",
+          "answer": "O endereço de acesso registrado é 192.0.2.40 [1]. O trecho disponível contém dados de acesso, mas não descreve as etapas do procedimento solicitado. Qual é o sistema ou equipamento utilizado?",
+          "sources": [
+            {
+              "documentId": "0abb3d7a-4f41-4342-a4f6-bee6dc1707e8",
+              "versionId": "a94570b9-715d-4b8b-aba9-fc2aa2c29aa8",
+              "versionNumber": 1,
+              "title": "Gerar voucher Wi-Fi de laboratório",
+              "ordinal": 0,
+              "excerpts": [
+                "IP: 192.0.2.40"
+              ]
+            }
+          ],
+          "investigationId": "34312135-6f0d-42e3-9af8-f6d8353c3b8a",
+          "capture": {
+            "agentMetrics": {
+              "steps": 3,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 1,
+              "promptTokens": 4808,
+              "completionTokens": 144,
+              "durationMs": 3756,
+              "stopReason": "answered",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 1,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 0,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 1,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "guided",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "new",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 0,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 0,
+              "knowledgeSelections": 0,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 0,
+              "verifierFailures": {},
+              "fallbackReason": "model_rejected"
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "a94570b9-715d-4b8b-aba9-fc2aa2c29aa8",
+                    "ordinal": 0,
+                    "score": 1.6948652139295013
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": []
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 6
+          },
+          "checks": []
+        }
+      ]
+    },
+    {
+      "id": "informal-intent-and-context-switch",
+      "turns": [
+        {
+          "message": "Tô precisando de ajuda pra tirar um crachá temporário no laboratório Nimbo",
+          "answer": "Pra tirar o crachá temporário no laboratório Nimbo, abre o sistema de Identificação de visitantes e escolhe a opção Novo crachá. [1] Quer que eu te ajude a seguir daí?",
+          "sources": [
+            {
+              "documentId": "17548848-ad69-436c-a02e-a46fe9cb68db",
+              "versionId": "cef2b0d5-2c24-498d-8ac6-2d7bbca19a8d",
+              "versionNumber": 1,
+              "title": "Emissão de crachá temporário — laboratório Nimbo",
+              "ordinal": 0,
+              "excerpts": [
+                "No laboratório Nimbo, para emitir crachá temporário, abra Identificação de visitantes e selecione Novo crachá."
+              ]
+            }
+          ],
+          "investigationId": "2090f74c-46c3-4432-96a0-3269ba761b2d",
+          "capture": {
+            "agentMetrics": {
+              "steps": 6,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 2,
+              "promptTokens": 10926,
+              "completionTokens": 301,
+              "durationMs": 8061,
+              "stopReason": "answered",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 2,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 1,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "adaptive",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "new",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 1,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 1,
+              "knowledgeSelections": 1,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 1,
+              "knowledgeSufficiency": "sufficient",
+              "verifierFailures": {}
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "cef2b0d5-2c24-498d-8ac6-2d7bbca19a8d",
+                    "ordinal": 0,
+                    "score": 2.12579098339535
+                  },
+                  {
+                    "versionId": "791ddf72-eafc-40a7-b60f-c737edeaaf35",
+                    "ordinal": 0,
+                    "score": 1.2143800406035652
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "Pra tirar o crachá temporário no laboratório Nimbo, abre o sistema de Identificação de visitantes e escolhe a opção Novo crachá. Quer que eu te ajude a seguir daí?",
+                "verdict": "supported",
+                "durationMs": 1013,
+                "promptTokens": 1379,
+                "completionTokens": 54,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": []
+        },
+        {
+          "message": "A impressão aqui no Nimbo também saiu toda em branco, me ajuda?",
+          "answer": "Pra resolver a impressão que saiu toda em branco no laboratório Nimbo, você precisa consultar a fila Âmbar e conferir se o trabalho está pendente lá. [1] Quer que eu te ajude a acessar essa fila?",
+          "sources": [
+            {
+              "documentId": "0f011b5e-ea3d-4aeb-9914-36ea2e9ef182",
+              "versionId": "791ddf72-eafc-40a7-b60f-c737edeaaf35",
+              "versionNumber": 1,
+              "title": "Fila de impressão — laboratório Nimbo",
+              "ordinal": 0,
+              "excerpts": [
+                "Para diagnosticar impressão em branco no laboratório Nimbo, consulte a fila Âmbar e confira o trabalho pendente."
+              ]
+            }
+          ],
+          "investigationId": "2090f74c-46c3-4432-96a0-3269ba761b2d",
+          "capture": {
+            "agentMetrics": {
+              "steps": 6,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 2,
+              "promptTokens": 12044,
+              "completionTokens": 316,
+              "durationMs": 7064,
+              "stopReason": "answered",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 2,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 1,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "adaptive",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "existing",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 1,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 1,
+              "knowledgeSelections": 1,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 1,
+              "knowledgeSufficiency": "sufficient",
+              "verifierFailures": {}
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "791ddf72-eafc-40a7-b60f-c737edeaaf35",
+                    "ordinal": 0,
+                    "score": 1.7903216780219613
+                  },
+                  {
+                    "versionId": "cef2b0d5-2c24-498d-8ac6-2d7bbca19a8d",
+                    "ordinal": 0,
+                    "score": 1.1646684044441853
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "Pra resolver a impressão que saiu toda em branco no laboratório Nimbo, você precisa consultar a fila Âmbar e conferir se o trabalho está pendente lá. Quer que eu te ajude a acessar essa fila?",
+                "verdict": "supported",
+                "durationMs": 1104,
+                "promptTokens": 1539,
+                "completionTokens": 54,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0.03225806451612903,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": [
+            "investigation_not_switched"
+          ]
+        },
+        {
+          "message": "Quero terminar aquele negócio do crachá, manda todas as instruções juntas",
+          "answer": "Não consegui confirmar uma orientação aplicável com segurança. Podemos continuar se você informar o detalhe do ambiente ou do resultado observado que ainda falta.",
+          "sources": [],
+          "investigationId": "2090f74c-46c3-4432-96a0-3269ba761b2d",
+          "capture": {
+            "agentMetrics": {
+              "steps": 7,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 3,
+              "promptTokens": 15366,
+              "completionTokens": 549,
+              "durationMs": 10314,
+              "stopReason": "unsafe_answer",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 2,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 1,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 1,
+              "verifierRejections": 1,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "complete",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "existing",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 1,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 1,
+              "knowledgeSelections": 1,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 2,
+              "knowledgeSufficiency": "sufficient",
+              "verifierFailures": {
+                "invalid_reference": 1
+              },
+              "lastVerifierFailure": "invalid_reference"
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "cef2b0d5-2c24-498d-8ac6-2d7bbca19a8d",
+                    "ordinal": 0,
+                    "score": 2.0085215443061246
+                  },
+                  {
+                    "versionId": "791ddf72-eafc-40a7-b60f-c737edeaaf35",
+                    "ordinal": 0,
+                    "score": 1.1857399459872977
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 0.5,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "Pra emitir o crachá temporário no laboratório Nimbo, você deve abrir o sistema Identificação de visitantes e escolher a opção Novo crachá. Depois, siga as instruções do sistema pra preencher os dados e finalizar a emissão.\n\nSe a impressão sair toda em branco, o jeito é consultar a fila Âmbar e verificar se o trabalho de impressão está pendente lá.\n\nQuer ajuda pra algum desses passos?",
+                "verdict": "unsupported",
+                "reason": "invalid_reference",
+                "durationMs": 2171,
+                "promptTokens": 1668,
+                "completionTokens": 135,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 2
+          },
+          "checks": [
+            "missing_expected_source",
+            "missing_complete_document"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "semantic-specific-question",
+      "turns": [
+        {
+          "message": "Me ajuda a colocar o DNS pra funcionar no ambiente Íris",
+          "answer": "No ambiente Íris, para o DNS de teste use o IP 192.0.2.53 e configure pelo menu Rede. [1] Quer que eu te guie no passo a passo?",
+          "sources": [
+            {
+              "documentId": "0559109d-8ee6-4ff8-ab83-6139547bb8f4",
+              "versionId": "dfb261c5-05f4-4095-bcdf-563e995a0878",
+              "versionNumber": 1,
+              "title": "Resolução de nomes — ambiente Íris",
+              "ordinal": 0,
+              "excerpts": [
+                "Para o ambiente Íris, DNS de teste: 192.0.2.53. Para configurar, consulte o menu Rede."
+              ]
+            }
+          ],
+          "investigationId": "1a252b9c-f728-4188-8c45-851b62de3135",
+          "capture": {
+            "agentMetrics": {
+              "steps": 4,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 1,
+              "promptTokens": 6051,
+              "completionTokens": 198,
+              "durationMs": 4469,
+              "stopReason": "answered",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 1,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 1,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "guided",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "new",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 0,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 0,
+              "knowledgeSelections": 0,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 0,
+              "verifierFailures": {}
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "dfb261c5-05f4-4095-bcdf-563e995a0878",
+                    "ordinal": 0,
+                    "score": 1.6395075698324182
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "No ambiente Íris, para o DNS de teste use o IP 192.0.2.53 e configure pelo menu Rede. Quer que eu te guie no passo a passo?",
+                "verdict": "supported",
+                "durationMs": 1124,
+                "promptTokens": 1231,
+                "completionTokens": 57,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 5
+          },
+          "checks": []
+        },
+        {
+          "message": "só quero o endereço que vai nesse campo",
+          "answer": "O endereço que vai no campo de configuração DNS no ambiente Íris é 192.0.2.53. [1] Quer ajuda para configurar?",
+          "sources": [
+            {
+              "documentId": "0559109d-8ee6-4ff8-ab83-6139547bb8f4",
+              "versionId": "dfb261c5-05f4-4095-bcdf-563e995a0878",
+              "versionNumber": 1,
+              "title": "Resolução de nomes — ambiente Íris",
+              "ordinal": 0,
+              "excerpts": [
+                "Para o ambiente Íris, DNS de teste: 192.0.2.53."
+              ]
+            }
+          ],
+          "investigationId": "1a252b9c-f728-4188-8c45-851b62de3135",
+          "capture": {
+            "agentMetrics": {
+              "steps": 4,
+              "searches": 1,
+              "repeatedSearches": 0,
+              "searchFailures": 0,
+              "toolCalls": 1,
+              "promptTokens": 6732,
+              "completionTokens": 201,
+              "durationMs": 4747,
+              "stopReason": "answered",
+              "readAttempts": 1,
+              "readsWithNewEvidence": 1,
+              "evidenceCount": 1,
+              "emptyReads": 0,
+              "duplicateReads": 0,
+              "readTimeouts": 0,
+              "unavailableReads": 0,
+              "inaccessibleReads": 0,
+              "stalledSteps": 0,
+              "clarificationRequests": 0,
+              "conflicts": 0,
+              "blockedWriteRetries": 0,
+              "verifierChecks": 1,
+              "verifierRejections": 0,
+              "recoverySearches": 0,
+              "literalFallbacks": 0,
+              "adaptiveRewrites": 0,
+              "nonclaimsRemoved": 0,
+              "unsupportedUnits": 0,
+              "supportPreference": "guided",
+              "semanticTurnStatus": "accepted",
+              "semanticRoute": "existing",
+              "semanticIntent": "knowledge",
+              "semanticObservations": 1,
+              "selectionRequired": 0,
+              "conflictRecoveries": 0,
+              "clarificationChecks": 0,
+              "knowledgeSelectionAttempts": 0,
+              "knowledgeSelections": 0,
+              "knowledgeSelectionRejections": 0,
+              "knowledgeSelectionInvalidations": 0,
+              "selectedKnowledgeVersions": 0,
+              "verifierFailures": {}
+            },
+            "retrieval": [
+              {
+                "ranked": [
+                  {
+                    "versionId": "dfb261c5-05f4-4095-bcdf-563e995a0878",
+                    "ordinal": 0,
+                    "score": 1.5056401907548445
+                  }
+                ],
+                "metrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                },
+                "chunkMetrics": {
+                  "recall": 1,
+                  "precision": 1,
+                  "mrr": 1
+                }
+              }
+            ],
+            "review": [
+              {
+                "candidate": "O endereço que vai no campo de configuração DNS no ambiente Íris é 192.0.2.53. Quer ajuda para configurar?",
+                "verdict": "supported",
+                "durationMs": 1010,
+                "promptTokens": 1383,
+                "completionTokens": 49,
+                "usageObserved": true
+              }
+            ]
+          },
+          "quality": {
+            "literalOverlap": 0,
+            "repeatedLines": 0,
+            "boilerplate": false,
+            "escapedMarkdown": false,
+            "partialWarning": false,
+            "sentenceCount": 5
+          },
+          "checks": []
+        }
+      ]
+    }
+  ],
+  "failures": [
+    "ris-erp-switch-resume:2:missing_expected_source",
+    "ris-erp-switch-resume:2:missing_complete_document",
+    "ris-erp-switch-resume:6:missing_expected_source",
+    "ris-erp-switch-resume:6:missing_complete_document",
+    "informal-intent-and-context-switch:2:investigation_not_switched",
+    "informal-intent-and-context-switch:3:missing_expected_source",
+    "informal-intent-and-context-switch:3:missing_complete_document"
+  ],
+  "humanReview": "pending"
+}

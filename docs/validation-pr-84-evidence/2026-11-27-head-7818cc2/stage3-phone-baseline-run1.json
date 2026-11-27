@@ -1,0 +1,152 @@
+{
+  "mode": "real-http",
+  "architecture": "semantic_turn_v1",
+  "model": "gpt-4.1-mini",
+  "embeddingModel": "text-embedding-3-small",
+  "temperature": 0.2,
+  "limits": {
+    "maxSteps": 8,
+    "maxSearches": 5,
+    "maxToolsPerStep": 4,
+    "maxSources": 12,
+    "maxElapsedMs": 60000,
+    "maxTokensPerCall": 1800,
+    "maxCompletionTokens": 9000,
+    "maxTotalTokens": 40000,
+    "maxRepeatedSearches": 2,
+    "maxSearchFailures": 2
+  },
+  "corpusHash": "669005f2f335bfe15218a29ac29a3c8b5a55cb9edcb3d67343db9b82f4657e43",
+  "commit": "21a5f050ddfe28f0b10e8a646fe28b196fb94c3c",
+  "ranking": {
+    "recall": 1,
+    "precision": 1,
+    "mrr": 1
+  },
+  "turns": [
+    {
+      "message": "Preciso configurar um telefone de laboratório",
+      "answer": "Não consegui confirmar uma orientação aplicável com segurança. Podemos continuar se você informar o detalhe do ambiente ou do resultado observado que ainda falta.",
+      "sources": [],
+      "states": [
+        {
+          "id": "26a2a3d2-376e-41da-adcc-f8e8a34c7704",
+          "topic": "configuração de telefone de laboratório",
+          "support_preference": "guided"
+        }
+      ],
+      "capture": {
+        "agentMetrics": {
+          "steps": 8,
+          "searches": 1,
+          "repeatedSearches": 0,
+          "searchFailures": 0,
+          "toolCalls": 2,
+          "promptTokens": 12719,
+          "completionTokens": 313,
+          "durationMs": 9814,
+          "stopReason": "unsafe_answer",
+          "readAttempts": 2,
+          "readsWithNewEvidence": 2,
+          "evidenceCount": 2,
+          "emptyReads": 0,
+          "duplicateReads": 0,
+          "readTimeouts": 0,
+          "unavailableReads": 0,
+          "inaccessibleReads": 0,
+          "stalledSteps": 0,
+          "clarificationRequests": 1,
+          "conflicts": 0,
+          "blockedWriteRetries": 0,
+          "verifierChecks": 1,
+          "verifierRejections": 1,
+          "recoverySearches": 0,
+          "literalFallbacks": 0,
+          "adaptiveRewrites": 1,
+          "nonclaimsRemoved": 0,
+          "unsupportedUnits": 0,
+          "supportPreference": "guided",
+          "semanticTurnStatus": "accepted",
+          "semanticRoute": "new",
+          "semanticIntent": "knowledge",
+          "semanticObservations": 1,
+          "selectionRequired": 0,
+          "conflictRecoveries": 0,
+          "clarificationChecks": 1,
+          "knowledgeSelectionAttempts": 0,
+          "knowledgeSelections": 0,
+          "knowledgeSelectionRejections": 0,
+          "knowledgeSelectionInvalidations": 0,
+          "selectedKnowledgeVersions": 0,
+          "verifierFailures": {
+            "invalid_reference": 1
+          },
+          "lastVerifierFailure": "invalid_reference"
+        },
+        "retrieval": [
+          {
+            "ranked": [
+              {
+                "versionId": "9125326a-5b06-4b2d-98bd-1666c6486857",
+                "ordinal": 0,
+                "score": 1.3230140570337863
+              }
+            ],
+            "metrics": {
+              "recall": 1,
+              "precision": 1,
+              "mrr": 1
+            },
+            "chunkMetrics": {
+              "recall": 1,
+              "precision": 1,
+              "mrr": 1
+            }
+          }
+        ],
+        "review": [
+          {
+            "candidate": "Primeiro, veja o IP do telefone no menu Status. Conseguiu encontrar o IP?",
+            "verdict": "unsupported",
+            "reason": "invalid_reference",
+            "durationMs": 1242,
+            "promptTokens": 1303,
+            "completionTokens": 58,
+            "usageObserved": true
+          }
+        ]
+      },
+      "quality": {
+        "literalOverlap": 0,
+        "repeatedLines": 0,
+        "boilerplate": false,
+        "escapedMarkdown": false,
+        "partialWarning": false,
+        "sentenceCount": 2
+      }
+    },
+    {
+      "message": "sim",
+      "answer": "Não consegui interpretar o contexto desta mensagem com segurança. Pode informar qual assunto deseja consultar?",
+      "sources": [],
+      "states": [
+        {
+          "id": "26a2a3d2-376e-41da-adcc-f8e8a34c7704",
+          "topic": "configuração de telefone de laboratório",
+          "support_preference": "guided"
+        }
+      ],
+      "capture": null,
+      "quality": {
+        "literalOverlap": 0,
+        "repeatedLines": 0,
+        "boilerplate": false,
+        "escapedMarkdown": false,
+        "partialWarning": false,
+        "sentenceCount": 2
+      }
+    }
+  ],
+  "complete": false,
+  "humanReview": "pending"
+}
