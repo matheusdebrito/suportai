@@ -192,3 +192,34 @@ test('grounding reviewer sees every bounded current candidate, including the las
  assert.equal(evidence.length,12);
  assert.ok(evidence.some((s:any)=>s.versionId===candidates[11].versionId));
 });
+
+test('complete semantic review repairs an invalid reference within the shared budget',async()=>{
+ const doc={...green,ordinal:-1,completeDocument:true};
+ const candidate=green.content;
+ const calls:any[]=[];
+ const result=await respond(actor,randomUUID(),'Me dê o procedimento completo do controlador Verde.',[],scripted([
+  tool('search_knowledge',{query:'emitir acesso verde'}),assistant(candidate),
+  ground('Trecho que não existe.'),ground(candidate)
+ ],calls),async()=>[doc],{semantic:semantic({mode:'complete',query:'emitir acesso verde'}),budget:plannedBudget(),verifyEvidence:true});
+ assert.equal(result.metrics?.verifierRepairs,1);
+ assert.equal(result.metrics?.verifierChecks,2);
+ assert.equal(result.metrics?.steps,5);
+ assert.deepEqual(result.sources.map(s=>s.versionId),[doc.versionId]);
+ assert.match(result.answer,/Novo acesso temporário/);
+ const reviews=calls.filter(c=>c.response_format?.json_schema?.name==='grounding_review_v1');
+ assert.equal(reviews.length,2);
+ assert.deepEqual(JSON.parse(reviews[0].messages[1].content),JSON.parse(reviews[1].messages[1].content));
+ assert.match(reviews[1].messages[0].content,/invalid_reference/);
+});
+test('a semantic rejection is not erased by a subsequent structural failure',async()=>{
+ const doc={...green,ordinal:-1,completeDocument:true};
+ const result=await respond(actor,randomUUID(),'Me dê o procedimento completo do controlador Verde.',[],scripted([
+  tool('search_knowledge',{query:'emitir acesso verde'}),assistant('Use uma operação não confirmada.'),
+  assistant(JSON.stringify({verdict:'unsupported',claims:[]})),
+  assistant(green.content),ground('Trecho que não existe.'),ground('Trecho que também não existe.')
+ ]),async()=>[doc],{semantic:semantic({mode:'complete',query:'emitir acesso verde'}),budget:plannedBudget(),verifyEvidence:true});
+ assert.equal(result.metrics?.verifierRepairs,1);
+ assert.equal(result.metrics?.literalFallbacks,0);
+ assert.deepEqual(result.sources,[]);
+ assert.equal(result.metrics?.stopReason,'unsafe_answer');
+});

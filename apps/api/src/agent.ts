@@ -56,23 +56,27 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  // Semantic intent guides the model, but cannot authorize an unsourced reply.
  const plan=new InvestigationPlan(userMessage,semantic?semantic.intent!=='social':shouldForceKnowledgeLookup(userMessage)||shouldForceKnowledgeLookup(contextualQuery),options.investigation?.hypotheses);
  const shouldVerify=Boolean(options.verifyEvidence||(provider===client&&client!==null));
- let verifierChecks=0,verifierRejections=0,recoverySearches=0,literalFallbacks=0,adaptiveRewrites=0,nonclaimsRemoved=0,unsupportedUnits=0;
+ let verifierChecks=0,verifierRejections=0,verifierRepairs=0,recoverySearches=0,literalFallbacks=0,adaptiveRewrites=0,nonclaimsRemoved=0,unsupportedUnits=0;
  const localPreference=supportPreference(userMessage,history,options.investigation?.supportPreference);
  const preference=semantic?(requestsSupportMode(userMessage)?localPreference:semanticPreference(semantic,options.investigation)):localPreference;
  const focused=semantic?semantic.focused||isFocusedKnowledgeQuestion(userMessage):isFocusedKnowledgeQuestion(userMessage);
  const focusedAnswerPolicy=focused
   ? '\nPEDIDO PONTUAL: responda apenas ao dado solicitado na mensagem mais recente, em uma ou duas frases naturais. Não recapitule o artigo ou o procedimento, não use títulos e não explique que consultou uma fonte.'
   : '';
- const responseContract=SUPPORT_POLICY+'\nMODO ATUAL: '+preference+focusedAnswerPolicy;
+ const responseContract=SUPPORT_POLICY+'\nMODO ATUAL: '+preference+focusedAnswerPolicy+
+  (preference==='complete'&&!focused?'\nMODO COMPLETO: entregue os passos documentados com suas condições, em ordem. Evite introduções e encerramentos genéricos, promessas de ajuda ou perguntas de progresso. Não acrescente ações implícitas; se faltar uma condição de aplicabilidade ou parte do procedimento, indique a lacuna em vez de apresentar a resposta como completa.':'');
  const verificationContext=semantic?JSON.stringify({message:userMessage,query:contextualQuery,decision:semanticContext(semantic),
    reportedHistory:history.filter(m=>m.role==='user'&&!hasSecrets(m.content)&&!hasInfrastructureSecrets(m.content)).slice(-6).map(m=>m.content.slice(0,400)),
    investigation:options.investigation?investigationContextMessage(options.investigation):null,subjects:options.subjectCandidates??[]}):undefined;
  let lastVerifierFailure:GroundingFailure|undefined;
  const verifierFailures:Partial<Record<GroundingFailure,number>>={};
  let fallbackReason:GroundingFailure|AgentStopReason|undefined;
- const recordVerifierFailure=(reason:GroundingFailure)=>{verifierRejections++;lastVerifierFailure=reason;verifierFailures[reason]=(verifierFailures[reason]??0)+1;};
+ // A later structural failure cannot erase a substantive safety rejection.
+ const semanticRejectionReasons=new Set<GroundingFailure>(['model_rejected','model_uncertain','conflicting_evidence','selection_mismatch','historical_mismatch','unsupported_literal','invalid_question','no_supported_claim','injected_directive','fabricated_citation']);
+ let semanticRejectionSeen=false;
+ const recordVerifierFailure=(reason:GroundingFailure)=>{verifierRejections++;lastVerifierFailure=reason;verifierFailures[reason]=(verifierFailures[reason]??0)+1;if(semanticRejectionReasons.has(reason))semanticRejectionSeen=true;};
  const done=(result:AgentOutput,reason:AgentStopReason):AgentOutput=>({
-   ...result,metrics:{...budget.metrics(reason),...plan.metrics(),verifierChecks,verifierRejections,recoverySearches,literalFallbacks,adaptiveRewrites,nonclaimsRemoved,unsupportedUnits,supportPreference:preference,
+   ...result,metrics:{...budget.metrics(reason),...plan.metrics(),verifierChecks,verifierRejections,verifierRepairs,recoverySearches,literalFallbacks,adaptiveRewrites,nonclaimsRemoved,unsupportedUnits,supportPreference:preference,
      ...(options.semanticTurnStatus?{semanticTurnStatus:options.semanticTurnStatus}:{}),...(semantic?{semanticRoute:semantic.route,semanticIntent:semantic.intent,semanticObservations:semantic.observations.length}:{}),
      selectionRequired,conflictRecoveries,clarificationChecks,
      knowledgeSelectionAttempts,knowledgeSelections,knowledgeSelectionRejections,knowledgeSelectionInvalidations,
@@ -97,7 +101,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      const deterministicReasons=['provider_failure','model_timeout','model_interrupted','provider_error','provider_incompatible','invalid_json','schema_invalid','claim_shape'];
      if(focused)deterministicReasons.push('invalid_reference','missing_reference');
      if(preference==='complete')deterministicReasons.push('invalid_reference','missing_reference');
-     if(pendingActions.length||plan.metrics().conflicts||!deterministicReasons.includes(reason))return null;
+     if(pendingActions.length||plan.metrics().conflicts||semanticRejectionSeen||!deterministicReasons.includes(reason))return null;
       const safe=focused?focusedGroundingFallback(userMessage,available,fallbackQuery):semanticEvidenceFallback(fallbackQuery,available,preference==='complete');
      if(safe){literalFallbacks++;fallbackReason=reason;return done({...safe,pendingActions},'answered');}
      return null;
@@ -377,21 +381,36 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      if(sources.length>0&&shouldVerify){
        const accessOnly=accessNoteGroundingFallback(fallbackQuery,selection?.versionIds.length?sources.filter(source=>selection!.versionIds.includes(source.versionId)):sources,preference==='complete');
        if(accessOnly){literalFallbacks++;fallbackReason='model_rejected';return done({...accessOnly,pendingActions},'answered');}
-       const validation=budget.startModelTurn(true);
-       if(!validation)return budgetReply(budget.stopCause()??'token_budget');
-       verifierChecks++;
-       const started=Date.now(),promptBefore=budget.promptTokens,completionBefore=budget.completionTokens;
-       let verifierUsage:{prompt_tokens?:number|null;completion_tokens?:number|null}|undefined;
-       const review=await verifyGroundedAnswer(provider,semantic?userMessage:contextualQuery,message.content,
-         [...sources,...historicalSources],Math.min(10_000,validation.timeoutMs),validation.maxTokens,usage=>{verifierUsage=usage;},selection,verificationContext);
-       budget.recordModelUsage(verifierUsage,
-         userMessage.length+message.content.length+[...sources,...historicalSources].reduce((sum,source)=>sum+Math.min(source.content.length,source.completeDocument?10000:1800),0),
-         review.verdict==='supported'?JSON.stringify(review.sources.map(source=>source.excerpts)).length+120:40);
-       if(process.env.NODE_ENV==='test')options.evaluationObserver?.({candidate:message.content,verdict:review.verdict,
-         ...(review.verdict!=='supported'?{reason:review.reason}:{}),durationMs:Date.now()-started,
-         promptTokens:budget.promptTokens-promptBefore,completionTokens:budget.completionTokens-completionBefore,
-         usageObserved:verifierUsage!==undefined});
-       if(review.verdict!=='supported')recordVerifierFailure(review.reason);
+       // Repair the same candidate once after structural reviewer failure, rather
+       // than spending the remaining budget on a potentially worse rewrite.
+       // Keep the evidence, selection and all local validation unchanged.
+       const candidate=message.content;
+       const runVerifier=async (repairReason?:GroundingFailure)=>{
+         const validation=budget.startModelTurn(true);
+         if(!validation)return null;
+         verifierChecks++;
+         const started=Date.now(),promptBefore=budget.promptTokens,completionBefore=budget.completionTokens;
+         let verifierUsage:{prompt_tokens?:number|null;completion_tokens?:number|null}|undefined;
+         const result=await verifyGroundedAnswer(provider,semantic?userMessage:contextualQuery,candidate,
+           [...sources,...historicalSources],Math.min(10_000,validation.timeoutMs),validation.maxTokens,usage=>{verifierUsage=usage;},selection,verificationContext,repairReason);
+         budget.recordModelUsage(verifierUsage,
+           userMessage.length+candidate.length+[...sources,...historicalSources].reduce((sum,source)=>sum+Math.min(source.content.length,source.completeDocument?10000:1800),0),
+           result.verdict==='supported'?JSON.stringify(result.sources.map(source=>source.excerpts)).length+120:40);
+         if(process.env.NODE_ENV==='test')options.evaluationObserver?.({candidate,verdict:result.verdict,
+           ...(result.verdict!=='supported'?{reason:result.reason}:{}),durationMs:Date.now()-started,
+           promptTokens:budget.promptTokens-promptBefore,completionTokens:budget.completionTokens-completionBefore,
+           usageObserved:verifierUsage!==undefined});
+         if(result.verdict!=='supported')recordVerifierFailure(result.reason);
+         return result;
+       };
+       let review=await runVerifier();
+       if(!review)return budgetReply(budget.stopCause()??'token_budget');
+       if(semantic&&preference==='complete'&&review.verdict!=='supported'&&review.verdict!=='conflict'&&
+          ['claim_shape','invalid_reference','missing_reference','schema_invalid','invalid_json'].includes(review.reason)&&
+          verifierRepairs===0&&!budget.stopCause()){
+         const repaired=await runVerifier(review.reason);
+         if(repaired){verifierRepairs++;review=repaired;}
+       }
        if(review.verdict==='conflict'){
          plan.recordConflict();
          if(semantic&&!synthesisRecoveryAttempted&&budget.steps+2<=budget.limits.maxSteps&&!budget.stopCause()){

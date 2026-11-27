@@ -55,6 +55,8 @@ Source of truth: melhorias.md. No merge authorized. Code first, execution of tes
 - Harness endurecido: citar ordinal -1 não basta quando a resposta declara falta de completude; telefone coleta turnos HTTP antes das asserções; matriz registra cobertura; comparação recusa relatórios explicitamente incompletos. Nenhum artefato histórico foi sobrescrito. Cache TypeScript removido e ignorado.
 - O ambiente desta revisão não possui PostgreSQL/pgvector, Docker, chave autorizada nem acesso Git direto. CI e avaliação real no ambiente autorizado são pendentes. Etapas 5–6 bloqueadas; sem merge/deploy/reindexação.
 
+- Correção complementar do verificador: em modo completo, uma única revisão adicional do mesmo candidato e das mesmas evidências é permitida após erro estrutural, contabilizada no orçamento existente. Referências continuam literais e autorizadas. Uma rejeição semântica substantiva anterior bloqueia fallback estrutural posterior. Instrução de modo completo evita introduções/encerramentos que ampliam a quantidade de claims sem benefício. Testes simulados adicionados; CI e confirmação real pendentes.
+
 | Requirement | State | Evidence / next action |
 |---|---|---|
 | Active investigation and short follow-ups | Implemented and validated | One investigation ID remained stable across five real turns; `sim` advanced to the next documented stage |
