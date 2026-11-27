@@ -5,7 +5,7 @@ import type {TurnCapture} from './episode-harness.js';
 import type {episodeQuality} from './episode-quality.js';
 import {summarizeReviews,type TurnReview} from './episode-review.js';
 type Turn={message:string;quality:ReturnType<typeof episodeQuality>;capture?:TurnCapture|null};
-type Report={mode:string;model:string;embeddingModel:string;temperature:number;limits:unknown;corpusHash:string;commit:string;turns:Turn[];ranking?:{recall:number|null;precision:number;mrr:number}};
+type Report={mode:string;model:string;embeddingModel:string;temperature:number;limits:unknown;corpusHash:string;commit:string;complete?:boolean;expectedTurnCount?:number;turns:Turn[];ranking?:{recall:number|null;precision:number;mrr:number}};
 type Labels={origin:'ai'|'human';rows:TurnReview[]};
 function sumKnown(values:(number|undefined|null)[]):number|null{
  return values.length&&values.every(value=>typeof value==='number'&&Number.isFinite(value))?values.reduce<number>((sum,value)=>sum+Number(value),0):null;
@@ -42,13 +42,14 @@ export function compareEpisodeReports(baseline:Report,current:Report,baselineLab
  if(baseline.mode!=='real-http'||current.mode!=='real-http')mismatches.push('not_matched_real_http');
  if(!isDeepStrictEqual(baseline.turns.map(t=>t.message),current.turns.map(t=>t.message)))mismatches.push('messages');
  if(!baseline.turns.length||!current.turns.length)mismatches.push('empty_episode');
+ if([baseline,current].some(report=>report.complete===false||(report.expectedTurnCount!==undefined&&report.expectedTurnCount!==report.turns.length)))mismatches.push('incomplete_episode');
  if(!baseline.commit||!current.commit)mismatches.push('missing_commit');
  const previous=summarize(baseline),next=summarize(current);
  const delta=Object.fromEntries(Object.entries(previous).map(([key,value])=>{
   const after=next[key as keyof typeof next];return [key,!mismatches.length&&typeof value==='number'&&typeof after==='number'?after-value:null];
  }));
  let reviewed:null|{origin:Labels['origin'];previous:ReturnType<typeof summarizeReviews>;current:ReturnType<typeof summarizeReviews>;falseRejectionDelta:number}=null;
- const covers=(labels:Labels,report:Report)=>labels.rows.length===report.turns.length&&new Set(labels.rows.map(r=>r.episodeId)).size===1&&labels.rows.every(r=>r.turn<=report.turns.length);
+ const covers=(labels:Labels,report:Report)=>labels.rows.length===report.turns.length&&new Set(labels.rows.map(r=>r.episodeId)).size===1&&new Set(labels.rows.map(r=>r.turn)).size===report.turns.length&&labels.rows.every(r=>Number.isInteger(r.turn)&&r.turn>=1&&r.turn<=report.turns.length);
  if(!mismatches.length&&baselineLabels&&currentLabels&&baselineLabels.origin===currentLabels.origin&&covers(baselineLabels,baseline)&&covers(currentLabels,current)){
   const before=summarizeReviews(baselineLabels.rows),after=summarizeReviews(currentLabels.rows);
   reviewed={origin:currentLabels.origin,previous:before,current:after,falseRejectionDelta:after.falseRejections-before.falseRejections};

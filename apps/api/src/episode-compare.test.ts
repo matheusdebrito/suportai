@@ -13,3 +13,10 @@ test('comparison refuses deltas across different model, corpus or messages',()=>
  const result=compareEpisodeReports(report,{...report,model:'other',corpusHash:'other',turns:[{message:'different',quality}]});
  assert.equal(result.comparable,false);assert.deepEqual(result.mismatches,['model','corpusHash','messages']);assert.equal(result.delta.repeatedLines,null);
 });
+
+test('comparison refuses equally truncated episodes and incomplete declared coverage',()=>{
+ const result=compareEpisodeReports({...report,complete:false,expectedTurnCount:5},{...report,commit:'current',complete:false,expectedTurnCount:5});
+ assert.equal(result.comparable,false);
+ assert.ok(result.mismatches.includes('incomplete_episode'));
+ assert.equal(result.delta.repeatedLines,null);
+});

@@ -47,6 +47,14 @@ Source of truth: melhorias.md. No merge authorized. Code first, execution of tes
 - **Correção do harness:** relatório do telefone passa a ser persistido por turno e marca `complete=false` quando uma asserção interrompe o episódio. O primeiro ensaio RAG, que misturou pools candidatos, foi marcado inválido e preservado sem uso nas métricas.
 - **Próximo passo:** no piloto, avaliar a recuperação de linguagem informal abaixo do piso atual e o contrato condicional de `semantic_turn_v1`; selecionar somente mudanças que melhorem o piloto e então consultar o holdout uma vez.
 
+### Revisão independente do HEAD 63c0c7a — Etapa 4 (27/11/2026)
+
+- CI Linux 46043266555: 344 testes, 340 aprovados, 1 falha em retrieval-ranking.test.ts e 3 opt-in ignorados; typecheck passou, build/E2E não executaram. Auditoria 46043266505 aprovada.
+- A política experimental 0,40/0,50 elevou recall piloto de 0,9083 para 0,9417 e MRR de 0,8917 para 0,9167, mas no holdout recall 0,95 e MRR 0,8792 permaneceram iguais, a precisão sobre retornados caiu de 0,6008 para 0,59875 e o teste existente passou a admitir um vetor fraco sem relevância lexical. Restaurada a política 0,45/0,56, com experimentos preservados.
+- Matriz real: rodadas completas 1–3 apresentaram 16, 7 e 10 checks falhos. Rodada 4 contém somente 2/9 episódios (10/26 turnos), sem homologação. RIS/ERP ainda apresentam rejeições; telefone teve abstenção após confirmação.
+- Harness endurecido: citar ordinal -1 não basta quando a resposta declara falta de completude; telefone coleta turnos HTTP antes das asserções; matriz registra cobertura; comparação recusa relatórios explicitamente incompletos. Nenhum artefato histórico foi sobrescrito. Cache TypeScript removido e ignorado.
+- O ambiente desta revisão não possui PostgreSQL/pgvector, Docker, chave autorizada nem acesso Git direto. CI e avaliação real no ambiente autorizado são pendentes. Etapas 5–6 bloqueadas; sem merge/deploy/reindexação.
+
 | Requirement | State | Evidence / next action |
 |---|---|---|
 | Active investigation and short follow-ups | Implemented and validated | One investigation ID remained stable across five real turns; `sim` advanced to the next documented stage |

@@ -12,3 +12,6 @@ coverage/
 *.log
 .DS_Store
 uploads/
+
+# TypeScript incremental build cache
+*.tsbuildinfo

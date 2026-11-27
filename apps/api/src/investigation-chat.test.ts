@@ -11,7 +11,7 @@ import {respond} from './agent.js';
 import {client,embedText} from './llm.js';
 import {interpretSemanticTurn,type SemanticTurn} from './semantic-turn.js';
 import {searchKnowledge} from './retrieval.js';
-import {episodeQuality,retrievalMetrics} from './episode-quality.js';
+import {completeProcedureChecks,episodeQuality,retrievalMetrics} from './episode-quality.js';
 import {writeFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {resolveAgentLimits} from './agent-budget.js';
@@ -182,33 +182,36 @@ if(!process.env.TEST_DATABASE_URL){
       const conversation=await openConversation(app,headers);
       const retrieved=await searchKnowledge(actor,'configurar telefone de laboratório');
       const ranking=retrievalMetrics([source.version],retrieved.map(x=>x.versionId));
-      const turns:{message:string;answer:string;sources:{versionId:string}[];states:{id:string;topic:string;support_preference:string}[];capture:TurnCapture|null;quality:ReturnType<typeof episodeQuality>}[]=[];
-      const writeReport=()=>writeFileSync(process.env.EPISODE_REPORT_PATH||'episode-real-report.json',JSON.stringify({mode:'real-http',architecture:'semantic_turn_v1',model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',embeddingModel:process.env.OPENAI_EMBED_MODEL||'text-embedding-3-small',temperature:AGENT_GENERATION_TEMPERATURE,limits:resolveAgentLimits(),corpusHash:createHash('sha256').update(article).digest('hex'),commit:process.env.EVALUATION_COMMIT||null,ranking,turns,complete:turns.length===5,humanReview:'pending'},null,2));
+      const turns:{message:string;answer:string;sources:{versionId:string;ordinal:number}[];states:{id:string;topic:string;support_preference:string}[];capture:TurnCapture|null;quality:ReturnType<typeof episodeQuality>}[]=[];
+      const writeReport=()=>writeFileSync(process.env.EPISODE_REPORT_PATH||'episode-real-report.json',JSON.stringify({mode:'real-http',architecture:'semantic_turn_v1',model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',embeddingModel:process.env.OPENAI_EMBED_MODEL||'text-embedding-3-small',temperature:AGENT_GENERATION_TEMPERATURE,limits:resolveAgentLimits(),corpusHash:createHash('sha256').update(article).digest('hex'),commit:process.env.EVALUATION_COMMIT||null,ranking,turns,expectedTurnCount:5,complete:turns.length===5,humanReview:'pending'},null,2));
       const previous:string[]=[];
       for(const message of ['Preciso configurar um telefone de laboratório','sim','não entendi a parte da senha','a senha pode ser admin','me dê o passo a passo completo']){
         const response=await postTurn(app,headers,conversation,message);
         assert.equal(response.statusCode,200,response.body);
-        const result=response.json<{answer:string;sources:{versionId:string}[]}>();
+        const result=response.json<{answer:string;sources:{versionId:string;ordinal:number}[]}>();
         assert.ok(result.sources.every(sourceRef=>sourceRef.versionId===source.version),'Unexpected source in isolated synthetic episode');
         const states=await query('SELECT id,topic,support_preference FROM investigations WHERE conversation_id=$1',[conversation]);
         const observed=capture.take();
         turns.push({message,answer:result.answer,sources:result.sources,states:states.rows.map(row=>({id:String(row.id),topic:String(row.topic),support_preference:String(row.support_preference)})),capture:observed??null,quality:episodeQuality(result.answer,article,previous)});
         writeReport();
-        assert.ok(observed,'Every phone turn must invoke the actual agent and capture metrics');
+        // Collect every HTTP turn; assert capture completeness after the episode.
         previous.push(result.answer);
       }
       assert.equal(ranking.recall,1);
-      assert.ok(turns.every(t=>t.capture?.agentMetrics.semanticTurnStatus==='accepted'));
+      assert.equal(turns.length,5);
+       assert.ok(turns.every(t=>t.capture?.agentMetrics.semanticTurnStatus==='accepted'),'Every phone turn must invoke the agent and accept semantic interpretation');
       assert.ok(turns.every(t=>t.states.length===1&&t.states[0].id===turns[0].states[0].id));
       assert.ok(turns[3].sources.length>0,'Password answer must cite evidence');
       assert.ok(turns[4].sources.length>0,'Complete procedure must cite evidence');
+       assert.deepEqual(completeProcedureChecks(turns[4].answer,turns[4].sources,turns[4].capture?.agentMetrics.supportPreference),[]);
+       assert.ok(turns[1].capture?.agentMetrics.stopReason==='answered'||turns[1].capture?.agentMetrics.stopReason==='clarified','Confirmation must not end in a generic unsafe/budget failure');
       assert.equal(turns.at(-1)?.states[0].support_preference,'complete');
     }finally{await app.close();await query('DELETE FROM documents WHERE id=$1',[source.document]);await query('DELETE FROM users WHERE id=$1',[actor.id]);}
   });
 
   test('expanded real HTTP support episode matrix',{skip:process.env.RUN_REAL_EPISODES!=='1',timeout:900000},async()=>{
     assert.ok(client,'External AI authorization is required');
-    const episodes:unknown[]=[],failures:string[]=[];
+    const episodes:{id:string;turns:unknown[]}[]=[],failures:string[]=[];
     const evaluationCorpus=[...expandedEpisodes,...semanticSelectionEpisodes,...semanticArchitectureEpisodes];
     for(const fixture of evaluationCorpus){
       const {actor,headers}=await createSession();
@@ -251,7 +254,7 @@ if(!process.env.TEST_DATABASE_URL){
           const checks:string[]=[];
           if(result.sources.some(source=>!expected.includes(source.versionId)))checks.push('unexpected_final_source');
           if(target&&!turn.mayClarify&&!result.sources.length)checks.push('missing_expected_source');
-          if(turn.complete&&target&&!result.sources.some(source=>source.ordinal===-1))checks.push('missing_complete_document');
+          if(turn.complete&&target)checks.push(...completeProcedureChecks(result.answer,result.sources,observed?.agentMetrics.supportPreference));
           if((turn.forbidden??[]).some(marker=>result.answer.includes(marker)))checks.push('forbidden_content');
           if((turn.required??[]).some(marker=>!result.answer.includes(marker)))checks.push('missing_required_value');
           if(turn.mustClarify&&(observed?.agentMetrics.stopReason!=='clarified'||result.sources.length!==0||!result.answer.trim().endsWith('?')))checks.push('missing_safe_clarification');
@@ -281,9 +284,12 @@ if(!process.env.TEST_DATABASE_URL){
           temperature:AGENT_GENERATION_TEMPERATURE,limits:resolveAgentLimits(),corpusHash:createHash('sha256').update(JSON.stringify(evaluationCorpus)).digest('hex'),
           baseMatrixHash:createHash('sha256').update(JSON.stringify(expandedEpisodes)).digest('hex'),
           architecture:'semantic_turn_v1',
-          episodes,failures,humanReview:'pending'},null,2));
+          episodes,failures,expectedEpisodeCount:evaluationCorpus.length,expectedTurnCount:evaluationCorpus.reduce((sum,e)=>sum+e.turns.length,0),
+          complete:episodes.length===evaluationCorpus.length&&episodes.every((e,i)=>e.turns.length===evaluationCorpus[i].turns.length),humanReview:'pending'},null,2));
       }
     }
+    assert.equal(episodes.length,evaluationCorpus.length);
+    assert.ok(episodes.every((e,i)=>e.turns.length===evaluationCorpus[i].turns.length),'Expanded evaluation must collect every declared turn');
     assert.deepEqual(failures,[]);
   });
 

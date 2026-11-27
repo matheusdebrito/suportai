@@ -17,3 +17,14 @@ export function episodeQuality(answer:string,article:string,previous:string[]){
  partialWarning:/não consegui confirmar todos os detalhes/i.test(answer),
  sentenceCount:answer.split(/[.!?]+/).filter(x=>x.trim()).length};
 }
+
+/** A full-document citation proves access to a source, not response completeness.
+ * Detect explicit server disclaimers; semantic completeness still needs review. */
+export function completeProcedureChecks(answer:string,sources:{ordinal?:number}[],mode?:string):string[]{
+ const failures:string[]=[];
+ if(!sources.some(s=>s.ordinal===-1))failures.push('missing_complete_document');
+ if(mode!=='complete')failures.push('wrong_support_mode');
+ if(/não (?:consegui|consigo|posso|foi possível) (?:confirmar|validar|concluir)[^\n.!?]{0,200}(?:completude|procedimento completo|todos os detalhes|orientação aplicável)|sem confirmar[^\n.!?]{0,160}(?:completude|aplicação)|não descreve as etapas do procedimento|procedimento incompleto como confirmado/i.test(answer))
+  failures.push('procedure_completeness_not_confirmed');
+ return failures;
+}

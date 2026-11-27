@@ -4,8 +4,10 @@ import {hasSecrets,hasInfrastructureSecrets} from './knowledge.js';
 import type { Actor } from './security.js';
 export type Source={documentId:string;versionId:string;versionNumber:number;title:string;ordinal:number;content:string;score:number;historical?:true;completeDocument?:boolean;excerpts?:string[]};
 export type Candidate=Source&{semantic:number};
-export const DEFAULT_CANDIDATE_SEMANTIC_MINIMUM=0.4;
-export const DEFAULT_RERANK_POLICY={semanticMinimum:0.5,diversityPenalty:0.18,lexicalMinimum:0};
+// Preserve the established policy until a change passes independent holdout
+// and the existing weak-vector regression.
+export const DEFAULT_CANDIDATE_SEMANTIC_MINIMUM=0.45;
+export const DEFAULT_RERANK_POLICY={semanticMinimum:0.56,diversityPenalty:0.18,lexicalMinimum:0};
 export type RerankPolicy=typeof DEFAULT_RERANK_POLICY;
 
 // PostgreSQL's plainto_tsquery requires every query word to be present. This

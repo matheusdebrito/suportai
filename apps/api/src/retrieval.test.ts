@@ -7,9 +7,9 @@ test('natural Portuguese questions retain meaningful search terms',()=>{
  assert.equal(relaxedLexicalQuery('Qual o procedimento no laboratório isolado?'),'procedimento | laboratório | isolado');
  assert.equal(relaxedLexicalQuery('DNS DNS dns'),'dns');
 });
-test('calibrated defaults preserve the selected synthetic pilot policy',()=>{
- assert.equal(DEFAULT_CANDIDATE_SEMANTIC_MINIMUM,0.4);
- assert.deepEqual(DEFAULT_RERANK_POLICY,{semanticMinimum:0.5,diversityPenalty:0.18,lexicalMinimum:0});
+test('production defaults preserve the baseline until holdout and regressions justify a change',()=>{
+ assert.equal(DEFAULT_CANDIDATE_SEMANTIC_MINIMUM,0.45);
+ assert.deepEqual(DEFAULT_RERANK_POLICY,{semanticMinimum:0.56,diversityPenalty:0.18,lexicalMinimum:0});
 });
 test('tsquery operators from untrusted input are never forwarded',()=>{
  const cleaned=relaxedLexicalQuery("DNS | !(&:'bad') <-> VPN");
