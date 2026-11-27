@@ -1,11 +1,15 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {relaxedLexicalQuery,safeRetrievedSources,searchKnowledge,expandCandidateContext,type Source} from './retrieval.js';
+import {DEFAULT_CANDIDATE_SEMANTIC_MINIMUM,DEFAULT_RERANK_POLICY,relaxedLexicalQuery,safeRetrievedSources,searchKnowledge,expandCandidateContext,type Source} from './retrieval.js';
 
 test('natural Portuguese questions retain meaningful search terms',()=>{
  assert.equal(relaxedLexicalQuery('Como posso configurar o DNS no Linux?'),'configurar | dns | linux');
  assert.equal(relaxedLexicalQuery('Qual o procedimento no laboratório isolado?'),'procedimento | laboratório | isolado');
  assert.equal(relaxedLexicalQuery('DNS DNS dns'),'dns');
+});
+test('calibrated defaults preserve the selected synthetic pilot policy',()=>{
+ assert.equal(DEFAULT_CANDIDATE_SEMANTIC_MINIMUM,0.4);
+ assert.deepEqual(DEFAULT_RERANK_POLICY,{semanticMinimum:0.5,diversityPenalty:0.18,lexicalMinimum:0});
 });
 test('tsquery operators from untrusted input are never forwarded',()=>{
  const cleaned=relaxedLexicalQuery("DNS | !(&:'bad') <-> VPN");

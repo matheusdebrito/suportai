@@ -4,7 +4,7 @@ import {performance} from 'node:perf_hooks';
 import {pathToFileURL} from 'node:url';
 import {client} from './llm.js';
 import {pool,query,transaction} from './db.js';
-import {DEFAULT_RERANK_POLICY,rerankKnowledgeCandidates,retrieveKnowledgeCandidates} from './retrieval.js';
+import {DEFAULT_CANDIDATE_SEMANTIC_MINIMUM,DEFAULT_RERANK_POLICY,rerankKnowledgeCandidates,retrieveKnowledgeCandidates,type RerankPolicy} from './retrieval.js';
 import {retrievalMetrics} from './episode-quality.js';
 import type {Actor} from './security.js';
 
@@ -40,17 +40,22 @@ async function embeddings(inputs:string[]){
  return {vectors,usage:{providerReported:true,calls,promptTokens,totalTokens,latencyMs:performance.now()-started}};
 }
 
-export async function runRagCorpusBaseline(corpusPath:string,outputPath:string,commit:string){
+type BaselineOptions={split?:Split|'all';candidateSemanticMinimum?:number;rerankPolicy?:RerankPolicy;includeSecurity?:boolean};
+export async function runRagCorpusBaseline(corpusPath:string,outputPath:string,commit:string,options:BaselineOptions={}){
  if(process.env.NODE_ENV!=='test'||!process.env.TEST_DATABASE_URL||process.env.DATABASE_URL!==process.env.TEST_DATABASE_URL)throw new Error('Isolated test database required');
  const corpus=JSON.parse(readFileSync(corpusPath,'utf8')) as Corpus;
  if(!corpus.frozen||corpus.positive.cases.length!==100||corpus.security.cases.length!==20)throw new Error('Frozen calibration corpus v2 required');
+ const split=options.split??'all',candidateSemanticMinimum=options.candidateSemanticMinimum??DEFAULT_CANDIDATE_SEMANTIC_MINIMUM,rerankPolicy=options.rerankPolicy??DEFAULT_RERANK_POLICY;
+ if(!['pilot','holdout','all'].includes(split)||!Number.isFinite(candidateSemanticMinimum)||candidateSemanticMinimum<0||candidateSemanticMinimum>1)throw new Error('Invalid baseline options');
+ const positiveCases=corpus.positive.cases.filter(item=>split==='all'||item.split===split);
+ const securityCases=options.includeSecurity===false?[]:corpus.security.cases;
  const actor:Actor={id:randomUUID(),role:'USER',auth_revision:0,must_change_password:false};
  const activeDocuments:string[]=[];
  const allDocuments=[...corpus.positive.documents,...corpus.security.documents];
  const embeddedDocuments=allDocuments.filter(document=>document.current&&document.status==='published');
  const chunkKeys=embeddedDocuments.flatMap(document=>document.chunks.map((_,ordinal)=>`${document.id}:${ordinal}`));
  const chunkInputs=embeddedDocuments.flatMap(document=>document.chunks);
- const documentEmbeddings=await embeddings(chunkInputs),queryEmbeddings=await embeddings([...corpus.positive.cases.map(item=>item.query),...corpus.security.cases.map(item=>item.query)]);
+ const documentEmbeddings=await embeddings(chunkInputs),queryEmbeddings=await embeddings([...positiveCases.map(item=>item.query),...securityCases.map(item=>item.query)]);
  const vectorByChunk=new Map(chunkKeys.map((key,index)=>[key,documentEmbeddings.vectors[index]]));
  try{
   await query("INSERT INTO users(id,email,password_hash,role) VALUES($1,$2,'fixture','USER')",[actor.id,`${actor.id}@example.test`]);
@@ -76,11 +81,11 @@ export async function runRagCorpusBaseline(corpusPath:string,outputPath:string,c
     return {versionByFixture,fixtureByVersion};
    };
   const rows:Row[]=[];
-  for(const [index,item] of corpus.positive.cases.entries()){
+  for(const [index,item] of positiveCases.entries()){
     const {versionByFixture,fixtureByVersion}=await seed(item.candidateDocumentIds);
    const started=performance.now();
-   const candidates=await retrieveKnowledgeCandidates(actor,item.query,5,JSON.stringify(queryEmbeddings.vectors[index]));
-   const ranked=rerankKnowledgeCandidates(item.query,candidates,5,DEFAULT_RERANK_POLICY),latencyMs=performance.now()-started;
+   const candidates=await retrieveKnowledgeCandidates(actor,item.query,5,JSON.stringify(queryEmbeddings.vectors[index]),candidateSemanticMinimum);
+   const ranked=rerankKnowledgeCandidates(item.query,candidates,5,rerankPolicy),latencyMs=performance.now()-started;
    const expected=item.expectedRelevantDocumentIds.map(id=>versionByFixture.get(id)).filter((id):id is string=>Boolean(id));
    const expectedChunks=new Set(item.expectedRelevantChunks.map(value=>{const split=value.lastIndexOf(':');return `${versionByFixture.get(value.slice(0,split))}:${value.slice(split+1)}`;}));
    const rankedChunks=new Set(ranked.map(value=>`${value.versionId}:${value.ordinal}`));
@@ -89,15 +94,15 @@ export async function runRagCorpusBaseline(corpusPath:string,outputPath:string,c
    rows.push({id:item.id,category:item.category,domain:item.domain,split:item.split,recallAt5:metrics.recall,precisionReturnedAt5:metrics.precision,precisionAt5:hits/5,mrr:metrics.mrr,chunkCoverage:expectedChunks.size?[...expectedChunks].filter(value=>rankedChunks.has(value)).length/expectedChunks.size:1,correctCurrentVersion:ranked.every(value=>!fixtureByVersion.get(value.versionId)?.endsWith('-historical')),incompatibleDocuments:ranked.filter(value=>{const fixture=fixtureByVersion.get(value.versionId);return !fixture||!item.candidateDocumentIds.includes(fixture);}).length,returned:ranked.length,latencyMs,candidates:candidates.map(value=>({documentId:fixtureByVersion.get(value.versionId)??null,versionId:value.versionId,ordinal:value.ordinal,score:value.score,semantic:value.semantic})),ranked:ranked.map(value=>({documentId:fixtureByVersion.get(value.versionId)??null,versionId:value.versionId,ordinal:value.ordinal,score:value.score}))});
     await clear();
   }
-  const securityRows=[];const queryOffset=corpus.positive.cases.length;
-  for(const [index,item] of corpus.security.cases.entries()){
+  const securityRows=[];const queryOffset=positiveCases.length;
+  for(const [index,item] of securityCases.entries()){
     const {fixtureByVersion}=await seed(item.candidateDocumentIds);
-   const candidates=await retrieveKnowledgeCandidates(actor,item.query,5,JSON.stringify(queryEmbeddings.vectors[queryOffset+index]));
-   const ranked=rerankKnowledgeCandidates(item.query,candidates,5,DEFAULT_RERANK_POLICY);
+   const candidates=await retrieveKnowledgeCandidates(actor,item.query,5,JSON.stringify(queryEmbeddings.vectors[queryOffset+index]),candidateSemanticMinimum);
+   const ranked=rerankKnowledgeCandidates(item.query,candidates,5,rerankPolicy);
    securityRows.push({id:item.id,threat:item.threat,expectedBehavior:item.expectedBehavior,returned:ranked.map(value=>fixtureByVersion.get(value.versionId)??null),unauthorizedOrRevokedReturned:ranked.some(value=>{const fixture=fixtureByVersion.get(value.versionId);const document=allDocuments.find(entry=>entry.id===fixture);return !document||document.access==='restricted'||document.status==='revoked';})});
     await clear();
   }
-  const report={schemaVersion:1,mode:'real-rag-baseline',corpusId:corpus.corpusId,corpusSchemaVersion:corpus.schemaVersion,commit,model:null,embeddingModel:process.env.OPENAI_EMBED_MODEL||'text-embedding-3-small',policy:DEFAULT_RERANK_POLICY,review:{origin:'ai-technical-review',humanReview:'pending'},usage:{embeddings:{documents:documentEmbeddings.usage,queries:queryEmbeddings.usage},chat:null},pilot:aggregate(rows.filter(row=>row.split==='pilot')),holdout:aggregate(rows.filter(row=>row.split==='holdout')),scoreDistribution:scoreDistribution(rows),security:{cases:securityRows.length,unauthorizedOrRevokedReturned:securityRows.filter(row=>row.unauthorizedOrRevokedReturned).length,rows:securityRows},rows};
+  const report={schemaVersion:1,mode:'real-rag-baseline',corpusId:corpus.corpusId,corpusSchemaVersion:corpus.schemaVersion,commit,model:null,embeddingModel:process.env.OPENAI_EMBED_MODEL||'text-embedding-3-small',policy:{candidateSemanticMinimum,rerank:rerankPolicy},evaluatedSplit:split,review:{origin:'ai-technical-review',humanReview:'pending'},usage:{embeddings:{documents:documentEmbeddings.usage,queries:queryEmbeddings.usage},chat:null},pilot:aggregate(rows.filter(row=>row.split==='pilot')),holdout:aggregate(rows.filter(row=>row.split==='holdout')),scoreDistribution:scoreDistribution(rows),security:{cases:securityRows.length,unauthorizedOrRevokedReturned:securityRows.filter(row=>row.unauthorizedOrRevokedReturned).length,rows:securityRows},rows};
   writeFileSync(outputPath,JSON.stringify(report,null,2)+'\n');return report;
  }finally{
   if(activeDocuments.length)await query('DELETE FROM documents WHERE id=ANY($1::uuid[])',[[...activeDocuments]]);
@@ -107,5 +112,7 @@ export async function runRagCorpusBaseline(corpusPath:string,outputPath:string,c
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  const [corpusPath,outputPath,commit]=process.argv.slice(2);if(!corpusPath||!outputPath||!/^[a-f0-9]{40}$/.test(commit??''))throw new Error('Usage: rag-corpus-baseline <corpus> <output> <commit>');
- runRagCorpusBaseline(corpusPath,outputPath,commit!).then(report=>{console.log(JSON.stringify({pilot:report.pilot,holdout:report.holdout,security:report.security.cases,usage:report.usage},null,2));}).finally(()=>pool.end());
+ const number=(name:string,fallback:number)=>process.env[name]===undefined?fallback:Number(process.env[name]);
+ const options:BaselineOptions={split:(process.env.RAG_SPLIT??'all') as BaselineOptions['split'],candidateSemanticMinimum:number('RAG_CANDIDATE_SEMANTIC_MINIMUM',DEFAULT_CANDIDATE_SEMANTIC_MINIMUM),includeSecurity:process.env.RAG_INCLUDE_SECURITY!=='0',rerankPolicy:{semanticMinimum:number('RAG_RERANK_SEMANTIC_MINIMUM',DEFAULT_RERANK_POLICY.semanticMinimum),diversityPenalty:number('RAG_RERANK_DIVERSITY_PENALTY',DEFAULT_RERANK_POLICY.diversityPenalty),lexicalMinimum:number('RAG_RERANK_LEXICAL_MINIMUM',DEFAULT_RERANK_POLICY.lexicalMinimum)}};
+ runRagCorpusBaseline(corpusPath,outputPath,commit!,options).then(report=>{console.log(JSON.stringify({policy:report.policy,evaluatedSplit:report.evaluatedSplit,pilot:report.pilot,holdout:report.holdout,security:report.security.cases,usage:report.usage},null,2));}).finally(()=>pool.end());
 }

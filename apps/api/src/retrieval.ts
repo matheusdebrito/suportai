@@ -4,7 +4,8 @@ import {hasSecrets,hasInfrastructureSecrets} from './knowledge.js';
 import type { Actor } from './security.js';
 export type Source={documentId:string;versionId:string;versionNumber:number;title:string;ordinal:number;content:string;score:number;historical?:true;completeDocument?:boolean;excerpts?:string[]};
 export type Candidate=Source&{semantic:number};
-export const DEFAULT_RERANK_POLICY={semanticMinimum:0.56,diversityPenalty:0.18,lexicalMinimum:0};
+export const DEFAULT_CANDIDATE_SEMANTIC_MINIMUM=0.4;
+export const DEFAULT_RERANK_POLICY={semanticMinimum:0.5,diversityPenalty:0.18,lexicalMinimum:0};
 export type RerankPolicy=typeof DEFAULT_RERANK_POLICY;
 
 // PostgreSQL's plainto_tsquery requires every query word to be present. This
@@ -66,7 +67,8 @@ export function rerankKnowledgeCandidates(text:string,candidates:Candidate[],lim
  return selected;
 }
 
-export async function retrieveKnowledgeCandidates(actor:Actor,text:string,limit:number,vector:string|null):Promise<Candidate[]>{
+export async function retrieveKnowledgeCandidates(actor:Actor,text:string,limit:number,vector:string|null,semanticCandidateMinimum=DEFAULT_CANDIDATE_SEMANTIC_MINIMUM):Promise<Candidate[]>{
+  if(!Number.isFinite(semanticCandidateMinimum)||semanticCandidateMinimum<0||semanticCandidateMinimum>1)throw new Error('Invalid candidate semantic minimum');
   // Check the complete input before truncation. Model-generated search
   // queries are untrusted and must never forward credentials to embeddings.
   if(hasSecrets(text))return [];
@@ -96,8 +98,8 @@ export async function retrieveKnowledgeCandidates(actor:Actor,text:string,limit:
    FROM allowed)
    SELECT *, (lexical*4+relaxed+title_lexical*6+title_relaxed*2+
      GREATEST(semantic,0)) AS score FROM ranked
-   WHERE lexical>0 OR relaxed>0 OR title_lexical>0 OR title_relaxed>0 OR semantic>0.45
-   ORDER BY score DESC, document_id, ordinal LIMIT $4`,[actor.id,safe,vector,Math.min(Math.max(1,limit*3),16),relaxed,actor.auth_revision,actor.role]);
+   WHERE lexical>0 OR relaxed>0 OR title_lexical>0 OR title_relaxed>0 OR semantic>$8
+   ORDER BY score DESC, document_id, ordinal LIMIT $4`,[actor.id,safe,vector,Math.min(Math.max(1,limit*3),16),relaxed,actor.auth_revision,actor.role,semanticCandidateMinimum]);
   return r.rows.map(x=>({
    documentId:x.document_id,versionId:x.version_id,versionNumber:Number(x.version_number),
    title:x.title,ordinal:x.ordinal,content:x.content,score:Number(x.score),semantic:Number(x.semantic)
