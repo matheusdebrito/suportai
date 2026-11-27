@@ -8,8 +8,8 @@ import {buildConversationMemory,memoryMessage} from './conversation-memory.js';
 import {getPublishedDocument,getVisibleDocumentVersions,documentToSource,validDocumentId} from './agent-knowledge-tools.js';
 import {reviewDraftIntent} from './agent-intent.js';
 import {splitGroundingUnits,verifyGroundedAnswer,type GroundingFailure} from './agent-verifier.js';
-import {completeGroundingFallback,confirmedGuidance,focusedGroundingFallback,guidedGroundingFallback,literalGroundingFallback} from './grounding-fallback.js';
-import {isFocusedKnowledgeQuestion,lastProgressQuestion,supportPreference,supportContext,structuredSupportQuery,SUPPORT_POLICY} from './support-dialogue.js';
+import {completeGroundingFallback,confirmedGuidance,focusedGroundingFallback,guidedGroundingFallback,literalGroundingFallback,semanticEvidenceFallback} from './grounding-fallback.js';
+import {isFocusedKnowledgeQuestion,lastProgressQuestion,supportPreference,supportContext,structuredSupportQuery,SUPPORT_POLICY,safeProgressQuestion} from './support-dialogue.js';
 import {shouldForceKnowledgeLookup,groundedReply} from './llm-policy.js';
 import {unsupportedNetworkLiterals} from './answer-evidence.js';
 import {explicitlyTargetedSpace} from './space-targeting.js';
@@ -20,6 +20,7 @@ import {investigationContextMessage} from './investigation-dialogue.js';
 import type {InvestigationDraft} from './investigation-state.js';
 import {knowledgeSelectionTool,parseKnowledgeSelection,type KnowledgeSelection} from './knowledge-selection.js';
 import {semanticContext,semanticPreference,type SemanticTurn,type SemanticTurnResult} from './semantic-turn.js';
+import {reviewDialogueReply} from './dialogue-review.js';
 export const AGENT_GENERATION_TEMPERATURE=0.2;
 const SYSTEM=`IDENTIDADE E TOM: Você é o SuportAI, assistente interno de conhecimento. Converse naturalmente em português do Brasil, inclusive com gírias, abreviações e mensagens curtas. Use o histórico recente para compreender referências como "isso", "aquele problema" e "é a impressora".
 POLÍTICA DE FERRAMENTAS E EVIDÊNCIA: Decida livremente entre conversar sem consulta (respond_social), pesquisar conhecimento (search_knowledge), abrir um documento ou suas versões, e perguntar quando faltar contexto. Para qualquer procedimento, política ou orientação técnica interna, use fontes publicadas e autorizadas antes de responder. Para conversa social use respond_social; nunca use essa ferramenta para instruções operacionais. Reescreva as buscas com o assunto do histórico; caso uma busca não ajude, use termos equivalentes ou pergunte por detalhes, sem repetir buscas inúteis.
@@ -39,13 +40,15 @@ const tools:OpenAI.Chat.Completions.ChatCompletionTool[]=[
 ];
 export type AgentOutput={answer:string;sources:Source[];pendingActions:{id:string;title:string;content:string;spaceName:string;documentId?:string;beforeContent?:string}[];metrics?:AgentMetrics&InvestigationMetrics};
 export type EvaluationReview={candidate:string;verdict:'supported'|'unsupported'|'uncertain'|'conflict';reason?:GroundingFailure;durationMs:number;promptTokens:number;completionTokens:number;usageObserved:boolean};
-export type AgentOptions={verifyEvidence?:boolean;investigation?:InvestigationDraft;semantic?:SemanticTurn;semanticTurnStatus?:SemanticTurnResult['status'];budget?:AgentBudget;evaluationObserver?:(event:EvaluationReview)=>void};
+export type AgentOptions={verifyEvidence?:boolean;investigation?:InvestigationDraft;semantic?:SemanticTurn;semanticTurnStatus?:SemanticTurnResult['status'];budget?:AgentBudget;subjectCandidates?:string[];evaluationObserver?:(event:EvaluationReview)=>void};
 export async function respond(actor:Actor,conversationId:string,userMessage:string,history:{role:'user'|'assistant';content:string}[],provider:OpenAI|null=client,knowledgeSearch:typeof searchKnowledge=searchKnowledge,options:AgentOptions={}):Promise<AgentOutput>{
  const sources:Source[]=[];
  const historicalSources:Source[]=[];
  const pendingActions:AgentOutput['pendingActions']=[];
  let selection:KnowledgeSelection|undefined;
  let knowledgeSelectionAttempts=0,knowledgeSelections=0,knowledgeSelectionRejections=0,knowledgeSelectionInvalidations=0;
+ let selectionRequired=0,conflictRecoveries=0,clarificationChecks=0;
+ let selectionRepairAttempted=false,recoveryReadOnly=false,dialogueRepairAttempted=false;
  const budget=options.budget??new AgentBudget();
  const semantic=options.semantic;
  const contextualQuery=semantic?semantic.query||userMessage:structuredSupportQuery(userMessage,history,options.investigation);
@@ -59,6 +62,9 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
   ? '\nPEDIDO PONTUAL: responda apenas ao dado solicitado na mensagem mais recente, em uma ou duas frases naturais. Não recapitule o artigo ou o procedimento, não use títulos e não explique que consultou uma fonte.'
   : '';
  const responseContract=SUPPORT_POLICY+'\nMODO ATUAL: '+preference+focusedAnswerPolicy;
+ const verificationContext=semantic?JSON.stringify({message:userMessage,query:contextualQuery,decision:semanticContext(semantic),
+   reportedHistory:history.filter(m=>m.role==='user'&&!hasSecrets(m.content)&&!hasInfrastructureSecrets(m.content)).slice(-6).map(m=>m.content.slice(0,400)),
+   investigation:options.investigation?investigationContextMessage(options.investigation):null,subjects:options.subjectCandidates??[]}):undefined;
  let lastVerifierFailure:GroundingFailure|undefined;
  const verifierFailures:Partial<Record<GroundingFailure,number>>={};
  let fallbackReason:GroundingFailure|AgentStopReason|undefined;
@@ -66,6 +72,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  const done=(result:AgentOutput,reason:AgentStopReason):AgentOutput=>({
    ...result,metrics:{...budget.metrics(reason),...plan.metrics(),verifierChecks,verifierRejections,recoverySearches,literalFallbacks,adaptiveRewrites,nonclaimsRemoved,unsupportedUnits,supportPreference:preference,
      ...(options.semanticTurnStatus?{semanticTurnStatus:options.semanticTurnStatus}:{}),...(semantic?{semanticRoute:semantic.route,semanticIntent:semantic.intent,semanticObservations:semantic.observations.length}:{}),
+     selectionRequired,conflictRecoveries,clarificationChecks,
      knowledgeSelectionAttempts,knowledgeSelections,knowledgeSelectionRejections,knowledgeSelectionInvalidations,
      selectedKnowledgeVersions:selection?.versionIds.length??0,...(selection?{knowledgeSufficiency:selection.sufficiency}:{}),
      verifierFailures,...(lastVerifierFailure?{lastVerifierFailure}:{}),...(fallbackReason?{fallbackReason}:{})}
@@ -82,6 +89,13 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  const olderMemory=buildConversationMemory(history);
  const tryFallback=(reason:GroundingFailure|AgentStopReason):AgentOutput|null=>{
    const available=[...sources,...historicalSources];
+   if(semantic&&provider){
+     // Never replace a semantic rejection/conflict with a lexical guess.
+     if(pendingActions.length||plan.metrics().conflicts||!['provider_failure','model_timeout','model_interrupted','provider_error','provider_incompatible','invalid_json','schema_invalid','claim_shape'].includes(reason))return null;
+     const safe=semanticEvidenceFallback(contextualQuery,available,preference==='complete');
+     if(safe){literalFallbacks++;fallbackReason=reason;return done({...safe,pendingActions},'answered');}
+     return null;
+   }
    const fallback=!pendingActions.length&&available.length>0&&(focused
      ? focusedGroundingFallback(userMessage,available,contextualQuery)
      : preference==='guided'
@@ -92,7 +106,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
    if(fallback){literalFallbacks++;fallbackReason=reason;return done({...fallback,pendingActions},'answered');}
    return null;
  };
- const fallbackReply=():AgentOutput=>tryFallback(lastVerifierFailure??'unsafe_answer')??done({answer:'Encontrei documentos, mas não consegui validar uma orientação aplicável. Informe o equipamento ou ambiente para refinar a consulta.',sources:[],pendingActions},'unsafe_answer');
+ const fallbackReply=():AgentOutput=>tryFallback(lastVerifierFailure??'unsafe_answer')??done({answer:semantic?'Não consegui confirmar uma orientação aplicável com segurança. Podemos continuar se você informar o detalhe do ambiente ou do resultado observado que ainda falta.':'Encontrei documentos, mas não consegui validar uma orientação aplicável. Informe o equipamento ou ambiente para refinar a consulta.',sources:[],pendingActions},'unsafe_answer');
  const runRead=async <T>(read:()=>Promise<T>):Promise<T>=>{
    const remaining=budget.remainingMs();
    if(remaining<1_000)throw new ReadDeadlineError();
@@ -170,7 +184,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  const messages:OpenAI.Chat.Completions.ChatCompletionMessageParam[]=[
   {role:'system',content:SYSTEM+'\n'+responseContract},
   {role:'user',content:supportContext(userMessage,history,options.investigation,preference)},
-  ...(semantic?[{role:'user' as const,content:semanticContext(semantic)}]:[]),
+  ...(semantic?[{role:'user' as const,content:semanticContext(semantic)+(options.subjectCandidates?.length?'\nAssuntos visíveis para esclarecer (rótulos, não evidência): '+JSON.stringify(options.subjectCandidates):'')}]:[]),
   ...(options.investigation?[{role:'user' as const,content:investigationContextMessage(options.investigation)}]:[]),
   ...(olderMemory?[{role:'user' as const,content:memoryMessage(olderMemory)}]:[]),
   ...history.slice(-8).map(m=>({role:m.role,content:m.content} as OpenAI.Chat.Completions.ChatCompletionMessageParam)),
@@ -182,7 +196,9 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
    // Reserve the last turn for synthesis; never leave tool output unanswered.
    const toolChoice=turnBudget.finalTurn ? ('none' as const)
      : turn===0 && forceLookup ? ('required' as const) : ('auto' as const);
-   const availableTools=sources.length?[...tools,knowledgeSelectionTool]:tools;
+   const candidateTools=sources.length?[...tools,knowledgeSelectionTool]:tools;
+   const readOnlyTools=new Set(['search_knowledge','get_knowledge_document','list_document_versions','select_knowledge','ask_clarification']);
+   const availableTools=recoveryReadOnly?candidateTools.filter(t=>t.type==='function'&&readOnlyTools.has(t.function.name)):candidateTools;
    let completion:OpenAI.Chat.Completions.ChatCompletion;
    const promptCharacters=JSON.stringify(messages).length;
    try {
@@ -222,10 +238,14 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
        sources:[],pendingActions},'model_interrupted');
    }
    messages.push(message);
+   if(recoveryReadOnly&&message.tool_calls?.some(call=>call.type!=='function'||!readOnlyTools.has(call.function.name))){
+     for(const call of message.tool_calls)messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify({error:'Durante recuperação, somente leituras e esclarecimentos são permitidos.'})});
+     finalAnswerNext=true;continue;
+   }
    if(message.tool_calls?.some(call=>call.type==='function' && call.function.name==='ask_clarification')){
      // A clarification is not a reason to abandon an actionable lookup.
      // Only pure clarification calls qualify; never run accompanying writes.
-     if(forceLookup&&technicalRequest&&!sources.length&&message.tool_calls.length===1&&!clarificationRecoveryAttempted&&!pendingActions.length){
+     if(!semantic&&forceLookup&&technicalRequest&&!sources.length&&message.tool_calls.length===1&&!clarificationRecoveryAttempted&&!pendingActions.length){
        clarificationRecoveryAttempted=true;
        if(!sources.length&&!hasSecrets(contextualQuery)&&budget.lookup(contextualQuery).kind==='new'){
          try{const found=await runRead(()=>knowledgeSearch(actor,contextualQuery,5));
@@ -268,6 +288,18 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
        const unresolved=unresolvedReply();
        if(unresolved)return unresolved;
      }
+     if(semantic){
+       clarificationChecks++;
+       const accepted=await reviewDialogueReply(provider,budget,'question',question.trim(),verificationContext??userMessage,sources);
+       if(!accepted){
+         if(!dialogueRepairAttempted&&budget.steps+2<=budget.limits.maxSteps&&!budget.stopCause()){
+           dialogueRepairAttempted=true;recoveryReadOnly=true;
+           messages.push({role:'tool',tool_call_id:clarifyCall.id,content:JSON.stringify({error:'Pergunta não validada. Revise o contexto e as evidências. Faça uma pergunta neutra indispensável ou continue pesquisando; não repita dados nem solicite segredos.'})});
+           finalAnswerNext=budget.steps+3>budget.limits.maxSteps;continue;
+         }
+         return done({answer:'Qual detalhe do pedido você ainda pode informar?',sources:[],pendingActions},'clarified');
+       }
+     }
      return done({answer:question.trim(),sources:[],pendingActions:[]},'clarified');
    }
    if(!message.tool_calls?.length){
@@ -278,6 +310,22 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          sources:[],pendingActions},'provider_failure');
      const unresolved=unresolvedReply();
      if(unresolved)return unresolved;
+     if(semantic&&!pendingActions.length&&safeProgressQuestion(message.content.trim())){
+       clarificationChecks++;
+       const accepted=await reviewDialogueReply(provider,budget,'question',message.content.trim(),verificationContext??userMessage,sources);
+       if(accepted){plan.requestClarification();return done({answer:message.content.trim(),sources:[],pendingActions},'clarified');}
+       if(!dialogueRepairAttempted&&budget.steps+2<=budget.limits.maxSteps&&!budget.stopCause()){
+         dialogueRepairAttempted=true;recoveryReadOnly=true;
+         messages.push({role:'system',content:'A pergunta proposta não passou pela revisão. Use as evidências aplicáveis ou formule um esclarecimento indispensável, sem repetir informações já recebidas.'});
+         finalAnswerNext=budget.steps+3>budget.limits.maxSteps;continue;
+       }
+       return done({answer:'Não consegui esclarecer o pedido com segurança. Pode detalhar o que precisa consultar?',sources:[],pendingActions},'clarified');
+     }
+     if(semantic&&semantic.intent==='social'&&!sources.length&&!pendingActions.length){
+       const accepted=await reviewDialogueReply(provider,budget,'social',message.content,verificationContext??userMessage,[]);
+       return accepted?done({answer:message.content,sources:[],pendingActions},'answered'):
+         done({answer:'Posso ajudar a localizar conhecimento autorizado. O que você gostaria de consultar?',sources:[],pendingActions},'clarified');
+     }
      // A citation list alone does not establish that arbitrary IPs or URLs
      // fabricated in the answer came from the retrieved excerpts.
      if(hasInfrastructureSecrets(message.content)||(hasSecrets(message.content)&&(!sources.length||!shouldVerify))||
@@ -285,6 +333,18 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
        return done({answer:'Não consegui validar os endereços ou dados sensíveis apresentados pela IA nas fontes consultadas. '+
          'Não execute essa orientação antes de conferir a documentação publicada.',
          sources:[],pendingActions},'unsafe_answer');
+     }
+     // On the semantic path, competing current versions require a declared
+     // applicability decision before a factual synthesis. A question can
+     // conclude without selecting a winner.
+     if(semantic&&!pendingActions.length&&!selection&&new Set(sources.filter(s=>!s.historical).map(s=>s.versionId)).size>1){
+       selectionRequired++;
+       if(!selectionRepairAttempted&&budget.steps+3<=budget.limits.maxSteps&&!budget.stopCause()){
+         selectionRepairAttempted=true;recoveryReadOnly=true;finalAnswerNext=false;
+         messages.push({role:'system',content:'Há versões concorrentes. Antes de apresentar fatos, selecione explicitamente as versões aplicáveis com select_knowledge, ou esclareça a dúvida com o usuário. Não escolha pelo ranking.'});
+         continue;
+       }
+       return done({answer:'Ainda não consegui distinguir os conhecimentos aplicáveis. Qual é o contexto específico do procedimento que você precisa?',sources:[],pendingActions},'clarified');
      }
      // When the configured real provider is used, independently check that
      // the generated recommendations follow the retrieved evidence.
@@ -308,8 +368,8 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
        verifierChecks++;
        const started=Date.now(),promptBefore=budget.promptTokens,completionBefore=budget.completionTokens;
        let verifierUsage:{prompt_tokens?:number|null;completion_tokens?:number|null}|undefined;
-       const review=await verifyGroundedAnswer(provider,contextualQuery,message.content,
-         [...sources,...historicalSources],Math.min(10_000,validation.timeoutMs),validation.maxTokens,usage=>{verifierUsage=usage;},selection);
+       const review=await verifyGroundedAnswer(provider,semantic?userMessage:contextualQuery,message.content,
+         [...sources,...historicalSources],Math.min(10_000,validation.timeoutMs),validation.maxTokens,usage=>{verifierUsage=usage;},selection,verificationContext);
        budget.recordModelUsage(verifierUsage,
          userMessage.length+message.content.length+[...sources,...historicalSources].reduce((sum,source)=>sum+Math.min(source.content.length,source.completeDocument?10000:1800),0),
          review.verdict==='supported'?JSON.stringify(review.sources.map(source=>source.excerpts)).length+120:40);
@@ -320,8 +380,14 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
        if(review.verdict!=='supported')recordVerifierFailure(review.reason);
        if(review.verdict==='conflict'){
          plan.recordConflict();
+         if(semantic&&!synthesisRecoveryAttempted&&budget.steps+2<=budget.limits.maxSteps&&!budget.stopCause()){
+           synthesisRecoveryAttempted=true;conflictRecoveries++;recoveryReadOnly=true;
+           if(selection){selection=undefined;knowledgeSelectionInvalidations++;}
+           messages.push({role:'system',content:'O verificador detectou um conflito. Compare o objetivo e as condições das versões concorrentes. Investigue apenas por leitura se houver orçamento ou faça uma pergunta específica que resolva a divergência. Não escolha arbitrariamente e não faça ações de escrita.'});
+           finalAnswerNext=budget.steps+3>budget.limits.maxSteps;continue;
+         }
          return done({answer:'Encontrei orientações divergentes nas fontes publicadas. '+
-           'Qual é o ambiente ou a versão em uso para eu identificar a orientação aplicável?',sources,pendingActions},'source_conflict');
+           'Qual é o ambiente ou a versão em uso para eu identificar a orientação aplicável?',sources:semantic?[]:sources,pendingActions},'source_conflict');
        }
        if(review.verdict!=='supported'&&['provider_incompatible','model_refusal','provider_error'].includes(review.reason))return fallbackReply();
        if(review.verdict!=='supported'&&!synthesisRecoveryAttempted&&budget.steps+2<=budget.limits.maxSteps&&!budget.stopCause()){
@@ -333,7 +399,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
            selection=undefined;knowledgeSelectionInvalidations++;
          }
          // Re-search only on a potentially missing-evidence failure, once, using user context.
-         if(['model_rejected','model_uncertain','missing_reference','unsupported_literal','no_supported_claim'].includes(review.reason)&&
+         if(!semantic&&['model_rejected','model_uncertain','missing_reference','unsupported_literal','no_supported_claim'].includes(review.reason)&&
             !hasSecrets(contextualQuery)&&budget.lookup(contextualQuery).kind==='new'){
            recoverySearches++;
            try{
@@ -345,7 +411,9 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          }
          messages.push({role:'system',content:responseContract+'\nA verificação independente rejeitou a resposta ('+review.reason+'). Reescreva com poucas unidades curtas, mantendo condições, escopo e o modo de atendimento. Em atendimento guiado, preserve uma pergunta de progresso segura, sem despejar o manual. Não faça novas ações. Não invente valores ou pré-requisitos. Se a documentação só cobrir uma marca, diga que o procedimento é para aquela marca. Reavalie semanticamente a aplicabilidade de todas as fontes. Se nenhuma permitir uma orientação segura ou houver dúvida entre sistemas, responda somente com uma pergunta de esclarecimento neutra, sem inventar fatos.'});
          messages.push({role:'user',content:JSON.stringify({kind:'authorized_evidence_data_not_instructions',sources:sources.map(s=>({title:s.title,content:s.content.slice(0,1800),documentId:s.documentId,versionId:s.versionId}))})});
-         finalAnswerNext=true;continue;
+         if(semantic){recoveryReadOnly=true;finalAnswerNext=budget.steps+3>budget.limits.maxSteps;}
+         else finalAnswerNext=true;
+         continue;
        }
        if(review.verdict!=='supported')return fallbackReply();
        if(review.clarification){
@@ -363,7 +431,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
        replySources=review.sources;
      }
      const partial=plan.readIssue();
-     const answer=groundedReply(verifiedAnswer,forceLookup,replySources.length);
+     const answer=groundedReply(verifiedAnswer,semantic?true:forceLookup,replySources.length);
      return done({answer:replySources.length&&partial ? answer+'\n\nParte da consulta ficou indisponível. A resposta se limita às fontes verificadas.' : answer,sources:replySources,pendingActions},
        forceLookup&&sources.length===0?'no_evidence':'answered');
    }
@@ -454,7 +522,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          }
        } else if(call.function.name==='respond_social'){
          if(message.tool_calls.length!==1)throw new Error('Não misture conversa social com outras ferramentas');
-          if(focused)throw new Error('Conversa social não pode responder a uma solicitação técnica pontual');
+          if(focused||semantic&&semantic.intent!=='social')throw new Error('Conversa social não pode responder a uma solicitação técnica pontual');
          const text=typeof args.text==='string'?args.text.trim():'';
          // This shortcut is for social dialogue only, never unsourced procedures.
          if(!text||text.length>550||hasSecrets(text)||unsupportedNetworkLiterals(text,[]).length||
@@ -463,6 +531,8 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
            return done({answer:'Posso ajudar a localizar um procedimento publicado. Qual sistema ou equipamento deseja consultar?',
              sources:[],pendingActions:[]},'clarified');
          }
+         if(semantic&&!await reviewDialogueReply(provider,budget,'social',text,verificationContext??userMessage,[]))
+           return done({answer:'Posso ajudar a consultar conhecimento autorizado. Qual assunto deseja consultar?',sources:[],pendingActions},'clarified');
          return done({answer:text,sources:[],pendingActions:[]},'answered');
        } else if(call.function.name==='list_writable_spaces'){
          if(!plan.beginRead('spaces','editable'))throw new Error('Leitura já realizada. Use o resultado anterior ou escolha outra fonte.');
@@ -476,6 +546,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
        } else if(call.function.name==='get_knowledge_document'){
          if(!validDocumentId(args.documentId))throw new Error('Documento inválido');
          const id=args.documentId.toLowerCase();
+         if(semantic&&!sources.some(s=>s.documentId.toLowerCase()===id))throw new Error('Documento não encontrado ou sem autorização');
          if(!plan.beginRead('document',id))throw new Error('Leitura já realizada. Use o resultado anterior ou escolha outra fonte.');
          const document=await readDocument(id).catch(error=>{
            throw new Error(readFailure(error)==='timeout'?'A leitura do documento excedeu o prazo':'Não foi possível abrir o documento');
@@ -487,6 +558,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
        } else if(call.function.name==='list_document_versions'){
          if(!validDocumentId(args.documentId))throw new Error('Documento inválido');
          const id=args.documentId.toLowerCase();
+         if(semantic&&!sources.some(s=>s.documentId.toLowerCase()===id))throw new Error('Documento não encontrado ou sem autorização');
          if(!plan.beginRead('versions',id))throw new Error('Leitura já realizada. Use o resultado anterior ou escolha outra fonte.');
          const versions=await runRead(()=>getVisibleDocumentVersions(actor,id)).catch(error=>{
            throw new Error(readFailure(error)==='timeout'?'A leitura das versões excedeu o prazo':'Não foi possível consultar versões');

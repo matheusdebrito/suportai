@@ -201,7 +201,7 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
    const legacyActiveId=selectActiveInvestigation(previous.rows);
    const activeId=previous.rows[0]?.investigation_id&&visibleIds.has(previous.rows[0].investigation_id)?previous.rows[0].investigation_id:null;
    const lastAssistant=previous.rows[0]?.role==='assistant'?previous.rows[0].content:undefined;
-   const recentForRouting=previous.rows.filter(m=>m.investigation_id===activeId).slice(0,8).reverse()
+   const recentForRouting=previous.rows.slice(0,8).filter((m,index,rows)=>m.investigation_id===activeId&&rows.slice(0,index).every(prior=>prior.investigation_id===activeId)).reverse()
      .map(({role,content})=>({role,content}));
    const interpreted:SemanticTurnResult=await interpret({message:userMessage,subjects,activeId,history:recentForRouting},budget);
    const semantic=interpreted.status==='accepted'?interpreted.decision:undefined;
@@ -221,7 +221,8 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
      :updateInvestigationFromMessage(topic,userMessage,investigation??undefined,investigation?.id===legacyActiveId?lastAssistant:undefined)):null;
    // Unrelated subjects never become the selected agent's working history.
    // The semantic query can carry a short clarification across a new route.
-   const history=previous.rows.filter(message=>message.investigation_id===investigationId).reverse()
+   const scopedHistory=semantic&&!investigationId?previous.rows.slice(0,8).filter((m,index,rows)=>m.investigation_id===null&&rows.slice(0,index).every(prior=>prior.investigation_id===null)):previous.rows.filter(message=>message.investigation_id===investigationId);
+   const history=scopedHistory.reverse()
      .map(({role,content})=>({role,content}));
    const userMessageId=await transaction(async c=>{
      await requireCurrentActor(c,a);
@@ -235,7 +236,8 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
      const output=clarification ? {answer:clarification,sources:[],pendingActions:[],...(routingFailed?{
        metrics:{...budget.metrics('provider_failure'),readAttempts:0,readsWithNewEvidence:0,evidenceCount:0,emptyReads:0,duplicateReads:0,readTimeouts:0,unavailableReads:0,inaccessibleReads:0,stalledSteps:0,clarificationRequests:0,conflicts:0,blockedWriteRetries:0,semanticTurnStatus:interpreted.status}
      }:{})} :
-       await runAgent(a,id,userMessage,history,undefined,undefined,{investigation:investigation??undefined,semantic,semanticTurnStatus:interpreted.status,budget});
+       await runAgent(a,id,userMessage,history,undefined,undefined,{investigation:investigation??undefined,semantic,semanticTurnStatus:interpreted.status,budget,
+         ...(semantic?.route==='uncertain'?{subjectCandidates:subjects.map(s=>s.topic).slice(0,12)}:{})});
      // Bounded categorical and numeric diagnostic signal. Never log prompts, document excerpts or secrets.
      if(output.metrics)req.log.info({agent:output.metrics},'Agent turn finished');
      // Hold a shared account lock while saving the reply. Permission changes

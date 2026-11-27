@@ -269,3 +269,19 @@ export function completeGroundingFallback(question:string,sources:Source[]):{ans
  return {answer:`Claro — aqui está o passo a passo completo:\n\n${rendered.join('\n').trim()} [1]`,
   sources:[{...best,excerpts:[best.content]}]};
 }
+
+
+/** Production semantic path: deterministic recovery only exposes one
+ * unambiguous authorized excerpt on a transport/structural failure. It does
+ * not synthesize steps, infer progress, or overrule a semantic rejection. */
+export function semanticEvidenceFallback(query:string,sources:Source[],complete=false):FallbackResult|null{
+ const best=eligibleSource(query,sources);
+ if(!best)return null;
+ const access=accessNoteFallback(query,best,complete);
+ if(access!==undefined)return access;
+ // A raw excerpt can otherwise disclose credential values even when a
+ // previous scanner accepted them as operational. Do not use it here.
+ if(/\b(?:senha|password|login|usu[aá]rio|credencial|token|segredo|secret|chave)\b/i.test(best.content))return null;
+ return {answer:'Não consegui concluir a análise automática. Segue somente um trecho autorizado da documentação, sem confirmar sua aplicação ou a completude do procedimento.\n\n'+best.title+' [1]\n\n'+readableChecklist(best.content),
+  sources:[{...best,excerpts:[best.content]}]};
+}

@@ -110,10 +110,14 @@ Referência: PR #84, HEAD 77c0c45 (322 testes aprovados, 3 opt-in, 3 E2E).
 - [x] S1 — Introduzir interpretação semântica de investigação, com IDs autorizados, sem roteamento lexical obrigatório quando o modelo está habilitado.
 - [x] S2 — Contrato estruturado para intenção, modo, foco e contexto; validar forma e limites no servidor.
 - [x] S3 — Propagar consulta semântica ao loop, recuperação e verificação sem prefixo fixo.
-- [ ] S4 — Consolidar seleção de alternativas, cobertura do verificador e capacidade de recuperação.
-- [ ] S5 — Tratar conflitos e esclarecimentos no loop com validação independente.
+- [x] S4 — Consolidar seleção de alternativas, cobertura do verificador e capacidade de recuperação.
+- [x] S5 — Tratar conflitos e esclarecimentos no loop com validação independente.
 - [x] S6 — Atualização de memória via observações literais do usuário, sem promover hipóteses ou respostas da IA a fatos.
-- [ ] S7 — Simplificar fallback da rota semântica, preservando abstenção e compatibilidade offline.
+- [x] S7 — Simplificar fallback da rota semântica, preservando abstenção e compatibilidade offline.
 - [ ] S8 — Cobertura de contratos, integração e episódios reais; CI e avaliação real pendentes.
 
 S1/S2/S3/S6 compartilham uma única chamada Structured Outputs antes da seleção de histórico. O orçamento é compartilhado com o agente. Os checks [x] indicam código implementado, não homologação. A compatibilidade offline conserva o roteador anterior. Falha do intérprete habilitado não usa regex para escolher assunto. A seleção de estado continua restrita ao usuário, conversa, revisão e permissões. Não há migration nem alterações de limiares.
+
+### S4/S5/S7 — seleção, conflito e recuperação semânticos
+
+No fluxo semântico, síntese factual com múltiplas versões exige seleção explícita; pergunta neutra pode encerrar sem escolher fonte. O verificador recebe até as 12 fontes vigentes do pool e quatro históricas, com a pergunta original e contexto marcado como relato, não evidência. Revisão de perguntas e conversa social usa contrato separado e orçamento compartilhado; recuperação não executa escrita. Conflito permite uma investigação complementar ou esclarecimento pelo LLM antes da abstenção. Leituras diretas no fluxo semântico exigem candidato obtido no turno. O fallback de produção deixa de sintetizar etapas após rejeição semântica; em falha de transporte/estrutura pode retornar trecho literal conservador ou ficha parcial segura, sem sobrepor conflito. O caminho offline mantém compatibilidade. Testes e homologação pendentes.
