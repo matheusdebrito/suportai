@@ -117,18 +117,40 @@ export function parseIndexedGroundingReview(value:unknown,count:number,spans:rea
  return {verdict,claims,...(coverage?{coverage}:{}),...(issue?{issue}:{})};
 }
 
-/** Exact-document review has no generated quotations or arbitrary claim IDs.
- * The backend proves identity independently; the model must still judge
- * applicability, safety and coverage of the entire requested procedure. */
+/** Identity and complete retrieval are checked by the backend. The model
+ * independently assesses three separate semantic questions, never identity. */
+const applicabilityValues=['applicable','wrong_scope','conflict','uncertain'] as const;
+const safetyValues=['safe','unsafe','uncertain'] as const;
+const documentationValues=['addressed','material_gap','access_only','uncertain'] as const;
+export type SourceAlignedReview={
+ applicability:typeof applicabilityValues[number];
+ safety:typeof safetyValues[number];
+ documentation:typeof documentationValues[number];
+};
 export const SOURCE_ALIGNED_REVIEW_FORMAT={type:'json_schema' as const,json_schema:{
- name:'source_aligned_review_v1',strict:true,schema:{
-  type:'object',additionalProperties:false,required:['verdict','issue'],
-  properties:{verdict:{type:'string',enum:[...verdicts]},issue:{type:'string',enum:[...reviewIssues]}}
+ name:'source_aligned_review_v2',strict:true,schema:{
+  type:'object',additionalProperties:false,required:['applicability','safety','documentation'],
+  properties:{
+   applicability:{type:'string',enum:[...applicabilityValues]},
+   safety:{type:'string',enum:[...safetyValues]},
+   documentation:{type:'string',enum:[...documentationValues]}
+  }
  }
 }};
-export function parseSourceAlignedReview(value:unknown):{verdict:GroundingReview['verdict'];issue:GroundingReviewIssue}|null{
- if(!exact(value,['verdict','issue'])||!verdicts.includes(value.verdict as GroundingReview['verdict'])||
-    !reviewIssues.includes(value.issue as GroundingReviewIssue)||
-    (value.verdict==='supported')!==(value.issue==='none'))return null;
- return {verdict:value.verdict as GroundingReview['verdict'],issue:value.issue as GroundingReviewIssue};
+export function parseSourceAlignedReview(value:unknown):SourceAlignedReview|null{
+ if(!exact(value,['applicability','safety','documentation'])||
+    !applicabilityValues.includes(value.applicability as SourceAlignedReview['applicability'])||
+    !safetyValues.includes(value.safety as SourceAlignedReview['safety'])||
+    !documentationValues.includes(value.documentation as SourceAlignedReview['documentation']))return null;
+ return value as SourceAlignedReview;
+}
+/** Every dimension must pass. A short document is not inherently incomplete;
+ * an actual material gap, access-only note, conflict or unsafe source fails. */
+export function sourceAlignedDecision(review:SourceAlignedReview):{verdict:GroundingReview['verdict'];issue:GroundingReviewIssue}{
+ if(review.safety==='unsafe')return {verdict:'unsupported',issue:'unsafe_content'};
+ if(review.applicability==='conflict')return {verdict:'conflict',issue:'unresolved_conflict'};
+ if(review.applicability==='wrong_scope')return {verdict:'unsupported',issue:'wrong_scope'};
+ if(review.documentation==='material_gap'||review.documentation==='access_only')return {verdict:'unsupported',issue:'missing_coverage'};
+ if(review.applicability!=='applicable'||review.safety!=='safe'||review.documentation!=='addressed')return {verdict:'uncertain',issue:'other'};
+ return {verdict:'supported',issue:'none'};
 }

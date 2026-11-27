@@ -60,7 +60,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  const shouldVerify=Boolean(options.verifyEvidence||(provider===client&&client!==null));
  let verifierChecks=0,verifierRejections=0,verifierRepairs=0,sourceAlignedReviews=0,entailmentChecks=0,entailmentRejections=0,recoverySearches=0,literalFallbacks=0,adaptiveRewrites=0,nonclaimsRemoved=0,unsupportedUnits=0;
  const localPreference=supportPreference(userMessage,history,options.investigation?.supportPreference);
- const preference=semantic?(requestsSupportMode(userMessage)?localPreference:semanticPreference(semantic,options.investigation)):localPreference;
+ const preference=semantic?semanticPreference(semantic,options.investigation,userMessage):localPreference;
  const explicitComplete=requestsSupportMode(userMessage)&&localPreference==='complete'||semantic?.mode==='complete'&&!isFocusedKnowledgeQuestion(userMessage);
  const focused=!explicitComplete&&(semantic?semantic.focused||isFocusedKnowledgeQuestion(userMessage):isFocusedKnowledgeQuestion(userMessage));
  const focusedAnswerPolicy=focused
@@ -69,7 +69,10 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  const responseContract=SUPPORT_POLICY+'\nMODO ATUAL: '+preference+focusedAnswerPolicy+
   (preference!=='complete'&&!focused?'\nCONTINUIDADE: em pedido aberto de ajuda com configuração, comece pela primeira etapa útil e pergunte pelo resultado concreto, não por uma oferta genérica de ajuda. Em resposta afirmativa a uma oferta de ajuda, comece a orientação; em confirmação de uma etapa, avance somente quando o relato confirmar o resultado. Não repita o manual ou a pergunta anterior.':'')+
   (preference==='complete'&&!focused?'\nMODO COMPLETO: entregue os passos documentados com suas condições, em ordem. Evite introduções e encerramentos genéricos, promessas de ajuda ou perguntas de progresso. Não acrescente ações implícitas; se faltar uma condição de aplicabilidade ou parte do procedimento, indique a lacuna em vez de apresentar a resposta como completa.':'');
+ const priorAssistant=history.at(-1)?.role==='assistant'?history.at(-1)?.content:undefined;
+ const priorProgress=priorAssistant&&!hasSecrets(priorAssistant)&&!hasInfrastructureSecrets(priorAssistant)?lastProgressQuestion(priorAssistant):undefined;
  const verificationContext=semantic?JSON.stringify({message:userMessage,query:contextualQuery,decision:semanticContext(semantic),
+   supportMode:preference,focused,previousProgressQuestion:priorProgress??null,
    reportedHistory:history.filter(m=>m.role==='user'&&!hasSecrets(m.content)&&!hasInfrastructureSecrets(m.content)).slice(-6).map(m=>m.content.slice(0,400)),
    investigation:options.investigation?investigationContextMessage(options.investigation):null,subjects:options.subjectCandidates??[]}):undefined;
  let lastVerifierFailure:GroundingFailure|undefined;
@@ -458,31 +461,48 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
              diagnostic:{contract:'grounding_entailment_v1',entailmentRejectedUnits:audit.rejectedUnits.length,
                ...(result.verdict!=='supported'?{localFailure:result.reason}:{})},durationMs:Date.now()-auditStarted,
              promptTokens:budget.promptTokens-auditPrompt,completionTokens:budget.completionTokens-auditCompletion,
-             usageObserved:false});
+             usageObserved:audit.usageObserved});
          }
          return result;
        };
-       let review=await runVerifier();
+       const structuralFailure=(result:GroundingResult)=>result.verdict!=='supported'&&result.verdict!=='conflict'&&
+         ['claim_shape','invalid_reference','missing_reference','schema_invalid','invalid_json'].includes(result.reason);
+       const alignedCandidate=()=>requireComplete&&!plan.metrics().conflicts&&!pendingActions.length&&sourceAlignedReviews===0&&
+         (!selection||selection.sufficiency==='sufficient'&&selection.versionIds.length===1)
+         ? sourceAlignedProcedureCandidate([...sources,...historicalSources],selection?.versionIds[0]):null;
        let alignedAccepted=false;
+       const runAligned=async (aligned:string)=>{
+         if(splitGroundingUnits(aligned).length>20)return null;
+         const result=await runVerifier(undefined,aligned,true);
+         if(result){sourceAlignedReviews++;alignedAccepted=result.verdict==='supported';}
+         return result;
+       };
+       // With only one verification call left, prefer the independent
+       // exact-source review if available rather than a paraphrase whose
+       // additional entailment audit would necessarily exceed the budget.
+       const lastCallCandidate=!semanticRejectionSeen&&budget.steps+2>budget.limits.maxSteps?alignedCandidate():null;
+       let review=(lastCallCandidate?await runAligned(lastCallCandidate):null)??await runVerifier();
        if(!review)return budgetReply(budget.stopCause()??'token_budget');
-       if(semantic&&review.verdict!=='supported'&&review.verdict!=='conflict'&&
-          ['claim_shape','invalid_reference','missing_reference','schema_invalid','invalid_json'].includes(review.reason)&&
-          verifierRepairs===0&&!budget.stopCause()){
-         const repaired=await runVerifier(review.reason);
-         if(repaired){verifierRepairs++;review=repaired;}
+       // A structural failure in complete mode has a different recovery
+       // contract when literal full-document evidence is available. Do not
+       // repeat the same indexed contract just to re-encode known text.
+       const structuralCandidate=structuralFailure(review)&&!semanticRejectionSeen?alignedCandidate():null;
+       if(structuralCandidate&&!budget.stopCause()){
+         const revised=await runAligned(structuralCandidate);
+         if(revised)review=revised;
+       }else if(semantic&&structuralFailure(review)&&verifierRepairs===0&&!budget.stopCause()){
+         if(review.verdict!=='supported'){
+           const repaired=await runVerifier(review.reason);
+           if(repaired){verifierRepairs++;review=repaired;}
+         }
        }
-       // A new extractive candidate can repair unsupported elaboration or
-       // omissions. It does not override the previous rejection: only an
-       // independent review of the new answer can authorize delivery.
-       if(requireComplete&&review.verdict==='unsupported'&&
+       if(review.verdict==='unsupported'&&
           ['model_rejected','incomplete_procedure','entailment_rejected'].includes(review.reason)&&
-          (!review.issue||['unsupported_content','missing_coverage','other'].includes(review.issue))&&
-          !plan.metrics().conflicts&&!pendingActions.length&&sourceAlignedReviews===0&&
-          (!selection||selection.sufficiency==='sufficient'&&selection.versionIds.length===1)&&!budget.stopCause()){
-         const aligned=sourceAlignedProcedureCandidate([...sources,...historicalSources],selection?.versionIds[0]);
-         if(aligned&&splitGroundingUnits(aligned).length<=20){
-           const revised=await runVerifier(undefined,aligned,true);
-           if(revised){sourceAlignedReviews++;review=revised;alignedAccepted=revised.verdict==='supported';}
+          (!review.issue||['unsupported_content','missing_coverage','other'].includes(review.issue))&&!budget.stopCause()){
+         const aligned=alignedCandidate();
+         if(aligned){
+           const revised=await runAligned(aligned);
+           if(revised)review=revised;
          }
        }
        if(review.verdict==='conflict'){

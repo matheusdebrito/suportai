@@ -5,11 +5,11 @@ import type OpenAI from 'openai';
 import type {Actor} from './security.js';
 import type {Source} from './retrieval.js';
 import {AgentBudget,DEFAULT_AGENT_LIMITS} from './agent-budget.js';
-import {applySemanticMemory,interpretSemanticTurn,parseSemanticTurn,SEMANTIC_TURN_FORMAT,type SemanticTurn,type SemanticTurnInput} from './semantic-turn.js';
+import {applySemanticMemory,interpretSemanticTurn,parseSemanticTurn,semanticPreference,SEMANTIC_TURN_FORMAT,type SemanticTurn,type SemanticTurnInput} from './semantic-turn.js';
 import {neutralQuestionCandidate,reviewDialogueReply} from './dialogue-review.js';
 import {respond} from './agent.js';
 import {verifyGroundedAnswer,verifySourceAlignedProcedure} from './agent-verifier.js';
-import {indexEvidenceSpans,indexedGroundingResponseFormat,parseIndexedGroundingReview,INDEXED_GROUNDING_SCHEMA_VERSION,COMPLETE_GROUNDING_SCHEMA_VERSION} from './grounding-contract.js';
+import {indexEvidenceSpans,indexedGroundingResponseFormat,parseIndexedGroundingReview,INDEXED_GROUNDING_SCHEMA_VERSION,COMPLETE_GROUNDING_SCHEMA_VERSION,parseSourceAlignedReview,sourceAlignedDecision} from './grounding-contract.js';
 
 const actor:Actor={id:randomUUID(),role:'USER',auth_revision:1,must_change_password:false};
 const caseId=randomUUID();
@@ -194,28 +194,28 @@ test('grounding reviewer sees every bounded current candidate, including the las
  assert.ok(evidence.some((s:any)=>s.versionId===candidates[11].versionId));
 });
 
-test('complete semantic review repairs an invalid reference within the shared budget',async()=>{
+test('complete semantic review switches to independent exact-source review after an invalid reference',async()=>{
  const doc={...green,ordinal:-1,completeDocument:true};
  const candidate=green.content;
  const calls:any[]=[];
  const result=await respond(actor,randomUUID(),'Me dê o procedimento completo do controlador Verde.',[],scripted([
   tool('search_knowledge',{query:'emitir acesso verde'}),assistant(candidate),
   assistant(JSON.stringify({verdict:'supported',coverage:'complete',issue:'none',claims:{u1:{kind:'current',refs:['unknown-span']}}})),
-  assistant(JSON.stringify({verdict:'supported',coverage:'complete',issue:'none',claims:{u1:{kind:'current',refs:['e1s1']}}}))
+  assistant(JSON.stringify({applicability:'applicable',safety:'safe',documentation:'addressed'}))
  ],calls),async()=>[doc],{semantic:semantic({mode:'complete',query:'emitir acesso verde'}),budget:plannedBudget(),verifyEvidence:true});
- assert.equal(result.metrics?.verifierRepairs,1);
+ assert.equal(result.metrics?.verifierRepairs,0);
+ assert.equal(result.metrics?.sourceAlignedReviews,1);
  assert.equal(result.metrics?.verifierChecks,2);
  assert.equal(result.metrics?.steps,5);
  assert.deepEqual(result.sources.map(s=>s.versionId),[doc.versionId]);
  assert.match(result.answer,/Novo acesso temporário/);
- const reviews=calls.filter(c=>[COMPLETE_GROUNDING_SCHEMA_VERSION].includes(c.response_format?.json_schema?.name));
+ const reviews=calls.filter(c=>[COMPLETE_GROUNDING_SCHEMA_VERSION,'source_aligned_review_v2'].includes(c.response_format?.json_schema?.name));
  assert.equal(reviews.length,2);
  const before=JSON.parse(reviews[0].messages[1].content),after=JSON.parse(reviews[1].messages[1].content);
  assert.equal(after.question,before.question);
- assert.deepEqual(after.units.map((unit:any)=>unit.text),before.units.map((unit:any)=>unit.text));
- assert.deepEqual(after.evidence[0].spans,[{id:'e1s1',text:candidate}]);
- assert.equal(reviews[1].response_format.json_schema.name,COMPLETE_GROUNDING_SCHEMA_VERSION);
- assert.match(reviews[1].messages[0].content,/schema_invalid/);
+ assert.equal(after.candidate,candidate);
+ assert.equal(after.proposedVersionId,doc.versionId);
+ assert.equal(reviews[1].response_format.json_schema.name,'source_aligned_review_v2');
  assert.equal(result.metrics?.completeProcedureVerified,true);
 });
 test('a semantic rejection is not erased by a subsequent structural failure',async()=>{
@@ -303,7 +303,7 @@ test('complete mode rewrites a partial answer instead of accepting a full-docume
  const result=await respond(actor,randomUUID(),'Me dê o procedimento completo',[],scripted([
   tool('search_knowledge',{query:'emitir acesso verde'}),assistant('Abra o painel.'),
   indexed('partial',{u1:{kind:'current',refs:['e1s1']}}),
-  assistant(JSON.stringify({verdict:'supported',issue:'none'}))
+  assistant(JSON.stringify({applicability:'applicable',safety:'safe',documentation:'addressed'}))
  ],calls),async()=>[doc],{semantic:semantic({mode:'complete'}),budget:plannedBudget(),verifyEvidence:true});
  assert.equal(result.metrics?.completeProcedureVerified,true);
  assert.equal(result.metrics?.verifierFailures?.incomplete_procedure,1);
@@ -318,7 +318,7 @@ test('a replacement candidate still requires independent approval and never bypa
  const result=await respond(actor,randomUUID(),'Me dê o procedimento completo',[],scripted([
   tool('search_knowledge',{query:'emitir acesso verde'}),assistant('Abra o painel.'),
   assistant(JSON.stringify({verdict:'unsupported',coverage:'not_applicable',issue:'unsupported_content',claims:null})),
-  assistant(JSON.stringify({verdict:'conflict',issue:'unresolved_conflict'}))
+  assistant(JSON.stringify({applicability:'conflict',safety:'safe',documentation:'addressed'}))
  ],calls),async()=>[doc],{semantic:semantic({mode:'complete'}),budget:new AgentBudget({...DEFAULT_AGENT_LIMITS,maxSteps:5}),verifyEvidence:true});
  assert.equal(result.metrics?.sourceAlignedReviews,1);
  assert.notEqual(result.metrics?.completeProcedureVerified,true);
@@ -326,17 +326,17 @@ test('a replacement candidate still requires independent approval and never bypa
  assert.equal(result.metrics?.stopReason,'source_conflict');
  const review=JSON.parse(calls.at(-1).messages[1].content);
  assert.equal(review.candidate,doc.content);
- assert.equal(calls.at(-1).response_format.json_schema.name,'source_aligned_review_v1');
+ assert.equal(calls.at(-1).response_format.json_schema.name,'source_aligned_review_v2');
 });
 
 test('exact-document review preserves the published procedure and rejects altered text before calling the model',async()=>{
  const doc={...green,ordinal:-1,completeDocument:true,content:'Abra o painel.\n2. Use a senha padrão demo-default.\nConfirme a emissão.'};
  const calls:any[]=[];
- const provider=scripted([assistant(JSON.stringify({verdict:'supported',issue:'none'}))],calls);
+ const provider=scripted([assistant(JSON.stringify({applicability:'applicable',safety:'safe',documentation:'addressed'}))],calls);
  const result=await verifySourceAlignedProcedure(provider,'Me dê o procedimento completo',doc.content,[doc],1000,1000,()=>{});
  assert.equal(result.verdict,'supported');
  if(result.verdict==='supported'){
-  assert.equal(result.answer,doc.content+' [1]');
+  assert.equal(result.answer,'Procedimento documentado:\n\n'+doc.content+' [1]');
   assert.deepEqual(result.sources[0].excerpts,[doc.content]);
   assert.equal(result.completeProcedureVerified,true);
  }
@@ -349,7 +349,7 @@ test('exact-document review independently rejects unsafe and inapplicable source
  const doc={...green,ordinal:-1,completeDocument:true,content:'Abra o painel.\nConfirme a emissão.'};
  const decision={versionIds:[doc.versionId],sufficiency:'sufficient'} as const;
  const calls:any[]=[];
- const result=await verifySourceAlignedProcedure(scripted([assistant(JSON.stringify({verdict:'unsupported',issue:'wrong_scope'}))],calls),
+ const result=await verifySourceAlignedProcedure(scripted([assistant(JSON.stringify({applicability:'wrong_scope',safety:'safe',documentation:'addressed'}))],calls),
   'Procedimento de outro ambiente',doc.content,[doc,blue],1000,1000,()=>{},
   {versionIds:[...decision.versionIds],sufficiency:decision.sufficiency});
  assert.deepEqual(result,{verdict:'unsupported',reason:'model_rejected',issue:'wrong_scope'});
@@ -377,12 +377,12 @@ test('explicit complete mode takes precedence over conflicting focus and recover
   tool('search_knowledge',{query:'controlador Verde procedimento'}),
   assistant('Abra o painel.'),
   assistant(JSON.stringify({verdict:'unsupported',coverage:'not_applicable',issue:'missing_coverage',claims:null})),
-  assistant(JSON.stringify({verdict:'supported',issue:'none'}))
+  assistant(JSON.stringify({applicability:'applicable',safety:'safe',documentation:'addressed'}))
  ],calls),async()=>[doc],{semantic:semantic({mode:'complete',focused:true}),budget:plannedBudget(),verifyEvidence:true});
  assert.equal(result.metrics?.completeProcedureVerified,true);
  assert.equal(result.metrics?.sourceAlignedReviews,1);
- assert.equal(result.answer,doc.content+' [1]');
- assert.equal(calls.at(-1).response_format.json_schema.name,'source_aligned_review_v1');
+ assert.equal(result.answer,'Procedimento documentado:\n\n'+doc.content+' [1]');
+ assert.equal(calls.at(-1).response_format.json_schema.name,'source_aligned_review_v2');
  assert.deepEqual(result.sources[0].excerpts,[doc.content]);
 });
 
@@ -415,4 +415,44 @@ test('an unavailable entailment audit cannot turn an unverified paraphrase into 
  assert.equal(result.metrics?.verifierFailures?.entailment_unavailable,1);
  assert.equal(result.metrics?.literalFallbacks,0);
  assert.deepEqual(result.sources,[]);
+});
+
+test('exact-source review separately rejects scope, safety and an actual documentary gap',()=>{
+ const valid={applicability:'applicable',safety:'safe',documentation:'addressed'};
+ assert.deepEqual(sourceAlignedDecision(parseSourceAlignedReview(valid)!),{verdict:'supported',issue:'none'});
+ for(const [decision,issue] of [
+  [{...valid,applicability:'wrong_scope'},'wrong_scope'],
+  [{...valid,safety:'unsafe'},'unsafe_content'],
+  [{...valid,documentation:'material_gap'},'missing_coverage'],
+  [{...valid,documentation:'access_only'},'missing_coverage']
+ ] as const)assert.deepEqual(sourceAlignedDecision(parseSourceAlignedReview(decision)!),{verdict:'unsupported',issue});
+ assert.deepEqual(sourceAlignedDecision(parseSourceAlignedReview({...valid,applicability:'conflict'})!),{verdict:'conflict',issue:'unresolved_conflict'});
+ assert.deepEqual(sourceAlignedDecision(parseSourceAlignedReview({...valid,safety:'uncertain'})!),{verdict:'uncertain',issue:'other'});
+ assert.equal(parseSourceAlignedReview({verdict:'supported',issue:'none'}),null);
+ assert.equal(parseSourceAlignedReview({...valid,extra:true}),null);
+});
+test('semantic preference and persisted state agree for initial guided setup and explicit complete follow-up',()=>{
+ const start=semantic({route:'new',investigationId:null,topic:'Relatório de inspeção',mode:'adaptive'});
+ const message='Preciso preparar um relatório de inspeção';
+ assert.equal(semanticPreference(start,undefined,message),'guided');
+ const draft=applySemanticMemory(start.topic!,start,undefined,message);
+ assert.equal(draft.supportPreference,'guided');
+ assert.equal(semanticPreference(semantic({mode:'adaptive'}),draft,'consegui'),'guided');
+ const complete=applySemanticMemory(draft.topic,semantic({mode:'adaptive'}),draft,'Me passe tudo');
+ assert.equal(complete.supportPreference,'complete');
+ assert.equal(semanticPreference(semantic({mode:'adaptive'}),complete,'e depois?'),'complete');
+ assert.equal(semanticPreference(semantic({route:'new',mode:'adaptive'}),undefined,'Qual é o estado do pedido?'),'adaptive');
+});
+test('last available verification call uses exact-document review, not an unauditable paraphrase',async()=>{
+ const doc={...green,ordinal:-1,completeDocument:true,content:'Abra o painel.\nConfirme a emissão.'};
+ const calls:any[]=[];
+ const result=await respond(actor,randomUUID(),'Me dê o procedimento completo',[],scripted([
+  tool('search_knowledge',{query:'emitir acesso verde'}),assistant('Entre na tela e finalize a emissão.'),
+  assistant(JSON.stringify({applicability:'applicable',safety:'safe',documentation:'addressed'}))
+ ],calls),async()=>[doc],{semantic:semantic({mode:'complete'}),budget:new AgentBudget({...DEFAULT_AGENT_LIMITS,maxSteps:3}),verifyEvidence:true});
+ assert.equal(result.metrics?.steps,3);
+ assert.equal(result.metrics?.sourceAlignedReviews,1);
+ assert.equal(result.metrics?.entailmentChecks,0);
+ assert.equal(result.metrics?.completeProcedureVerified,true);
+ assert.equal(result.answer,'Procedimento documentado:\n\n'+doc.content+' [1]');
 });

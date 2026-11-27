@@ -221,7 +221,7 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
      ?'O contexto anterior não está disponível. Qual sistema ou equipamento você quer investigar agora?':null;
    const investigationId=investigation?.id??(route?.kind==='new'?randomUUID():null);
    const topic=investigation?.topic??(route?.kind==='new'?route.topic:null);
-   const draft=topic?(semantic?applySemanticMemory(topic,semantic,investigation??undefined)
+   const draft=topic?(semantic?applySemanticMemory(topic,semantic,investigation??undefined,userMessage)
      :updateInvestigationFromMessage(topic,userMessage,investigation??undefined,investigation?.id===legacyActiveId?lastAssistant:undefined)):null;
    // Unrelated subjects never become the selected agent's working history.
    // The semantic query can carry a short clarification across a new route.

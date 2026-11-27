@@ -26,13 +26,13 @@ test('entailment contract is strict, complete and keyed by server units',()=>{
 test('independent audit rejects unsupported causal claims even if adjacent paraphrases are faithful',async()=>{
  const calls:any[]=[],budget=new AgentBudget();
  const result=await reviewEntailment(provider(JSON.stringify({u2:'entailed',u4:'unsupported'}),calls),budget,units);
- assert.deepEqual(result,{status:'unsupported',attempted:true,rejectedUnits:[4]});
+ assert.deepEqual(result,{status:'unsupported',attempted:true,rejectedUnits:[4],usageObserved:true});
  assert.equal(budget.steps,1);assert.equal(budget.promptTokens,30);assert.equal(budget.completionTokens,12);
  assert.deepEqual(JSON.parse(calls[0].messages[1].content),units.map(u=>({key:'u'+u.unit,statement:u.statement,quotes:u.quotes})));
 });
 test('incomplete or unavailable audit fails closed and consumes no unallocated model call',async()=>{
  const calls:any[]=[],budget=new AgentBudget({...DEFAULT_AGENT_LIMITS,maxSteps:1});
- assert.deepEqual(await reviewEntailment(provider('{}',calls),budget,units),{status:'unavailable',attempted:true,rejectedUnits:[]});
- assert.deepEqual(await reviewEntailment(provider('{}',calls),budget,units),{status:'unavailable',attempted:false,rejectedUnits:[]});
+ assert.deepEqual(await reviewEntailment(provider('{}',calls),budget,units),{status:'unavailable',attempted:true,rejectedUnits:[],usageObserved:true});
+ assert.deepEqual(await reviewEntailment(provider('{}',calls),budget,units),{status:'unavailable',attempted:false,rejectedUnits:[],usageObserved:false});
  assert.equal(calls.length,1);
 });

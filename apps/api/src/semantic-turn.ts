@@ -3,7 +3,7 @@ import type {AgentBudget} from './agent-budget.js';
 import type {HistoryMessage} from './conversation-memory.js';
 import type {InvestigationDraft,InvestigationSubject} from './investigation-state.js';
 import {hasSecrets,hasInfrastructureSecrets} from './knowledge.js';
-import type {SupportPreference} from './support-dialogue.js';
+import {requestsSupportMode,setupObjective,supportPreference,type SupportPreference} from './support-dialogue.js';
 
 const routes=['new','existing','standalone','uncertain'] as const;
 const intents=['knowledge','social','write','clarify'] as const;
@@ -79,15 +79,21 @@ export function parseSemanticTurn(value:unknown,input:SemanticTurnInput):Semanti
  if(value.intent==='social'&&(value.route!=='standalone'||value.query!==''||observations.length||equipment!==null||environment!==null))return null;
  return {...value,route,investigationId,topic,equipment,environment,observations} as SemanticTurn;
 }
-export function semanticPreference(decision:SemanticTurn,previous?:InvestigationDraft):SupportPreference{
+export function semanticPreference(decision:SemanticTurn,previous?:InvestigationDraft,message?:string):SupportPreference{
+ if(message&&requestsSupportMode(message))return supportPreference(message,[],previous?.supportPreference);
+ if(decision.route==='existing'&&previous?.supportPreference&&['inherit','adaptive'].includes(decision.mode))
+  return previous.supportPreference;
+ // Reuse the generic setup objective contract for an open-ended initial
+ // request. This is a mode default, never a subject/operation classifier.
+ if(message&&!decision.focused&&decision.intent==='knowledge'&&['adaptive','inherit'].includes(decision.mode)&&setupObjective(message))return 'guided';
  return decision.mode==='inherit'?previous?.supportPreference??'adaptive':decision.mode;
 }
 /** Persist only user-authored quotations from the current message. No source
  * or assistant answer becomes an observation or a confirmed test result. */
-export function applySemanticMemory(topic:string,decision:SemanticTurn,previous?:InvestigationDraft):InvestigationDraft{
+export function applySemanticMemory(topic:string,decision:SemanticTurn,previous?:InvestigationDraft,message?:string):InvestigationDraft{
  const draft:InvestigationDraft={topic,reportedFacts:[],hypotheses:[],openQuestions:[],tests:[],sourceVersionIds:[],...previous};
  const append=(list:string[],value:string)=>[...list.filter(v=>v!==value),value].slice(-12);
- draft.supportPreference=semanticPreference(decision,previous);
+ draft.supportPreference=semanticPreference(decision,previous,message);
  if(decision.equipment!==null)draft.equipmentOrSystem=decision.equipment;
  if(decision.environment!==null)draft.environment=decision.environment;
  for(const item of decision.observations){

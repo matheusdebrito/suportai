@@ -6,12 +6,12 @@ import type {AgentBudget} from './agent-budget.js';
  * evidence for this second, narrower decision. */
 export type EntailmentUnit={unit:number;statement:string;quotes:readonly string[]};
 type Decision='entailed'|'unsupported'|'uncertain';
-export type EntailmentResult={status:'supported'|'unsupported'|'unavailable';attempted:boolean;rejectedUnits:number[]};
+export type EntailmentResult={status:'supported'|'unsupported'|'unavailable';attempted:boolean;rejectedUnits:number[];usageObserved:boolean};
 
-/** Preserve case, negations, punctuation and field values. Only normalize
- * formatting whitespace and a leading list marker, not factual text. */
+/** Preserve case, negations, punctuation, internal whitespace and field
+ * values. Only trim framing and a leading list marker. */
 export function sameDocumentedStatement(statement:string,quote:string):boolean{
- const canonical=(s:string)=>s.trim().replace(/^(?:\d+[.)]|[-*+])\s+/,'').replace(/\s+/g,' ');
+ const canonical=(s:string)=>s.trim().replace(/^(?:\d+[.)]|[-*+])\s+/,'');
  return canonical(statement)===canonical(quote);
 }
 function validUnits(units:readonly EntailmentUnit[]):boolean{
@@ -44,7 +44,8 @@ export function parseEntailment(value:unknown,units:readonly EntailmentUnit[]):D
  * each nonliteral unit and its own previously validated quotations, not
  * the answer generator's reasoning, previous verdict or conversation. */
 export async function reviewEntailment(provider:OpenAI,budget:AgentBudget,units:readonly EntailmentUnit[]):Promise<EntailmentResult>{
- const unavailable=(attempted:boolean):EntailmentResult=>({status:'unavailable',attempted,rejectedUnits:[]});
+ let usageObserved=false;
+ const unavailable=(attempted:boolean):EntailmentResult=>({status:'unavailable',attempted,rejectedUnits:[],usageObserved});
  if(!validUnits(units))return unavailable(false);
  const turn=budget.startModelTurn(true);
  if(!turn)return unavailable(false);
@@ -56,6 +57,7 @@ export async function reviewEntailment(provider:OpenAI,budget:AgentBudget,units:
    messages:[{role:'system',content:system},{role:'user',content:data}]},
    {timeout:Math.min(turn.timeoutMs,10000),maxRetries:0,signal:AbortSignal.timeout(Math.min(turn.timeoutMs,10000))});
   const choice=response.choices[0];
+  usageObserved=typeof response.usage?.prompt_tokens==='number'&&typeof response.usage?.completion_tokens==='number';
   budget.recordModelUsage(response.usage,system.length+data.length,choice?.message?.content?.length??0);
   if(choice?.message?.refusal||choice?.finish_reason==='length'||choice?.finish_reason==='content_filter')return unavailable(true);
   let raw:unknown;
@@ -63,6 +65,6 @@ export async function reviewEntailment(provider:OpenAI,budget:AgentBudget,units:
   const decisions=parseEntailment(raw,units);
   if(!decisions)return unavailable(true);
   const rejectedUnits=units.filter((_,i)=>decisions[i]!=='entailed').map(u=>u.unit);
-  return {status:rejectedUnits.length?'unsupported':'supported',attempted:true,rejectedUnits};
+  return {status:rejectedUnits.length?'unsupported':'supported',attempted:true,rejectedUnits,usageObserved};
  }catch{return unavailable(true);}
 }
