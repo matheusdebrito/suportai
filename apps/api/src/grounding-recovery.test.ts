@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import type OpenAI from 'openai';
 import type {Source} from './retrieval.js';
-import {completeGroundingFallback,guidedGroundingFallback,literalGroundingFallback} from './grounding-fallback.js';
+import {completeGroundingFallback,focusedGroundingFallback,guidedGroundingFallback,literalGroundingFallback} from './grounding-fallback.js';
 import {splitGroundingUnits,verifyGroundedAnswer} from './agent-verifier.js';
 const source:Source={documentId:'doc',versionId:'v1',versionNumber:1,ordinal:0,title:'Telefone Grandstream',content:'Consulte o IP do telefone.\nAccount Active: YES\nSIP Server: sip.example.test',score:1};
 const provider=(message:string)=>({chat:{completions:{create:async()=>({choices:[{message:{content:message},finish_reason:'stop'}]})}}}) as unknown as OpenAI;
@@ -25,6 +25,14 @@ test('literal fallback cannot select irrelevant, conflicting, historical or host
  assert.equal(literalGroundingFallback('telefone',[{...source,content:'api_key=abcdefghijklmnop Configure o telefone.'}]),null);
  assert.equal(literalGroundingFallback('qual a senha do telefone',[source]),null);
  assert.equal(literalGroundingFallback('telefone',[{...source,ordinal:3}]),null);
+});
+test('focused fallback returns only an exact authorized operational value',()=>{
+ const focused=focusedGroundingFallback('A senha pode ser admin?', [{...source,content:'3. Use a senha padrão admin.\n4. Account Active: YES'}]);
+ assert.ok(focused);
+ assert.equal(focused.answer,'Use a senha padrão admin. [1]');
+ assert.deepEqual(focused.sources[0].excerpts,['Use a senha padrão admin.']);
+ assert.equal(focusedGroundingFallback('A senha pode ser root?', [{...source,content:'Use a senha padrão admin.'}]),null);
+ assert.equal(focusedGroundingFallback('Qual a senha?', [{...source,historical:true,content:'Use a senha padrão admin.'}]),null);
 });
 test('guided fallback turns only the first documented stage into a short interaction',()=>{
  const phone={...source,title:'Configurar telefone',content:'# Ver o IP do telefone\n- Segurar o botão central.\n- Status > Network Status > IPV4\n# Configurar SIP\n- Account Active: YES\n- SIP Server: sip.example.test'};

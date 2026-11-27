@@ -1,6 +1,7 @@
 import type {Source} from './retrieval.js';
 import {hasInfrastructureSecrets,hasSecrets} from './knowledge.js';
 const common=new Set('preciso quero saber como qual quais configurar configuracao configuro fazer instalar instalacao procedimento procedimentos passo passos completo completa inteiro inteira tutorial instrucoes guia roteiro todos todas etapas manual ajuda preciso necessario tenho pode poderia passe passar envie enviar mostre mostrar forneca sim claro beleza certo agora orientacao tecnica por favor para sobre meu minha um uma do da de dos das no na o a os as em com e ou que isso esse essa modelo marca nao sei fixo problema sistema ambiente'.split(' '));
+const normal=(s:string)=>s.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase();
 const words=(s:string)=>s.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().match(/[\p{L}\p{N}]{3,}/gu)??[];
 const hostile=/(?:ignore|desconsidere|desobede[cç]a|esque[cç]a)\s+(?:todas?\s+)?(?:as\s+|os\s+)?(?:regras|permiss[oõ]es|instru[cç][oõ]es|mensagens|restri[cç][oõ]es)|(?:prompt\s*(?:injection|do sistema)|instru[cç][aã]o[_\s-]*maliciosa|system\s*prompt|revele\s+(?:um\s+)?segredo)/i;
 const sensitiveRequest=/\b(?:senha|password|token|credencial|chave|segredo)\b/i;
@@ -29,6 +30,26 @@ export function literalGroundingFallback(question:string,sources:Source[]):{answ
  if(!best)return null;
  return {answer:'Encontrei um procedimento publicado que pode ajudar. Não consegui validar a síntese da IA, então segue o trecho original da documentação. Confirme se o equipamento ou ambiente corresponde ao artigo antes de aplicar. Consulte a fonte para o procedimento completo.\n\n'+best.title+' [1]\n\n'+best.content,
   sources:[{...best,excerpts:[best.content]}]};
+}
+
+/** A focused value lookup may return one exact authorized line, including an
+ * operational default password. It never synthesizes, combines versions or
+ * exposes personal/infrastructure secrets. */
+export function focusedGroundingFallback(question:string,sources:Source[]):{answer:string;sources:Source[]}|null{
+ const normalized=question.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase();
+ const focus=['senha','usuario','login','endereco','ip','porta','servidor','url','link','valor','codigo','caminho','menu']
+  .find(term=>new RegExp(`\\b${term}\\b`).test(normalized));
+ if(!focus||/\b(?:anterior|antigo|historico|comparar|versoes)\b/.test(normalized))return null;
+ const current=sources.filter(source=>!source.historical);
+ if(!current.length||sources.some(source=>source.historical)||new Set(current.map(source=>source.versionId)).size!==1)return null;
+ if(current.some(source=>hostile.test(source.title)||hostile.test(source.content)||hasSecrets(source.title)||hasInfrastructureSecrets(source.content)))return null;
+ const proposed=/\bpode ser\s+([\p{L}\p{N}._-]{2,80})/u.exec(normalized)?.[1];
+ const candidates=current.flatMap(source=>source.content.split(/\r?\n|(?<=[.!?])\s+/).map(text=>({source,text:text.trim()})))
+  .filter(({text})=>text.length>=4&&text.length<=240&&new RegExp(`\\b${focus}\\b`,'i').test(text)&&(!proposed||normal(text).includes(proposed)));
+ const selected=candidates[0];
+ if(!selected||hasSecrets(selected.text)||hasInfrastructureSecrets(selected.text))return null;
+ const answer=selected.text.replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/,'').trim();
+ return {answer:`${answer} [1]`,sources:[{...selected.source,excerpts:[selected.text]}]};
 }
 
 function naturalStep(raw:string):string{

@@ -8,7 +8,7 @@ import {buildConversationMemory,memoryMessage} from './conversation-memory.js';
 import {getPublishedDocument,getVisibleDocumentVersions,documentToSource,validDocumentId} from './agent-knowledge-tools.js';
 import {reviewDraftIntent} from './agent-intent.js';
 import {splitGroundingUnits,verifyGroundedAnswer,type GroundingFailure} from './agent-verifier.js';
-import {completeGroundingFallback,guidedGroundingFallback,literalGroundingFallback} from './grounding-fallback.js';
+import {completeGroundingFallback,focusedGroundingFallback,guidedGroundingFallback,literalGroundingFallback} from './grounding-fallback.js';
 import {isFocusedKnowledgeQuestion,lastProgressQuestion,supportPreference,supportContext,structuredSupportQuery,SUPPORT_POLICY} from './support-dialogue.js';
 import {shouldForceKnowledgeLookup,groundedReply} from './llm-policy.js';
 import {unsupportedNetworkLiterals} from './answer-evidence.js';
@@ -67,11 +67,13 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  const olderMemory=buildConversationMemory(history);
  const fallbackReply=():AgentOutput=>{
    const available=[...sources,...historicalSources];
-   const fallback=!pendingActions.length&&(preference==='guided'
-     ? guidedGroundingFallback(contextualQuery,available)
-     : preference==='complete'
-       ? completeGroundingFallback(contextualQuery,available)
-       : literalGroundingFallback(contextualQuery,available));
+   const fallback=!pendingActions.length&&(isFocusedKnowledgeQuestion(userMessage)
+     ? focusedGroundingFallback(userMessage,available)
+     : preference==='guided'
+       ? guidedGroundingFallback(contextualQuery,available)
+       : preference==='complete'
+         ? completeGroundingFallback(contextualQuery,available)
+         : literalGroundingFallback(contextualQuery,available));
    if(fallback){literalFallbacks++;return done({...fallback,pendingActions},'answered');}
    return done({answer:'Encontrei documentos, mas não consegui validar uma orientação aplicável. Informe o equipamento ou ambiente para refinar a consulta.',sources:[],pendingActions},'unsafe_answer');
  };
@@ -305,7 +307,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
        if(review.verdict!=='supported')return fallbackReply();
        nonclaimsRemoved+=review.nonclaimsRemoved??0;
        unsupportedUnits+=review.unsupportedUnits??0;
-        if(preference==='guided'&&(review.unsupportedUnits??0)>0){
+        if((preference==='guided'||preference==='complete')&&(review.unsupportedUnits??0)>0){
           verifierRejections++;lastVerifierFailure='model_rejected';return fallbackReply();
         }
         if(preference==='complete'&&lastProgressQuestion(review.answer))return fallbackReply();
@@ -364,6 +366,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          output=results.map(x=>({title:x.title,versionId:x.versionId,documentId:x.documentId,content:x.content,ordinal:x.ordinal}));
        } else if(call.function.name==='respond_social'){
          if(message.tool_calls.length!==1)throw new Error('Não misture conversa social com outras ferramentas');
+          if(isFocusedKnowledgeQuestion(userMessage))throw new Error('Conversa social não pode responder a uma solicitação técnica pontual');
          const text=typeof args.text==='string'?args.text.trim():'';
          // This shortcut is for social dialogue only, never unsourced procedures.
          if(!text||text.length>550||hasSecrets(text)||unsupportedNetworkLiterals(text,[]).length||

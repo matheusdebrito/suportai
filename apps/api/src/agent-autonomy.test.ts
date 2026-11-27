@@ -45,6 +45,18 @@ test('social tool cannot smuggle unsourced operational instructions',async()=>{
  assert.match(result.answer,/localizar um procedimento publicado/i);
  assert.doesNotMatch(result.answer,/Desative o antivírus/);
 });
+test('social tool cannot answer a focused technical value without retrieval',async()=>{
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('respond_social',{text:'A senha padrão costuma ser admin.'},'social')]},
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'senha telefone'},'search')]},
+  {role:'assistant',content:'Use a senha padrão admin.'},
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[{unit:1,kind:'current',refs:[{evidence:1,quote:'Use a senha padrão admin.'}]}]})}
+ ],[]);
+ const phone:Source={...source,title:'Telefone',content:'Use a senha padrão admin.'};
+ const result=await respond(actor,randomUUID(),'Qual a senha do telefone?',[],model,async()=>[phone],{verifyEvidence:true});
+ assert.match(result.answer,/admin/);
+ assert.equal(result.sources[0]?.versionId,phone.versionId);
+});
 test('older investigation context is preserved as untrusted structured memory',async()=>{
  const history=[
   {role:'user' as const,content:'A impressora é uma Zebra ZD230.'},
