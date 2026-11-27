@@ -70,7 +70,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
    const fallback=!pendingActions.length&&(isFocusedKnowledgeQuestion(userMessage)
      ? focusedGroundingFallback(userMessage,available)
      : preference==='guided'
-       ? guidedGroundingFallback(contextualQuery,available)
+       ? guidedGroundingFallback(contextualQuery,available,history.filter(entry=>entry.role==='assistant').map(entry=>entry.content))
        : preference==='complete'
          ? completeGroundingFallback(contextualQuery,available)
          : literalGroundingFallback(contextualQuery,available));

@@ -66,18 +66,15 @@ function naturalStep(raw:string):string{
 
 /** A guided recovery must never dump the whole article. It presents only the
  * first documented stage and asks for the observed result. */
-export function guidedGroundingFallback(question:string,sources:Source[]):{answer:string;sources:Source[]}|null{
+export function guidedGroundingFallback(question:string,sources:Source[],previousAnswers:string[]=[]):{answer:string;sources:Source[]}|null{
  const best=eligibleSource(question,sources);
  if(!best)return null;
  const lines=best.content.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
- const firstHeading=lines.findIndex(line=>/^#{1,6}\s+/.test(line));
- const start=firstHeading>=0?firstHeading+1:0;
- const stage:string[]=[];
- for(const line of lines.slice(start)){
-  if(/^#{1,6}\s+/.test(line))break;
-  if(firstHeading>=0||/^(?:[-*+]\s+|\d+[.)]\s+)/.test(line))stage.push(line);
-  if(stage.length===2)break;
- }
+ const seen=normal(previousAnswers.join('\n')).replace(/\s+/g,' ');
+ const actionable=lines.filter(line=>!/^#{1,6}\s+/.test(line)&&/^(?:[-*+]\s+|\d+[.)]\s+)/.test(line));
+ const stage=(actionable.length?actionable:lines.filter(line=>!/^#{1,6}\s+/.test(line)))
+  .filter(line=>!seen.includes(normal(naturalStep(line)).replace(/\s+/g,' ')))
+  .slice(0,2);
  if(!stage.length||stage.some(line=>hasSecrets(line)||hasInfrastructureSecrets(line)))return null;
  const steps=stage.map((line,index)=>`${index+1}. ${naturalStep(line)}`).join('\n');
  return {answer:`Vamos por etapas. Primeiro, faça o seguinte:\n\n${steps} [1]\n\nConseguiu concluir essa etapa?`,
@@ -91,7 +88,10 @@ export function completeGroundingFallback(question:string,sources:Source[]):{ans
  if(!best?.completeDocument)return null;
  const normalize=(value:string)=>value.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
  const lines=best.content.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
- if(lines.length&&normalize(lines[0])===normalize(best.title))lines.shift();
+ if(lines.length&&!/^(?:#{1,6}\s|[-*+]\s|\d+[.)]\s)/.test(lines[0])){
+  const first=normalize(lines[0]),titleWords=normalize(best.title).split(' ').filter(word=>word.length>2);
+  if(first===normalize(best.title)||titleWords.every(word=>first.split(' ').includes(word)))lines.shift();
+ }
  const rendered:string[]=[];
  let number=0;
  for(const line of lines){

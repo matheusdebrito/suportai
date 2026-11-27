@@ -43,6 +43,10 @@ test('guided fallback turns only the first documented stage into a short interac
  assert.match(guided.answer,/Status > Network Status > IPV4/);
  assert.match(guided.answer,/Conseguiu concluir essa etapa\?/);
  assert.doesNotMatch(guided.answer,/Account Active|SIP Server|trecho original/);
+ const next=guidedGroundingFallback('configurar telefone',[phone],[guided.answer]);
+ assert.ok(next);
+ assert.match(next.answer,/Account Active|SIP Server/);
+ assert.doesNotMatch(next.answer,/Segure o botão central|Network Status/);
 });
 test('complete fallback formats every documented stage without a raw-article preamble',()=>{
  const phone={...source,title:'Configurar telefone',content:'# Ver o IP\n- Segurar o botão central.\n- Status > Network Status > IPV4\n# Configurar SIP\n- Acessar ACCOUNTS > GENERAL SETTINGS\n- Account Active: YES'};
@@ -58,6 +62,15 @@ test('complete fallback formats every documented stage without a raw-article pre
 
 test('complete fallback does not number a plain-text document title as a step',()=>{
  const phone={...source,title:'Configuração do telefone de laboratório',ordinal:-1,completeDocument:true,
+  content:'Configuração do telefone de laboratório.\n1. Consulte o IP no menu Status.\n2. Abra o IP no navegador.'};
+ const complete=completeGroundingFallback('configurar telefone procedimento completo',[phone]);
+ assert.ok(complete);
+ assert.match(complete.answer,/completo:\n\n1\. Consulte/);
+ assert.doesNotMatch(complete.answer,/1\. Configuração do telefone/);
+});
+
+test('complete fallback removes a descriptive preamble that contains the document title',()=>{
+ const phone={...source,title:'Telefone de laboratório',ordinal:-1,completeDocument:true,
   content:'Configuração do telefone de laboratório.\n1. Consulte o IP no menu Status.\n2. Abra o IP no navegador.'};
  const complete=completeGroundingFallback('configurar telefone procedimento completo',[phone]);
  assert.ok(complete);
