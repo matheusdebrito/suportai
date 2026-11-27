@@ -10,6 +10,9 @@ import {withConversationTurnLock} from './conversation-lock.js';
 import {listInvestigationSubjects,readInvestigationState,saveInvestigationState,visibleInvestigationVersions} from './investigation-state.js';
 import {routeInvestigation,selectActiveInvestigation,updateInvestigationFromMessage} from './investigation-dialogue.js';
 import {recordTurnTelemetry} from './telemetry.js';
+import {client} from './llm.js';
+import {AgentBudget} from './agent-budget.js';
+import {interpretSemanticTurn,applySemanticMemory,type TurnInterpreter,type SemanticTurnResult} from './semantic-turn.js';
 
 const inaccessibleContext=`EXISTS (
   SELECT 1 FROM unnest(m.context_source_version_ids) AS context(version_id)
@@ -18,7 +21,7 @@ const inaccessibleContext=`EXISTS (
   )
 )`;
 
-export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond) {
+export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond,interpret:TurnInterpreter=(input,budget)=>interpretSemanticTurn(client,input,budget)) {
  app.post('/conversations',async req=>{
    const actor=await requireActor(req);
    const r=await query('INSERT INTO conversations(user_id) VALUES($1) RETURNING id',[actor.id]);
@@ -191,16 +194,33 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
     WHERE m.conversation_id=$1 AND m.auth_revision=$2
     ORDER BY m.created_at DESC,m.id DESC LIMIT 60`,[id,a.auth_revision,a.id]);
    const subjects=await listInvestigationSubjects(a,id);
-   const activeId=selectActiveInvestigation(previous.rows);
+   const budget=new AgentBudget();
+   // Only visible subjects and a bounded recent context are sent to the
+   // interpreter. The selected investigation's full state is read afterwards.
+   const visibleIds=new Set(subjects.map(s=>s.id));
+   const legacyActiveId=selectActiveInvestigation(previous.rows);
+   const activeId=previous.rows[0]?.investigation_id&&visibleIds.has(previous.rows[0].investigation_id)?previous.rows[0].investigation_id:null;
    const lastAssistant=previous.rows[0]?.role==='assistant'?previous.rows[0].content:undefined;
-   const route=routeInvestigation(userMessage,subjects,activeId,lastAssistant);
-   const investigation=route?.kind==='existing' ? await readInvestigationState(a,id,route.id) : null;
-   const clarification=route?.kind==='clarify' ? route.question : route?.kind==='existing'&&!investigation
-     ? 'O contexto anterior não está disponível. Qual sistema ou equipamento você quer investigar agora?' : null;
-   const investigationId=investigation?.id??(route?.kind==='new' ? randomUUID() : null);
-   const topic=investigation?.topic??(route?.kind==='new' ? route.topic : null);
-   const draft=topic ? updateInvestigationFromMessage(topic,userMessage,investigation??undefined,investigation?.id===activeId?lastAssistant:undefined) : null;
-   // Older transcripts can inform this turn only when they belong to the selected subject.
+   const recentForRouting=previous.rows.filter(m=>m.investigation_id===activeId).slice(0,8).reverse()
+     .map(({role,content})=>({role,content}));
+   const interpreted:SemanticTurnResult=await interpret({message:userMessage,subjects,activeId,history:recentForRouting},budget);
+   const semantic=interpreted.status==='accepted'?interpreted.decision:undefined;
+   // The legacy classifier is only the local/offline compatibility path.
+   // Do not silently choose a subject by regex after a failed model review.
+   const route=semantic?(semantic.route==='existing'?{kind:'existing' as const,id:semantic.investigationId!}
+     :semantic.route==='new'?{kind:'new' as const,topic:semantic.topic!}:null)
+     :interpreted.status==='disabled'?routeInvestigation(userMessage,subjects,legacyActiveId,lastAssistant):null;
+   const investigation=route?.kind==='existing'?await readInvestigationState(a,id,route.id):null;
+   const routingFailed=interpreted.status!=='accepted'&&interpreted.status!=='disabled';
+   const clarification=routingFailed?'Não consegui interpretar o contexto desta mensagem com segurança. Pode informar qual assunto deseja consultar?':
+     route?.kind==='clarify'?route.question:route?.kind==='existing'&&!investigation
+     ?'O contexto anterior não está disponível. Qual sistema ou equipamento você quer investigar agora?':null;
+   const investigationId=investigation?.id??(route?.kind==='new'?randomUUID():null);
+   const topic=investigation?.topic??(route?.kind==='new'?route.topic:null);
+   const draft=topic?(semantic?applySemanticMemory(topic,semantic,investigation??undefined)
+     :updateInvestigationFromMessage(topic,userMessage,investigation??undefined,investigation?.id===legacyActiveId?lastAssistant:undefined)):null;
+   // Unrelated subjects never become the selected agent's working history.
+   // The semantic query can carry a short clarification across a new route.
    const history=previous.rows.filter(message=>message.investigation_id===investigationId).reverse()
      .map(({role,content})=>({role,content}));
    const userMessageId=await transaction(async c=>{
@@ -212,8 +232,10 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
      return inserted.rows[0].id as string;
    });
    try {
-     const output=clarification ? {answer:clarification,sources:[],pendingActions:[]} :
-       await runAgent(a,id,userMessage,history,undefined,undefined,{investigation:investigation??undefined});
+     const output=clarification ? {answer:clarification,sources:[],pendingActions:[],...(routingFailed?{
+       metrics:{...budget.metrics('provider_failure'),readAttempts:0,readsWithNewEvidence:0,evidenceCount:0,emptyReads:0,duplicateReads:0,readTimeouts:0,unavailableReads:0,inaccessibleReads:0,stalledSteps:0,clarificationRequests:0,conflicts:0,blockedWriteRetries:0,semanticTurnStatus:interpreted.status}
+     }:{})} :
+       await runAgent(a,id,userMessage,history,undefined,undefined,{investigation:investigation??undefined,semantic,semanticTurnStatus:interpreted.status,budget});
      // Bounded categorical and numeric diagnostic signal. Never log prompts, document excerpts or secrets.
      if(output.metrics)req.log.info({agent:output.metrics},'Agent turn finished');
      // Hold a shared account lock while saving the reply. Permission changes

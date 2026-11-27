@@ -103,3 +103,17 @@ A seleção semântica pode ser revisada após rejeição do verificador, sem fo
 ### Compatibilidade do contrato de busca
 
 CI 46028765142: 309 aprovados, uma falha de contrato (campo adicional `completeDocument:false` em trecho parcial), três skips reais. CI 46028857738: falha TS2339 no teste da ferramenta; corrigida pela tipagem `satisfies` no commit 5976cad. Preservado o formato anterior dos trechos da ferramenta de busca; `completeDocument:true` é acrescentado somente para documentos efetivamente completos. As asserções antigas continuam intactas. Novo CI necessário, sem alegação de validação com modelo real.
+
+## Migração para arquitetura semântica ponta a ponta — checklist
+
+Referência: PR #84, HEAD 77c0c45 (322 testes aprovados, 3 opt-in, 3 E2E).
+- [x] S1 — Introduzir interpretação semântica de investigação, com IDs autorizados, sem roteamento lexical obrigatório quando o modelo está habilitado.
+- [x] S2 — Contrato estruturado para intenção, modo, foco e contexto; validar forma e limites no servidor.
+- [x] S3 — Propagar consulta semântica ao loop, recuperação e verificação sem prefixo fixo.
+- [ ] S4 — Consolidar seleção de alternativas, cobertura do verificador e capacidade de recuperação.
+- [ ] S5 — Tratar conflitos e esclarecimentos no loop com validação independente.
+- [x] S6 — Atualização de memória via observações literais do usuário, sem promover hipóteses ou respostas da IA a fatos.
+- [ ] S7 — Simplificar fallback da rota semântica, preservando abstenção e compatibilidade offline.
+- [ ] S8 — Cobertura de contratos, integração e episódios reais; CI e avaliação real pendentes.
+
+S1/S2/S3/S6 compartilham uma única chamada Structured Outputs antes da seleção de histórico. O orçamento é compartilhado com o agente. Os checks [x] indicam código implementado, não homologação. A compatibilidade offline conserva o roteador anterior. Falha do intérprete habilitado não usa regex para escolher assunto. A seleção de estado continua restrita ao usuário, conversa, revisão e permissões. Não há migration nem alterações de limiares.

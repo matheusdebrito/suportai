@@ -12,7 +12,8 @@ import {registerOperations} from './operations.js';
 import {respond} from './agent.js';
 import {safeErrorType} from './safe-errors.js';
 import {registerTelemetryHooks} from './telemetry.js';
-export async function buildApp(options:{agentResponder?:typeof respond}={}){
+import type {TurnInterpreter} from './semantic-turn.js';
+export async function buildApp(options:{agentResponder?:typeof respond;turnInterpreter?:TurnInterpreter}={}){
  const app=Fastify({requestIdHeader:false,genReqId:()=>randomUUID(),logger:{redact:['req.headers.authorization','req.headers.cookie','res.headers.set-cookie']},bodyLimit:200_000});
  const origin=process.env.APP_ORIGIN||'http://localhost:5173';
  await app.register(cors,{origin,credentials:true});
@@ -32,7 +33,9 @@ export async function buildApp(options:{agentResponder?:typeof respond}={}){
  registerAuth(app);
  registerOperations(app);
  registerKnowledge(app);
- registerChat(app,options.agentResponder??respond);
+ // Injected test responders keep their offline fixtures unless explicitly
+ // opting into the real (or scripted) semantic interpreter as well.
+ registerChat(app,options.agentResponder??respond,options.turnInterpreter??(options.agentResponder?async()=>({status:'disabled' as const}):undefined));
  app.setErrorHandler((error,req,reply)=>{
    const err=error as Error & {statusCode?:number};
    const code=typeof err.statusCode==='number' && err.statusCode>=400 && err.statusCode<500?err.statusCode:500;

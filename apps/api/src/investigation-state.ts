@@ -50,9 +50,9 @@ const visibleInvestigation=`i.user_id=$1 AND i.conversation_id=$2 AND i.auth_rev
       AND NOT EXISTS (SELECT 1 ${visibleInvestigationVersions('$1')} AND v.id=src.version_id)
   )`;
 
-export type InvestigationSubject=Pick<InvestigationState,'id'|'topic'|'equipmentOrSystem'>;
+export type InvestigationSubject=Pick<InvestigationState,'id'|'topic'|'equipmentOrSystem'|'environment'|'supportPreference'>;
 export async function listInvestigationSubjects(actor:Actor,conversationId:string):Promise<InvestigationSubject[]>{
-  const result=await pool.query<InvestigationSubject>(`SELECT i.id,i.topic,i.equipment_or_system AS "equipmentOrSystem"
+  const result=await pool.query<InvestigationSubject>(`SELECT i.id,i.topic,i.equipment_or_system AS "equipmentOrSystem",i.environment,i.support_preference AS "supportPreference"
     FROM investigations i JOIN users u ON u.id=i.user_id WHERE ${visibleInvestigation}
     ORDER BY i.last_activity_at DESC,i.id DESC LIMIT 40`,[actor.id,conversationId,actor.auth_revision,actor.role]);
   return result.rows;

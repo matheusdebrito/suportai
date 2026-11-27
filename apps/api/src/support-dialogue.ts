@@ -65,8 +65,8 @@ export function requestsSupportMode(message:string):boolean{
  const value=normal(message);
  return (full.test(value)||guided.test(value)||/^me (?:passe|envie|de|mostre) tudo[.!?\s]*$/.test(value))&&value.length<=120&&!/\b(?:do|da|sobre|para)\s+(?!mim\b|uma vez\b)\S+/.test(value);
 }
-export function supportContext(message:string,history:HistoryMessage[],state?:InvestigationDraft):string{
- const preference=supportPreference(message,history,state?.supportPreference);
+export function supportContext(message:string,history:HistoryMessage[],state?:InvestigationDraft,chosenPreference?:SupportPreference):string{
+ const preference=chosenPreference??supportPreference(message,history,state?.supportPreference);
  const recent=history.slice(-12);
  const observations=recent.filter(m=>m.role==='user'&&!hasSecrets(m.content)).map(m=>m.content.slice(0,300)).slice(-6);
  // Prior replies are not evidence; a short answer like "sim" must refer to the

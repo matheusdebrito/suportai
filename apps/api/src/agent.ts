@@ -19,6 +19,7 @@ import {InvestigationPlan,type InvestigationMetrics} from './agent-investigation
 import {investigationContextMessage} from './investigation-dialogue.js';
 import type {InvestigationDraft} from './investigation-state.js';
 import {knowledgeSelectionTool,parseKnowledgeSelection,type KnowledgeSelection} from './knowledge-selection.js';
+import {semanticContext,semanticPreference,type SemanticTurn,type SemanticTurnResult} from './semantic-turn.js';
 export const AGENT_GENERATION_TEMPERATURE=0.2;
 const SYSTEM=`IDENTIDADE E TOM: Você é o SuportAI, assistente interno de conhecimento. Converse naturalmente em português do Brasil, inclusive com gírias, abreviações e mensagens curtas. Use o histórico recente para compreender referências como "isso", "aquele problema" e "é a impressora".
 POLÍTICA DE FERRAMENTAS E EVIDÊNCIA: Decida livremente entre conversar sem consulta (respond_social), pesquisar conhecimento (search_knowledge), abrir um documento ou suas versões, e perguntar quando faltar contexto. Para qualquer procedimento, política ou orientação técnica interna, use fontes publicadas e autorizadas antes de responder. Para conversa social use respond_social; nunca use essa ferramenta para instruções operacionais. Reescreva as buscas com o assunto do histórico; caso uma busca não ajude, use termos equivalentes ou pergunte por detalhes, sem repetir buscas inúteis.
@@ -38,20 +39,23 @@ const tools:OpenAI.Chat.Completions.ChatCompletionTool[]=[
 ];
 export type AgentOutput={answer:string;sources:Source[];pendingActions:{id:string;title:string;content:string;spaceName:string;documentId?:string;beforeContent?:string}[];metrics?:AgentMetrics&InvestigationMetrics};
 export type EvaluationReview={candidate:string;verdict:'supported'|'unsupported'|'uncertain'|'conflict';reason?:GroundingFailure;durationMs:number;promptTokens:number;completionTokens:number;usageObserved:boolean};
-export type AgentOptions={verifyEvidence?:boolean;investigation?:InvestigationDraft;evaluationObserver?:(event:EvaluationReview)=>void};
+export type AgentOptions={verifyEvidence?:boolean;investigation?:InvestigationDraft;semantic?:SemanticTurn;semanticTurnStatus?:SemanticTurnResult['status'];budget?:AgentBudget;evaluationObserver?:(event:EvaluationReview)=>void};
 export async function respond(actor:Actor,conversationId:string,userMessage:string,history:{role:'user'|'assistant';content:string}[],provider:OpenAI|null=client,knowledgeSearch:typeof searchKnowledge=searchKnowledge,options:AgentOptions={}):Promise<AgentOutput>{
  const sources:Source[]=[];
  const historicalSources:Source[]=[];
  const pendingActions:AgentOutput['pendingActions']=[];
  let selection:KnowledgeSelection|undefined;
  let knowledgeSelectionAttempts=0,knowledgeSelections=0,knowledgeSelectionRejections=0,knowledgeSelectionInvalidations=0;
- const budget=new AgentBudget();
- const contextualQuery=structuredSupportQuery(userMessage,history,options.investigation);
- const plan=new InvestigationPlan(userMessage,shouldForceKnowledgeLookup(userMessage)||shouldForceKnowledgeLookup(contextualQuery),options.investigation?.hypotheses);
+ const budget=options.budget??new AgentBudget();
+ const semantic=options.semantic;
+ const contextualQuery=semantic?semantic.query||userMessage:structuredSupportQuery(userMessage,history,options.investigation);
+ // Semantic intent guides the model, but cannot authorize an unsourced reply.
+ const plan=new InvestigationPlan(userMessage,semantic?semantic.intent!=='social':shouldForceKnowledgeLookup(userMessage)||shouldForceKnowledgeLookup(contextualQuery),options.investigation?.hypotheses);
  const shouldVerify=Boolean(options.verifyEvidence||(provider===client&&client!==null));
  let verifierChecks=0,verifierRejections=0,recoverySearches=0,literalFallbacks=0,adaptiveRewrites=0,nonclaimsRemoved=0,unsupportedUnits=0;
- const preference=supportPreference(userMessage,history,options.investigation?.supportPreference);
- const focusedAnswerPolicy=isFocusedKnowledgeQuestion(userMessage)
+ const preference=semantic?semanticPreference(semantic,options.investigation):supportPreference(userMessage,history,options.investigation?.supportPreference);
+ const focused=semantic?semantic.focused:isFocusedKnowledgeQuestion(userMessage);
+ const focusedAnswerPolicy=focused
   ? '\nPEDIDO PONTUAL: responda apenas ao dado solicitado na mensagem mais recente, em uma ou duas frases naturais. Não recapitule o artigo ou o procedimento, não use títulos e não explique que consultou uma fonte.'
   : '';
  const responseContract=SUPPORT_POLICY+'\nMODO ATUAL: '+preference+focusedAnswerPolicy;
@@ -61,6 +65,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  const recordVerifierFailure=(reason:GroundingFailure)=>{verifierRejections++;lastVerifierFailure=reason;verifierFailures[reason]=(verifierFailures[reason]??0)+1;};
  const done=(result:AgentOutput,reason:AgentStopReason):AgentOutput=>({
    ...result,metrics:{...budget.metrics(reason),...plan.metrics(),verifierChecks,verifierRejections,recoverySearches,literalFallbacks,adaptiveRewrites,nonclaimsRemoved,unsupportedUnits,supportPreference:preference,
+     ...(options.semanticTurnStatus?{semanticTurnStatus:options.semanticTurnStatus}:{}),...(semantic?{semanticRoute:semantic.route,semanticIntent:semantic.intent,semanticObservations:semantic.observations.length}:{}),
      knowledgeSelectionAttempts,knowledgeSelections,knowledgeSelectionRejections,knowledgeSelectionInvalidations,
      selectedKnowledgeVersions:selection?.versionIds.length??0,...(selection?{knowledgeSufficiency:selection.sufficiency}:{}),
      verifierFailures,...(lastVerifierFailure?{lastVerifierFailure}:{}),...(fallbackReason?{fallbackReason}:{})}
@@ -71,13 +76,13 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  },reason);
  const forceLookup=plan.needsEvidence;
  // Only user-authored turns contribute to this bounded alternate query.
- const technicalRequest=/\b(?:configur\w*|instal\w*|procediment\w*|manual|diagnostic\w*|acess\w*|conect\w*)\b/i.test(contextualQuery);
+ const technicalRequest=semantic?semantic.intent==='knowledge':/\b(?:configur\w*|instal\w*|procediment\w*|manual|diagnostic\w*|acess\w*|conect\w*)\b/i.test(contextualQuery);
  let clarificationRecoveryAttempted=false;
  let synthesisRecoveryAttempted=false;
  const olderMemory=buildConversationMemory(history);
  const tryFallback=(reason:GroundingFailure|AgentStopReason):AgentOutput|null=>{
    const available=[...sources,...historicalSources];
-   const fallback=!pendingActions.length&&available.length>0&&(isFocusedKnowledgeQuestion(userMessage)
+   const fallback=!pendingActions.length&&available.length>0&&(focused
      ? focusedGroundingFallback(userMessage,available,contextualQuery)
      : preference==='guided'
        ? guidedGroundingFallback(contextualQuery,available,confirmedGuidance(history,userMessage))
@@ -164,7 +169,8 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  // Tool selection no longer depends on a regex-based intention classifier.
  const messages:OpenAI.Chat.Completions.ChatCompletionMessageParam[]=[
   {role:'system',content:SYSTEM+'\n'+responseContract},
-  {role:'user',content:supportContext(userMessage,history,options.investigation)},
+  {role:'user',content:supportContext(userMessage,history,options.investigation,preference)},
+  ...(semantic?[{role:'user' as const,content:semanticContext(semantic)}]:[]),
   ...(options.investigation?[{role:'user' as const,content:investigationContextMessage(options.investigation)}]:[]),
   ...(olderMemory?[{role:'user' as const,content:memoryMessage(olderMemory)}]:[]),
   ...history.slice(-8).map(m=>({role:m.role,content:m.content} as OpenAI.Chat.Completions.ChatCompletionMessageParam)),
@@ -287,7 +293,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      // bounded opportunity to adapt it BEFORE semantic verification.
      if(shouldVerify&&preference==='guided'&&sources.length&&!pendingActions.length&&!adaptiveRewrites&&
          (message.content.length>650||message.content.split('\n').filter(line=>line.trim()).length>7||
-          (!isFocusedKnowledgeQuestion(userMessage)&&splitGroundingUnits(message.content).length>3))&&
+          (!focused&&splitGroundingUnits(message.content).length>3))&&
          (!message.content.trim().endsWith('?')||splitGroundingUnits(message.content).length>3)&&
          budget.steps+2<=budget.limits.maxSteps&&!budget.stopCause()){
        adaptiveRewrites++;
@@ -399,7 +405,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
            throw new Error(readFailure(error,true)==='timeout'?'A consulta ao cérebro excedeu o prazo':'Falha temporária na consulta ao cérebro');
          }
          budget.recordSearch(args.query,results);
-         if(preference==='complete'&&!isFocusedKnowledgeQuestion(userMessage)&&results.length&&new Set([...sources,...results].map(s=>s.versionId)).size===1&&!results.some(s=>s.completeDocument)){
+         if(preference==='complete'&&!focused&&results.length&&new Set([...sources,...results].map(s=>s.versionId)).size===1&&!results.some(s=>s.completeDocument)){
            const anchor=results[0];
            try{
              const doc=await readDocument(anchor.documentId);
@@ -448,7 +454,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          }
        } else if(call.function.name==='respond_social'){
          if(message.tool_calls.length!==1)throw new Error('Não misture conversa social com outras ferramentas');
-          if(isFocusedKnowledgeQuestion(userMessage))throw new Error('Conversa social não pode responder a uma solicitação técnica pontual');
+          if(focused)throw new Error('Conversa social não pode responder a uma solicitação técnica pontual');
          const text=typeof args.text==='string'?args.text.trim():'';
          // This shortcut is for social dialogue only, never unsourced procedures.
          if(!text||text.length>550||hasSecrets(text)||unsupportedNetworkLiterals(text,[]).length||

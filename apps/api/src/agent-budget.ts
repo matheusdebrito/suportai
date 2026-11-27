@@ -25,6 +25,9 @@ export type AgentMetrics={
  verifierFailures?:Partial<Record<GroundingFailure,number>>;fallbackReason?:GroundingFailure|AgentStopReason;
  knowledgeSelectionAttempts?:number;knowledgeSelections?:number;knowledgeSelectionRejections?:number;knowledgeSelectionInvalidations?:number;
  selectedKnowledgeVersions?:number;knowledgeSufficiency?:'sufficient'|'partial';
+ semanticTurnStatus?:'accepted'|'disabled'|'invalid'|'unavailable'|'budget';
+ semanticRoute?:'new'|'existing'|'standalone'|'uncertain';semanticIntent?:'knowledge'|'social'|'write'|'clarify';
+ semanticObservations?:number;selectionRequired?:number;conflictRecoveries?:number;clarificationChecks?:number;
  adaptiveRewrites?:number;nonclaimsRemoved?:number;unsupportedUnits?:number;supportPreference?:'adaptive'|'guided'|'complete';
 };
 
