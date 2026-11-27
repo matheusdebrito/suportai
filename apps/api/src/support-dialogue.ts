@@ -83,7 +83,7 @@ export function structuredSupportQuery(message:string,history:HistoryMessage[],s
  const safe=(value:string|undefined|null,max:number)=>value&&!hasSecrets(value)?value.trim().slice(0,max):'';
  const objective=state?.topic??setupObjective(message)??history.filter(m=>m.role==='user').map(m=>setupObjective(m.content)).filter(Boolean).at(-1);
  const mode=supportPreference(message,history,state?.supportPreference);
- const generic=/^\s*(?:sim|não|nao|ok|certo|beleza|obrigad[oa]|valeu|e depois|e agora)[.!?\s]*$/i.test(message);
+ const generic=/^\s*(?:sim|não|nao|consegui|não consegui|nao consegui|não funcionou|nao funcionou|concluí|conclui|feito|ok|certo|beleza|obrigad[oa]|valeu|e depois|e agora)[.!?\s]*$/i.test(message);
  const intent=mode==='complete'&&requestsSupportMode(message)?'procedimento completo':isFocusedKnowledgeQuestion(message)?'dado de configuração':objective?'orientação técnica':'';
  const recent=history.slice(-8);
  const equipment=recent.flatMap((entry,index)=>entry.role==='user'&&recent[index-1]?.role==='assistant'&&/^(?:qual (?:a marca|o modelo)|qual (?:é|e) (?:a marca|o modelo))\??$/i.test(recent[index-1].content.trim())&&/^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,39}$/u.test(entry.content.trim())&&!/\b(?:senha|token|password|credencial|não|nao|sei)\b/i.test(entry.content)?[entry.content]:[]).at(-1);

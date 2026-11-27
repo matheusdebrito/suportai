@@ -13,7 +13,7 @@ const segmenter=new Intl.Segmenter('pt-BR',{granularity:'sentence'});
 const historicalWording=/\b(?:históric[oa]s?|anterior(?:es)?|antig[oa]s?|no passado)\b/i;
 const currentWording=/\b(?:vigente|atual)\b/i;
 const injectedDirective=/\b(?:ignore|desconsidere)\s+(?:(?:todas?\s+)?as\s+)?(?:regras|permissões|instruções)\b/i;
-const safeNonclaim=(text:string)=>/^(?:#{1,6}\s+[^\n:]+|(?:claro|certo|vamos por etapas|vamos lá|vamos la)[.!:]?|primeiro,?\s+faça o seguinte[:.]?|(?:passo a passo|procedimento|orientações|orientacoes)(?: completo| completa)?[:.]?)$/i.test(text.trim());
+const safeNonclaim=(text:string)=>/^(?:(?:#{1,6}\s+)?(?:configuração|configuracao|procedimento|passos|passo a passo|orientações|orientacoes|instruções|instrucoes)[:.]?|(?:claro|certo|vamos por etapas|vamos lá|vamos la)[.!:]?|primeiro,?\s+faça o seguinte[:.]?|(?:passo a passo|procedimento|orientações|orientacoes)(?: completo| completa)?[:.]?)$/i.test(text.trim());
 
 function reviewClaims(question:string,answer:string,units:{text:string;end:number}[],passages:Passage[],claims:GroundingClaim[]):GroundingResult{
  if(!Array.isArray(claims)||claims.length>units.length)return rejected('claim_shape','uncertain');

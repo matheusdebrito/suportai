@@ -6,4 +6,17 @@ The report separates retrieval recall, precision and reciprocal rank from turn r
 
 Record commit, model, embedding model, effective agent limits, corpus version and human labels with each baseline. Use synthetic fixtures only for this runner. For calibration, use a separately reviewed pilot corpus, hold out validation cases, compare candidate thresholds on recall, precision and MRR, and require no authorization regressions. Do not change thresholds before measured results. Existing documents need controlled reindexing to benefit from the new chunking; do not reindex production automatically.
 
-No real-model baseline is claimed by this change.
+The historical real phone report is versioned under `docs/validation-pr-84-evidence/` (evaluated code 036f2fa). It has AI-reviewed labels, not human homologation. Preserve these files unchanged.
+
+## Strict verifier and expanded episodes
+
+The verifier requests strict JSON Schema `grounding_review_v1`. Provider incompatibility, refusal, malformed JSON, schema errors, claim coverage errors and transport errors are distinguished. No downgrade to free JSON. The test-only capture wraps the actual responder and retrieval, not the HTTP response; it records verifier candidates/outcomes, actual usage when provided, bounded metrics and ranked fixture version/ordinal identifiers. Production responses and telemetry contain no evaluation candidate text.
+
+In addition to the original 5-turn phone episode and the 4-case calibration corpus, the opt-in suite now includes five expanded episodes (18 turns). Keep the original episode and its corpus hash unchanged for comparisons; expanded corpus is separately reported. Run on an explicitly authorized local test environment with the same model and limits as the historical baseline:
+
+- Set `NODE_ENV=test`, `RUN_REAL_EPISODES=1`, `ALLOW_EXTERNAL_AI_DATA_PROCESSING=true`, `DATABASE_URL=TEST_DATABASE_URL` (isolated migrated pgvector database), and `EVALUATION_COMMIT` to actual git HEAD. Use an authorized API key without printing it.
+- Set `EPISODE_REPORT_PATH`, `CALIBRATION_REPORT_PATH`, and `EXPANDED_EPISODE_REPORT_PATH` to distinct new paths outside the historical evidence directory. Run `node --import tsx --test src/investigation-chat.test.ts` in apps/api.
+- Run `npm run episode:compare -- ../../docs/validation-pr-84-evidence/episode-real-report.json <new-phone-report> <comparison-output>` in apps/api. Optional matched review files can be provided with their shared explicit origin (`ai` or `human`). No human review may be fabricated.
+- New report captures per-turn diagnostics; the historical report did not. Null deltas for historical verifier failures, latency or token usage are unavailable, not zero. Compare those measures only against a future matched telemetry-bearing baseline or a fresh authorized run of the historical code. Keep calibration thresholds unchanged until a representative reviewed corpus supports a change.
+
+CI executes the deterministic regressions; real episodes remain opt-in to avoid unauthorized external processing. Record failed cases and human review separately; one passing phone episode does not establish 95% continuity across representative episodes.

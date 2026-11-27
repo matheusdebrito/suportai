@@ -3,7 +3,7 @@ export type EpisodeDocument={id:string;title:string;article:string;restricted?:b
 export type EpisodeTurn={message:string;expectedDocument:string|null;context:'same'|'new'|'resume'|'none';complete?:boolean;forbidden?:string[];archiveBefore?:string;mayClarify?:boolean};
 export type EpisodeFixture={id:string;documents:EpisodeDocument[];turns:EpisodeTurn[]};
 export const expandedEpisodes:EpisodeFixture[]=[
- {id:'printer-negative-progress',documents:[{id:'printer',title:'Impressora de etiquetas de laboratório',article:'Somente no laboratório de testes, com a tampa fechada.\n# Etapa inicial\n1. Confira o alinhamento da etiqueta.\n2. Feche a tampa.\n# Calibração\n3. Pressione Feed.\n4. Confirme se a etiqueta avançou.'}],turns:[
+ {id:'printer-negative-progress',documents:[{id:'printer',title:'Impressora de etiquetas de laboratório',article:'Antes da calibração, confirme que a impressora pertence ao laboratório de testes.\n# Etapa inicial\n1. Confira o alinhamento da etiqueta.\n2. Feche a tampa.\n# Calibração\n3. Pressione Feed.\n4. Confirme se a etiqueta avançou.'}],turns:[
   {message:'Preciso configurar uma impressora de etiquetas de laboratório',expectedDocument:'printer',context:'new'},
   {message:'não consegui',expectedDocument:'printer',context:'same',mayClarify:true},
   {message:'agora a tampa está fechada',expectedDocument:'printer',context:'same'},

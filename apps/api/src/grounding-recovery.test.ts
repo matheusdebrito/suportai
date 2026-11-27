@@ -139,3 +139,10 @@ test('guided recovery preserves headings for unmarked prose and rejects interlea
  const ambiguous={...phone,content:'1. Abra o compartimento.\nSomente se estiver desligado.\n2. Confira o visor.'};
  assert.equal(guidedGroundingFallback('configurar telefone',[ambiguous]),null);
 });
+
+
+test('fallback rejects explicitly personal credentials even if the document is published',()=>{
+ const personal={...source,content:'Configure o telefone.\nSenha pessoal: 1234.'};
+ assert.equal(literalGroundingFallback('configurar telefone',[personal]),null);
+ assert.equal(focusedGroundingFallback('Qual a senha do telefone?',[personal]),null);
+});

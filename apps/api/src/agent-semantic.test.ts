@@ -175,3 +175,12 @@ test('strict grounding contract rejects duplicate units even with valid schema',
  const result=await verifyGroundedAnswer(mockedProvider(JSON.stringify({verdict:'supported',claims:[row,row]}),[]),'procedimento','No ambiente Azul, aguarde 15 segundos. Não religue antes de conferir o visor.',[source]);
  assert.deepEqual(result,{verdict:'uncertain',reason:'claim_shape'});
 });
+
+
+test('a markdown applicability heading cannot be silently omitted as framing',async()=>{
+ const fixture=groundingCases.find(item=>item.id==='phone-fields')!;
+ const answer='# Para telefone Grandstream\n1. Consulte Status > Network Status > IPV4.';
+ const claim={unit:2,kind:'current',refs:[{evidence:1,quote:'Para telefone Grandstream, consulte Status > Network Status > IPV4.'}]};
+ const rejected=await verifyGroundedAnswer(mockedProvider(JSON.stringify({verdict:'supported',claims:[claim]}),[]),fixture.question!,answer,fixture.sources);
+ assert.notEqual(rejected.verdict,'supported');
+});

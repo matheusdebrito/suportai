@@ -20,12 +20,13 @@ const readableChecklist=(content:string)=>content
  .replace(/^\s*[-*+]\s+\[[ xX]\]\s+/gm,'- ');
 const contentLines=(content:string)=>readableChecklist(content).split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
 const hostile=/(?:ignore|desconsidere|desobede[cç]a|esque[cç]a)\s+(?:todas?\s+)?(?:as\s+|os\s+)?(?:regras|permiss[oõ]es|instru[cç][oõ]es|mensagens|restri[cç][oõ]es)|(?:prompt\s*(?:injection|do sistema)|instru[cç][aã]o[_\s-]*maliciosa|system\s*prompt|revele\s+(?:um\s+)?segredo)/i;
+const personalCredential=/\b(?:senha|password|credencial|login)\s+(?:pessoal|individual|privad[ao]|do usu[aá]rio|de outro usu[aá]rio)\b/i;
 const sensitiveRequest=/\b(?:senha|password|token|credencial|chave|segredo)\b/i;
 function eligibleSource(question:string,sources:Source[],allowGeneric=false):Source|null{
  if(sensitiveRequest.test(question)||/\b(?:anterior|antigo|hist[oó]ric[oa]|comparar|vers[oõ]es)\b/i.test(question))return null;
  const current=sources.filter(s=>!s.historical);
  if(!current.length||sources.some(s=>s.historical)||new Set(current.map(s=>s.versionId)).size!==1)return null;
- if(current.some(s=>hostile.test(s.title)||hostile.test(s.content)||hasSecrets(s.title)||hasInfrastructureSecrets(s.content)))return null;
+ if(current.some(s=>hostile.test(s.title)||hostile.test(s.content)||hasSecrets(s.title)||hasInfrastructureSecrets(s.content)||personalCredential.test(s.content)))return null;
  const terms=[...new Set(words(question).filter(w=>!common.has(w)))];
  if(!terms.length&&!allowGeneric)return null;
  // Require all specific terms in the retrieved document, and one in the title.
@@ -58,14 +59,14 @@ export function focusedGroundingFallback(question:string,sources:Source[],contex
  if(!focus||/\b(?:anterior|antigo|historico|comparar|versoes|pessoal|minha conta|meu usuario|de outro usuario)\b/.test(normalized)||hasSecrets(question))return null;
  const current=sources.filter(source=>!source.historical);
  if(!current.length||sources.some(source=>source.historical)||new Set(current.map(source=>source.versionId)).size!==1)return null;
- if(current.some(source=>hostile.test(source.title)||hostile.test(source.content)||hasSecrets(source.title)||hasInfrastructureSecrets(source.content)))return null;
+ if(current.some(source=>hostile.test(source.title)||hostile.test(source.content)||hasSecrets(source.title)||hasInfrastructureSecrets(source.content)||personalCredential.test(source.content)))return null;
  const proposed=/\bpode ser\s+([\p{L}\p{N}._-]{2,80})/iu.exec(question)?.[1];
  const proposalMatches=(text:string)=>!proposed||text.split(/[^\p{L}\p{N}._-]+/u).some(value=>value.replace(/\.$/,'')===proposed);
  const contextTerms=words(contextualQuery).filter(term=>!common.has(term)&&!['dado','configuracao','senha','usuario','login','endereco','porta','servidor','url','link','valor','codigo','caminho','menu','interface','acessar','acesso','parte','entendi','ser'].includes(term)&&term!==normal(proposed??''));
  const availableWords=words(current.map(source=>source.title+' '+source.content).join(' '));
  if(contextTerms.some(term=>!hasLexeme(availableWords,term)))return null;
  const candidates=current.flatMap(source=>source.content.split(/\r?\n|(?<=[.!?])\s+/).map(text=>({source,text:text.trim()})))
-  .filter(({text})=>text.length>=4&&text.length<=240&&new RegExp(`\\b${focus}\\b`,'i').test(text)&&proposalMatches(text)&&(focus!=='senha'||/\b(?:padr[aã]o|operacional|equipamento)\b/i.test(text))&&!/\b(?:pessoal|individual|privad[ao]|de outro usu[aá]rio)\b/i.test(text));
+  .filter(({text})=>text.length>=4&&text.length<=240&&new RegExp(`\\b${focus}\\b`,'i').test(text)&&proposalMatches(text)&&(!['senha','usuario','login'].includes(focus)||/\b(?:padr[aã]o|operacional|equipamento)\b/i.test(text))&&!/\b(?:pessoal|individual|privad[ao]|de outro usu[aá]rio)\b/i.test(text));
  const distinct=new Set(candidates.map(({text})=>text.replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/,'').trim()));
  if(distinct.size!==1)return null;
  const selected=candidates[0];

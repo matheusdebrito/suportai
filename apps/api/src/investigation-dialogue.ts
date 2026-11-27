@@ -7,7 +7,7 @@ const switchSubject=/^\s*(?:mudando de assunto|mudei de assunto|(?:um )?outro (?
 const resumeSubject=/^\s*(?:(?:vamos\s+)?(?:voltar|retomar)|voltando|volte|volta|retomando)\b\s*(?:(?:aos?|às?|para|pro|pra|sobre|no|na)(?=\s|[:;,–-]))?\s*[:;,–-]?\s*/i;
 const namedIncident=/^\s*(?:estou com |tenho |temos |há )?(?:(?:um|uma) )?(?:problema|falha|erro|incidente) (?:com|na|no|nas|nos|de|do|da|em)\s+([^,.;!?\n]+)/i;
 const observedIncident=/^\s*(?:meu|minha|nosso|nossa|o|a)\s+([^,.;!?\n]+?)\s+(?:não|parou|falhou|travou|caiu|está|ficou)(?=\s|[,.!?]|$)/i;
-const continuation=/^\s*(?:agora\b|ainda\b|continua\b|e agora\b|(?:deu|funcionou|resolveu|falhou)\b|(?:sim|não)[.!?\s]*$|(?:testei|tentei|rodei|verifiquei|executei|medi|reiniciei|acho|suspeito|notei|observei|confirmei)\b)|\b(?:isso|aquilo|esse problema|essa falha|o mesmo erro)\b/i;
+const continuation=/^\s*(?:agora\b|ainda\b|continua\b|e agora\b|(?:deu|funcionou|resolveu|falhou)\b|(?:sim|não|nao|consegui|não consegui|nao consegui|não funcionou|nao funcionou|concluí|conclui|feito)[.!?\s]*$|(?:testei|tentei|rodei|verifiquei|executei|medi|reiniciei|acho|suspeito|notei|observei|confirmei)\b)|\b(?:isso|aquilo|esse problema|essa falha|o mesmo erro)\b/i;
 
 function normalize(value:string):string{
   return value.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();

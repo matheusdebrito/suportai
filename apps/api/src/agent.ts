@@ -135,7 +135,13 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      const found=await runRead(()=>knowledgeSearch(actor,searchText,5));
      budget.recordSearch(searchText,found);
      plan.recordRead(found.length?'evidence':'empty',found.length);
-     return done({answer:found.length?'Não há modelo de IA configurado. Encontrei estes trechos relevantes no cérebro:\n\n'+found.map((s,i)=>`${i+1}. ${s.title} — ${s.content.slice(0,500)}`).join('\n\n'):'Não encontrei um procedimento confirmado no cérebro. O uso do modelo externo não está habilitado nesta instalação.',sources:found,pendingActions},found.length?'answered':'no_evidence');
+     collect(sources,found,budget.limits.maxSources);
+     if(preference==='complete'&&found.length&&new Set(found.map(s=>s.versionId)).size===1&&!found.some(s=>s.completeDocument)){
+       try{const doc=await readDocument(found[0].documentId);
+         if(doc?.versionId===found[0].versionId)collect(sources,[documentToSource(doc)],budget.limits.maxSources);
+       }catch(error){readFailure(error,true);}
+     }
+     return tryFallback('provider_failure')??done({answer:'Não há modelo de IA habilitado e não foi possível confirmar uma orientação segura para este pedido.',sources:[],pendingActions},'no_evidence');
    }catch(error){
      budget.recordSearch(searchText,null);
      const outcome=readFailure(error);
@@ -299,6 +305,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          return done({answer:'Encontrei orientações divergentes nas fontes publicadas. '+
            'Qual é o ambiente ou a versão em uso para eu identificar a orientação aplicável?',sources,pendingActions},'source_conflict');
        }
+       if(review.verdict!=='supported'&&['provider_incompatible','model_refusal','provider_error'].includes(review.reason))return fallbackReply();
        if(review.verdict!=='supported'&&!synthesisRecoveryAttempted&&budget.steps+2<=budget.limits.maxSteps&&!budget.stopCause()){
          synthesisRecoveryAttempted=true;
          // Re-search only on a potentially missing-evidence failure, once, using user context.

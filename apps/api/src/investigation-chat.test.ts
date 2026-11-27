@@ -250,7 +250,7 @@ if(!process.env.TEST_DATABASE_URL){
           if((turn.forbidden??[]).some(marker=>result.answer.includes(marker)))checks.push('forbidden_content');
           if(!observed&&!turn.mayClarify)checks.push('missing_agent_capture');
           if(turn.context==='same'&&lastId&&investigationId!==lastId)checks.push('investigation_changed');
-          if(turn.context==='new'&&lastId&&investigationId===lastId)checks.push('investigation_not_switched');
+          if(turn.context==='new'&&(!investigationId||(lastId&&investigationId===lastId)))checks.push('investigation_not_switched');
           if(turn.context==='resume'&&turn.expectedDocument&&investigationId!==investigationByDoc.get(turn.expectedDocument))checks.push('investigation_not_resumed');
           if(turn.expectedDocument&&investigationId&&!investigationByDoc.has(turn.expectedDocument))investigationByDoc.set(turn.expectedDocument,investigationId);
           if(investigationId)lastId=investigationId;
@@ -259,7 +259,7 @@ if(!process.env.TEST_DATABASE_URL){
           previous.push(result.answer);
           failures.push(...checks.map(check=>fixture.id+':'+turns.length+':'+check));
         }
-      }catch(error){failures.push(fixture.id+':'+(error instanceof Error?error.name:'error'));throw error;}
+      }catch(error){failures.push(fixture.id+':'+(error instanceof Error?error.name:'error'));}
       finally{
         episodes.push({id:fixture.id,turns});
         await app.close();
