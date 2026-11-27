@@ -135,6 +135,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      const found=await runRead(()=>knowledgeSearch(actor,searchText,5));
      budget.recordSearch(searchText,found);
      plan.recordRead(found.length?'evidence':'empty',found.length);
+     if(!found.length)return done({answer:'Não encontrei um procedimento confirmado no cérebro. O uso do modelo externo não está habilitado nesta instalação.',sources:[],pendingActions},'no_evidence');
      collect(sources,found,budget.limits.maxSources);
      if(preference==='complete'&&found.length&&new Set(found.map(s=>s.versionId)).size===1&&!found.some(s=>s.completeDocument)){
        try{const doc=await readDocument(found[0].documentId);
