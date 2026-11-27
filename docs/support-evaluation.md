@@ -30,3 +30,17 @@ CI executes the deterministic regressions; real episodes remain opt-in to avoid 
 ## Semantic architecture evaluation
 
 The production HTTP path uses `semantic_turn_v1` before retrieving the selected investigation, sharing the existing budget with tool calls and the grounding reviewer. Both opt-in HTTP runners explicitly enable this interpreter even when a capture responder is injected. The original 23 turns and the previous three supplemental turns remain intact. Two additional episodes (five turns) exercise informal intent, a subject switch without magic keywords, resumption, complete mode and a focused follow-up, for 10 episodes / 31 turns total. Reports identify the architecture and record semantic route, intent, interpreter status, observations, required selection, conflicts and clarification checks through the existing capture. The original phone baseline is unchanged. A scripted contract or green CI is not evidence of real-model semantic quality; run the opt-in suite and review the answers.
+
+## Execução automatizada no Windows
+
+Na raiz de um checkout atualizado e limpo, com Node.js 22+ e Docker Desktop em execução:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\evaluate-support.ps1 -ApproveExternalAI
+```
+
+A opção `-ApproveExternalAI` autoriza explicitamente as chamadas faturáveis da API da OpenAI com fixtures sintéticas. O script reutiliza `OPENAI_API_KEY` do ambiente ou solicita a chave uma vez, de modo oculto. Não depende de créditos do Codex. Não imprime nem versiona a chave. Usa `gpt-4.1-mini`, `text-embedding-3-small`, os limites do baseline e a política de recuperação 0,45/0,56.
+
+O script instala as dependências com `npm ci` (opcionalmente `-SkipInstall` se já instaladas), cria um contêiner PostgreSQL 17/pgvector exclusivo, com porta loopback dinâmica, aplica migrations duas vezes, executa os 10 episódios/31 turnos e os quatro casos iniciais, usa um segundo banco descartável para os 100 casos positivos e 20 casos de segurança do RAG, e compara o episódio de telefone com o baseline histórico. O banco normal e seus volumes não são utilizados. Um teste conversacional reprovado não impede as avaliações independentes restantes; erros de preparação interrompem o fluxo. Os relatórios parciais e logs são preservados, e as variáveis do processo são restauradas no `finally`. Encerramento forçado pode exigir parar manualmente o contêiner exclusivo `suportai-eval-*` daquela execução.
+
+Ao terminar, envie o ZIP `test-results/support-eval-*.zip`, contendo os relatórios, logs e `summary.json`. Código de saída 0 indica aprovação das asserções automatizadas e cobertura/comparação verificadas, **não** homologação semântica/humana nem cumprimento automático de todas as metas de qualidade; código 1 indica falha ou avaliação que exige revisão; 2 indica falta de opt-in. A suíte de segurança do RAG mede recuperação, não a síntese de todos os ataques. Nenhum merge ou deploy é realizado.

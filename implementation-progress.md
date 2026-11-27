@@ -57,6 +57,8 @@ Source of truth: melhorias.md. No merge authorized. Code first, execution of tes
 
 - Correção complementar do verificador: em modo completo, uma única revisão adicional do mesmo candidato e das mesmas evidências é permitida após erro estrutural, contabilizada no orçamento existente. Referências continuam literais e autorizadas. Uma rejeição semântica substantiva anterior bloqueia fallback estrutural posterior. Instrução de modo completo evita introduções/encerramentos que ampliam a quantidade de claims sem benefício. Testes simulados adicionados; CI e confirmação real pendentes.
 
+- Operação local: CI e auditoria do HEAD 29ef030 aprovados (345 testes, zero falhas, três opt-in ignorados, três E2E aprovados). Adicionado `scripts/evaluate-support.ps1` para executar a rodada real com uma única chamada explícita, bancos descartáveis separados e ZIP com evidências. O CI verifica sintaxe e opt-in sem chamadas externas. Execução integral do script no Windows e avaliação real permanecem pendentes.
+
 | Requirement | State | Evidence / next action |
 |---|---|---|
 | Active investigation and short follow-ups | Implemented and validated | One investigation ID remained stable across five real turns; `sim` advanced to the next documented stage |

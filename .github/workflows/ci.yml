@@ -30,6 +30,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Validate local PowerShell evaluation runner without external calls
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path scripts/evaluate-support.ps1).Path, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) { $errors | Out-String | Write-Error; exit 1 }
+          $PSNativeCommandUseErrorActionPreference = $false
+          pwsh -NoProfile -File scripts/evaluate-support.ps1
+          if ($LASTEXITCODE -ne 2) { throw 'Real evaluation must require explicit external AI opt-in' }
+          exit 0
       - run: npm ci --no-audit --no-fund
       - run: npm run db:migrate
       - run: npm run db:migrate # Deve ser idempotente sem reaplicar DDL
