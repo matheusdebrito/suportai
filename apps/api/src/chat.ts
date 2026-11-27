@@ -203,7 +203,11 @@ export function registerChat(app:FastifyInstance,runAgent:typeof respond=respond
    const lastAssistant=previous.rows[0]?.role==='assistant'?previous.rows[0].content:undefined;
    const recentForRouting=previous.rows.slice(0,8).filter((m,index,rows)=>m.investigation_id===activeId&&rows.slice(0,index).every(prior=>prior.investigation_id===activeId)).reverse()
      .map(({role,content})=>({role,content}));
-   const interpreted:SemanticTurnResult=await interpret({message:userMessage,subjects,activeId,history:recentForRouting},budget);
+   // A failed unscoped turn must not erase the last visible subject from the
+   // routing input. This is only a model hint; selection still requires an
+   // accepted decision and an authorized state read.
+   const lastKnownId=previous.rows.find(m=>m.investigation_id&&visibleIds.has(m.investigation_id))?.investigation_id??null;
+   const interpreted:SemanticTurnResult=await interpret({message:userMessage,subjects,activeId,lastKnownId,history:recentForRouting},budget);
    const semantic=interpreted.status==='accepted'?interpreted.decision:undefined;
    // The legacy classifier is only the local/offline compatibility path.
    // Do not silently choose a subject by regex after a failed model review.

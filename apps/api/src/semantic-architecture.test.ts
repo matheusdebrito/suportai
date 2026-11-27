@@ -9,6 +9,7 @@ import {applySemanticMemory,interpretSemanticTurn,parseSemanticTurn,SEMANTIC_TUR
 import {neutralQuestionCandidate,reviewDialogueReply} from './dialogue-review.js';
 import {respond} from './agent.js';
 import {verifyGroundedAnswer} from './agent-verifier.js';
+import {indexEvidenceSpans,indexedGroundingResponseFormat,parseIndexedGroundingReview,INDEXED_GROUNDING_SCHEMA_VERSION} from './grounding-contract.js';
 
 const actor:Actor={id:randomUUID(),role:'USER',auth_revision:1,must_change_password:false};
 const caseId=randomUUID();
@@ -199,16 +200,20 @@ test('complete semantic review repairs an invalid reference within the shared bu
  const calls:any[]=[];
  const result=await respond(actor,randomUUID(),'Me dê o procedimento completo do controlador Verde.',[],scripted([
   tool('search_knowledge',{query:'emitir acesso verde'}),assistant(candidate),
-  ground('Trecho que não existe.'),ground(candidate)
+  ground('Trecho que não existe.'),assistant(JSON.stringify({verdict:'supported',claims:{u1:{kind:'current',refs:['e1s1']}}}))
  ],calls),async()=>[doc],{semantic:semantic({mode:'complete',query:'emitir acesso verde'}),budget:plannedBudget(),verifyEvidence:true});
  assert.equal(result.metrics?.verifierRepairs,1);
  assert.equal(result.metrics?.verifierChecks,2);
  assert.equal(result.metrics?.steps,5);
  assert.deepEqual(result.sources.map(s=>s.versionId),[doc.versionId]);
  assert.match(result.answer,/Novo acesso temporário/);
- const reviews=calls.filter(c=>c.response_format?.json_schema?.name==='grounding_review_v1');
+ const reviews=calls.filter(c=>['grounding_review_v1',INDEXED_GROUNDING_SCHEMA_VERSION].includes(c.response_format?.json_schema?.name));
  assert.equal(reviews.length,2);
- assert.deepEqual(JSON.parse(reviews[0].messages[1].content),JSON.parse(reviews[1].messages[1].content));
+ const before=JSON.parse(reviews[0].messages[1].content),after=JSON.parse(reviews[1].messages[1].content);
+ assert.equal(after.question,before.question);
+ assert.deepEqual(after.units.map((unit:any)=>unit.text),before.units.map((unit:any)=>unit.text));
+ assert.deepEqual(after.evidence[0].spans,[{id:'e1s1',text:candidate}]);
+ assert.equal(reviews[1].response_format.json_schema.name,INDEXED_GROUNDING_SCHEMA_VERSION);
  assert.match(reviews[1].messages[0].content,/invalid_reference/);
 });
 test('a semantic rejection is not erased by a subsequent structural failure',async()=>{
@@ -216,10 +221,45 @@ test('a semantic rejection is not erased by a subsequent structural failure',asy
  const result=await respond(actor,randomUUID(),'Me dê o procedimento completo do controlador Verde.',[],scripted([
   tool('search_knowledge',{query:'emitir acesso verde'}),assistant('Use uma operação não confirmada.'),
   assistant(JSON.stringify({verdict:'unsupported',claims:[]})),
-  assistant(green.content),ground('Trecho que não existe.'),ground('Trecho que também não existe.')
+  assistant(green.content),ground('Trecho que não existe.'),assistant(JSON.stringify({verdict:'supported',claims:{u1:{kind:'current',refs:['invented']}}}))
  ]),async()=>[doc],{semantic:semantic({mode:'complete',query:'emitir acesso verde'}),budget:plannedBudget(),verifyEvidence:true});
  assert.equal(result.metrics?.verifierRepairs,1);
  assert.equal(result.metrics?.literalFallbacks,0);
  assert.deepEqual(result.sources,[]);
  assert.equal(result.metrics?.stopReason,'unsafe_answer');
+});
+
+test('indexed grounding requires every unit and only exact server-generated evidence IDs',()=>{
+ const passages=[{text:'Somente no ambiente Verde.\nAbra o painel.\nConsulte o inventário.'},{text:'Somente no ambiente Azul.\nAbra a área Visitantes.'}];
+ const spans=indexEvidenceSpans(passages);
+ assert.ok(spans.every(span=>passages[span.evidence-1].text.includes(span.quote)&&span.quote.length<=240));
+ assert.deepEqual(indexedGroundingResponseFormat(2).json_schema.schema.properties.claims.anyOf[0],{
+  type:'object',additionalProperties:false,required:['u1','u2'],properties:{u1:{$ref:'#/$defs/claim'},u2:{$ref:'#/$defs/claim'}}
+ });
+ const good={verdict:'supported',claims:{u1:{kind:'current',refs:['e1s1','e1s2']},u2:{kind:'current',refs:['e1s3']}}};
+ assert.deepEqual(parseIndexedGroundingReview(good,2,spans)?.claims[1],{unit:2,kind:'current',refs:[{evidence:1,quote:'Consulte o inventário.'}]});
+ assert.equal(parseIndexedGroundingReview({verdict:'supported',claims:{u1:good.claims.u1}},2,spans),null);
+ assert.equal(parseIndexedGroundingReview({verdict:'supported',claims:{...good.claims,u2:{kind:'current',refs:['invented']}}},2,spans),null);
+ assert.equal(parseIndexedGroundingReview({verdict:'conflict',claims:good.claims},2,spans),null);
+ assert.deepEqual(parseIndexedGroundingReview({verdict:'conflict',claims:null},2,spans),{verdict:'conflict',claims:[]});
+ const long='condição de teste '.repeat(100);
+ const chunks=indexEvidenceSpans([{text:long}]);
+ assert.ok(chunks.length>1&&chunks.every(span=>long.includes(span.quote)&&span.quote.length<=240));
+});
+test('indexed grounding still rejects a reference to an unselected competing source',async()=>{
+ const candidate=green.content;
+ const response=assistant(JSON.stringify({verdict:'supported',claims:{u1:{kind:'current',refs:['e2s1']}}}));
+ const result=await verifyGroundedAnswer(scripted([response]),message,candidate,[green,blue],1000,1000,undefined,{versionIds:[green.versionId],sufficiency:'sufficient'},undefined,'claim_shape');
+ assert.deepEqual(result,{verdict:'unsupported',reason:'selection_mismatch'});
+});
+test('semantic interpreter repairs an invalid decision within the shared budget without accepting unknown IDs',async()=>{
+ const calls:any[]=[];
+ const budget=new AgentBudget();
+ const invalid=semantic({investigationId:randomUUID()});
+ const result=await interpretSemanticTurn(scripted([assistant(JSON.stringify(invalid)),assistant(JSON.stringify(semantic()))],calls),input,budget);
+ assert.deepEqual(result,{status:'accepted',decision:semantic()});
+ assert.equal(budget.steps,2);
+ assert.match(calls[1].messages[0].content,/rejeitada pelo contrato/);
+ const rejected=await interpretSemanticTurn(scripted([assistant(JSON.stringify(invalid)),assistant(JSON.stringify(invalid))]),input,new AgentBudget());
+ assert.deepEqual(rejected,{status:'invalid'});
 });

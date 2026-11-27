@@ -61,9 +61,10 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  const preference=semantic?(requestsSupportMode(userMessage)?localPreference:semanticPreference(semantic,options.investigation)):localPreference;
  const focused=semantic?semantic.focused||isFocusedKnowledgeQuestion(userMessage):isFocusedKnowledgeQuestion(userMessage);
  const focusedAnswerPolicy=focused
-  ? '\nPEDIDO PONTUAL: responda apenas ao dado solicitado na mensagem mais recente, em uma ou duas frases naturais. Não recapitule o artigo ou o procedimento, não use títulos e não explique que consultou uma fonte.'
+  ? '\nPEDIDO PONTUAL: responda apenas ao dado solicitado na mensagem mais recente, em uma ou duas frases naturais. Não recapitule o artigo ou o procedimento, não use títulos, não acrescente ofertas genéricas de ajuda ou perguntas de progresso e não explique que consultou uma fonte.'
   : '';
  const responseContract=SUPPORT_POLICY+'\nMODO ATUAL: '+preference+focusedAnswerPolicy+
+  (preference!=='complete'&&!focused?'\nCONTINUIDADE: em pedido aberto de ajuda com configuração, comece pela primeira etapa útil e pergunte pelo resultado concreto, não por uma oferta genérica de ajuda. Em resposta afirmativa a uma oferta de ajuda, comece a orientação; em confirmação de uma etapa, avance somente quando o relato confirmar o resultado. Não repita o manual ou a pergunta anterior.':'')+
   (preference==='complete'&&!focused?'\nMODO COMPLETO: entregue os passos documentados com suas condições, em ordem. Evite introduções e encerramentos genéricos, promessas de ajuda ou perguntas de progresso. Não acrescente ações implícitas; se faltar uma condição de aplicabilidade ou parte do procedimento, indique a lacuna em vez de apresentar a resposta como completa.':'');
  const verificationContext=semantic?JSON.stringify({message:userMessage,query:contextualQuery,decision:semanticContext(semantic),
    reportedHistory:history.filter(m=>m.role==='user'&&!hasSecrets(m.content)&&!hasInfrastructureSecrets(m.content)).slice(-6).map(m=>m.content.slice(0,400)),
@@ -405,7 +406,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
        };
        let review=await runVerifier();
        if(!review)return budgetReply(budget.stopCause()??'token_budget');
-       if(semantic&&preference==='complete'&&review.verdict!=='supported'&&review.verdict!=='conflict'&&
+       if(semantic&&review.verdict!=='supported'&&review.verdict!=='conflict'&&
           ['claim_shape','invalid_reference','missing_reference','schema_invalid','invalid_json'].includes(review.reason)&&
           verifierRepairs===0&&!budget.stopCause()){
          const repaired=await runVerifier(review.reason);
