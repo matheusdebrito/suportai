@@ -1,0 +1,720 @@
+{
+  "pilot": [
+    {
+      "policy": {
+        "semanticMinimum": 0.56,
+        "diversityPenalty": 0.18,
+        "lexicalMinimum": 0
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.5,
+        "diversityPenalty": 0.12,
+        "lexicalMinimum": 0
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.5,
+        "diversityPenalty": 0.12,
+        "lexicalMinimum": 0.1
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.5,
+        "diversityPenalty": 0.12,
+        "lexicalMinimum": 0.25
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.5,
+        "diversityPenalty": 0.18,
+        "lexicalMinimum": 0
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.5,
+        "diversityPenalty": 0.18,
+        "lexicalMinimum": 0.1
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.5,
+        "diversityPenalty": 0.18,
+        "lexicalMinimum": 0.25
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.5,
+        "diversityPenalty": 0.24,
+        "lexicalMinimum": 0
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.5,
+        "diversityPenalty": 0.24,
+        "lexicalMinimum": 0.1
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.5,
+        "diversityPenalty": 0.24,
+        "lexicalMinimum": 0.25
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.6,
+        "diversityPenalty": 0.12,
+        "lexicalMinimum": 0
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.6,
+        "diversityPenalty": 0.12,
+        "lexicalMinimum": 0.1
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.6,
+        "diversityPenalty": 0.12,
+        "lexicalMinimum": 0.25
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.6,
+        "diversityPenalty": 0.18,
+        "lexicalMinimum": 0
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.6,
+        "diversityPenalty": 0.18,
+        "lexicalMinimum": 0.1
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.6,
+        "diversityPenalty": 0.18,
+        "lexicalMinimum": 0.25
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.6,
+        "diversityPenalty": 0.24,
+        "lexicalMinimum": 0
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.6,
+        "diversityPenalty": 0.24,
+        "lexicalMinimum": 0.1
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.6,
+        "diversityPenalty": 0.24,
+        "lexicalMinimum": 0.25
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.65,
+        "diversityPenalty": 0.12,
+        "lexicalMinimum": 0
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.65,
+        "diversityPenalty": 0.12,
+        "lexicalMinimum": 0.1
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.65,
+        "diversityPenalty": 0.12,
+        "lexicalMinimum": 0.25
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.65,
+        "diversityPenalty": 0.18,
+        "lexicalMinimum": 0
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.65,
+        "diversityPenalty": 0.18,
+        "lexicalMinimum": 0.1
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.65,
+        "diversityPenalty": 0.18,
+        "lexicalMinimum": 0.25
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.65,
+        "diversityPenalty": 0.24,
+        "lexicalMinimum": 0
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.65,
+        "diversityPenalty": 0.24,
+        "lexicalMinimum": 0.1
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    },
+    {
+      "policy": {
+        "semanticMinimum": 0.65,
+        "diversityPenalty": 0.24,
+        "lexicalMinimum": 0.25
+      },
+      "rows": [
+        {
+          "id": "phone",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        },
+        {
+          "id": "printer",
+          "recall": 1,
+          "precision": 1,
+          "mrr": 1
+        }
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1
+    }
+  ],
+  "selected": {
+    "semanticMinimum": 0.56,
+    "diversityPenalty": 0.18,
+    "lexicalMinimum": 0
+  },
+  "holdout": {
+    "rows": [
+      {
+        "id": "wifi",
+        "recall": 1,
+        "precision": 1,
+        "mrr": 1
+      },
+      {
+        "id": "scanner",
+        "recall": 1,
+        "precision": 1,
+        "mrr": 1
+      }
+    ],
+    "recall": 1,
+    "precision": 1,
+    "mrr": 1
+  },
+  "baseline": {
+    "rows": [
+      {
+        "id": "wifi",
+        "recall": 1,
+        "precision": 1,
+        "mrr": 1
+      },
+      {
+        "id": "scanner",
+        "recall": 1,
+        "precision": 1,
+        "mrr": 1
+      }
+    ],
+    "recall": 1,
+    "precision": 1,
+    "mrr": 1
+  },
+  "applied": false
+}

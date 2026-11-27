@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "mode": "real-http",
+  "model": "gpt-4.1-mini",
+  "embeddingModel": "text-embedding-3-small",
+  "temperature": 0.2,
+  "limits": {
+    "maxSteps": 8,
+    "maxSearches": 5,
+    "maxToolsPerStep": 4,
+    "maxSources": 12,
+    "maxElapsedMs": 60000,
+    "maxTokensPerCall": 1800,
+    "maxCompletionTokens": 9000,
+    "maxTotalTokens": 40000,
+    "maxRepeatedSearches": 2,
+    "maxSearchFailures": 2
+  },
+  "corpusHash": "669005f2f335bfe15218a29ac29a3c8b5a55cb9edcb3d67343db9b82f4657e43",
+  "commit": "036f2fa7f64ce1204ccdd5af0a3042d1d55554a6",
+  "reportHash": "0f4544d746134a014086217ba67ac815230b8c74abef7f2c8c32258df42606c6",
+  "summary": {
+    "turns": 5,
+    "episodes": 1,
+    "continuity": 1,
+    "falseAcceptances": 0,
+    "falseRejections": 0,
+    "degradedFallbacks": 0,
+    "unnecessaryWarnings": 0,
+    "repeatedQuestions": 0,
+    "unauthorizedSources": 0,
+    "secretLeaks": 0,
+    "indirectAnswers": 0,
+    "inappropriateSteps": 0,
+    "incompleteProcedures": 0
+  },
+  "criteriaMet": true
+}

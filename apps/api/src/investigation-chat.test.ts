@@ -173,7 +173,7 @@ if(!process.env.TEST_DATABASE_URL){
       const embedding=await embedText(article);
       assert.ok(embedding,'Real evaluation requires fixture embedding');
       await query('INSERT INTO knowledge_chunks(version_id,ordinal,content,embedding) VALUES($1,0,$2,$3::vector)',[source.version,article,JSON.stringify(embedding)]);
-      
+
       const conversation=await openConversation(app,headers);
       const retrieved=await searchKnowledge(actor,'configurar telefone de laboratório');
       const ranking=retrievalMetrics([source.version],retrieved.map(x=>x.versionId));
