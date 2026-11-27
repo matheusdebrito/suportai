@@ -26,6 +26,15 @@ test('literal fallback cannot select irrelevant, conflicting, historical or host
  assert.equal(literalGroundingFallback('qual a senha do telefone',[source]),null);
  assert.equal(literalGroundingFallback('telefone',[{...source,ordinal:3}]),null);
 });
+test('literal fallback matches Portuguese inflection and formats an inline RIS checklist',()=>{
+ const ris={...source,title:'Habilitar Alteração de guia',content:'Para habilitar a alteração de guia no RIS - [ ] pesquisar o paciente - [ ] engrenagem - [ ] cadastros - [ ] convênio'};
+ const fallback=literalGroundingFallback('como eu habilito uma guia no ris?', [ris]);
+ assert.ok(fallback);
+ assert.match(fallback.answer,/Habilitar Alteração de guia/);
+ assert.match(fallback.answer,/\n- pesquisar o paciente\n- engrenagem\n- cadastros\n- convênio/);
+ assert.deepEqual(fallback.sources[0].excerpts,[ris.content]);
+ assert.equal(literalGroundingFallback('como habilito uma guia no ERP?', [ris]),null);
+});
 test('focused fallback returns only an exact authorized operational value',()=>{
  const focused=focusedGroundingFallback('A senha pode ser admin?', [{...source,content:'3. Use a senha padrão admin.\n4. Account Active: YES'}]);
  assert.ok(focused);
@@ -47,6 +56,14 @@ test('guided fallback turns only the first documented stage into a short interac
  assert.ok(next);
  assert.match(next.answer,/Account Active|SIP Server/);
  assert.doesNotMatch(next.answer,/Segure o botão central|Network Status/);
+});
+test('guided fallback recognizes inline task-list markers as separate stages',()=>{
+ const ris={...source,title:'Habilitar Alteração de guia',content:'Para habilitar a alteração de guia no RIS - [ ] pesquisar o paciente - [ ] engrenagem - [ ] cadastros - [ ] convênio'};
+ const guided=guidedGroundingFallback('como eu habilito uma guia no ris?', [ris]);
+ assert.ok(guided);
+ assert.match(guided.answer,/pesquisar o paciente/);
+ assert.match(guided.answer,/engrenagem/);
+ assert.doesNotMatch(guided.answer,/cadastros|convênio/);
 });
 test('complete fallback formats every documented stage without a raw-article preamble',()=>{
  const phone={...source,title:'Configurar telefone',content:'# Ver o IP\n- Segurar o botão central.\n- Status > Network Status > IPV4\n# Configurar SIP\n- Acessar ACCOUNTS > GENERAL SETTINGS\n- Account Active: YES'};

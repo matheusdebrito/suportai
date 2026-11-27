@@ -127,6 +127,24 @@ test('rejected synthesis never leaks invented instructions and falls back to an 
  assert.doesNotMatch(result.answer,/Reinicie o serviço antes/i);
  assert.equal(calls[2].response_format.type,'json_object');
 });
+test('RIS how-to recovers an authorized inline checklist after verifier rejection',async()=>{
+ const ris:Source={...source,title:'Habilitar Alteração de guia',
+  content:'Para habilitar a alteração de guia no RIS - [ ] pesquisar o paciente - [ ] engrenagem - [ ] cadastros - [ ] convênio'};
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'habilitar guia RIS'},'q')]},
+  {role:'assistant',content:'Altere uma configuração não documentada.'},
+  {role:'assistant',content:'{"verdict":"unsupported"}'},
+  {role:'assistant',content:'Use outro sistema.'},
+  {role:'assistant',content:'{"verdict":"unsupported"}'}
+ ],[]);
+ const result=await respond(actor,randomUUID(),'como eu habilito uma guia no ris?',[],model,async()=>[ris],{verifyEvidence:true});
+ assert.equal(result.metrics?.stopReason,'answered');
+ assert.equal(result.metrics?.literalFallbacks,1);
+ assert.equal(result.sources[0]?.versionId,ris.versionId);
+ assert.match(result.answer,/Habilitar Alteração de guia/);
+ assert.match(result.answer,/\n- pesquisar o paciente\n- engrenagem\n- cadastros\n- convênio/);
+ assert.doesNotMatch(result.answer,/configuração não documentada|outro sistema/);
+});
 test('independent verifier accepts a grounded answer when supported',async()=>{
  const calls:any[]=[];
  const model=scripted([

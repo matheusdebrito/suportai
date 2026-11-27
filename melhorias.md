@@ -104,6 +104,56 @@ Registrar separadamente:
 - unidades não factuais removidas;
 - respostas que receberam aviso parcial sem necessidade.
 
+### Tornar o contrato do verificador estrito com Structured Outputs
+
+O verificador atualmente solicita um objeto JSON, mas um JSON sintaticamente válido ainda pode omitir unidades, repetir índices ou devolver campos incompatíveis com o contrato. Isso produz `claim_shape` mesmo quando a resposta textual pode estar correta. Trocar o formato livre por Structured Outputs com JSON Schema estrito, sem transformar o modelo em autoridade sobre acesso ou publicação.
+
+Passos de implementação:
+
+1. definir um schema versionado para o resultado do verificador, com `additionalProperties: false` em todos os objetos;
+2. restringir `verdict` aos valores `supported`, `unsupported`, `uncertain` e `conflict`;
+3. quando o veredito for `supported`, exigir `claims` como array de objetos com `unit`, `kind` e `refs`, usando enums fechados e tipos explícitos;
+4. restringir cada referência a `evidence` e `quote`, mantendo os limites de quantidade e tamanho também na validação do backend;
+5. enviar o schema com modo estrito pela API do provedor, em vez de depender apenas de `response_format: {type: "json_object"}`;
+6. manter a validação local após a resposta: conferir intervalo e unicidade de `unit`, existência literal de `quote`, autorização, versão, escopo e dependências procedurais;
+7. classificar separadamente recusa do modelo, interrupção, incompatibilidade do provedor, schema inválido e falha de transporte, sem registrar resposta, prompt ou trechos;
+8. adicionar testes simulados para campos extras, enum inválido, unidade duplicada, referência inexistente, array incompleto e resposta recusada;
+9. executar o corpus episódico com modelo real e comparar `claim_shape`, falsos bloqueios, latência e tokens com o baseline anterior;
+10. manter compatibilidade explícita por modelo: se um modelo configurado não suportar Structured Outputs estrito, falhar de forma controlada e acionar o fallback, sem reduzir silenciosamente o contrato para JSON livre.
+
+Critérios de aceitação:
+
+- nenhuma resposta fora do schema chega à lógica de grounding como se fosse válida;
+- zero `claim_shape` causado apenas por JSON malformado ou campos livres nos cenários sintéticos revisados;
+- uma resposta estruturalmente válida ainda é rejeitada quando a evidência, autorização, versão ou dependência procedural estiver incorreta;
+- métricas distinguem erro estrutural do provedor de afirmação semanticamente não suportada;
+- nenhum conteúdo sensível é incluído em logs de erro ou telemetria.
+
+### Preservar fallback determinístico quando o provedor falhar
+
+Structured Outputs reduz variações de formato, mas não elimina timeout, indisponibilidade, recusa, interrupção ou respostas semanticamente insuficientes. O fallback deve continuar independente do modelo e devolver somente conteúdo vigente, publicado e autorizado.
+
+Passos de implementação:
+
+1. centralizar os motivos que podem acionar fallback: `provider_error`, `invalid_json`, erro de schema, `model_interrupted`, `model_uncertain`, rejeição após a tentativa limitada de reescrita e orçamento esgotado;
+2. exigir uma única versão vigente e autorizada, sem combinar documentos, versões históricas ou fontes conflitantes;
+3. preservar as verificações contra prompt injection, segredos de infraestrutura e trechos revogados antes de montar a resposta;
+4. usar correspondência lexical conservadora com normalização de acentos e flexões comuns do português, sem aceitar uma fonte apenas por similaridade semântica;
+5. reconhecer listas numeradas, bullets e task lists Markdown, inclusive marcadores `- [ ]` armazenados na mesma linha, preservando a ordem e os valores técnicos;
+6. manter respostas específicas por modo: próxima etapa curta no modo `guided`, documento completo somente no modo `complete` e trecho atribuído no modo `adaptive`;
+7. não remover pré-requisitos nem apresentar o restante de um procedimento quando a fonte estiver truncada;
+8. registrar somente código do motivo, contagens e uso do fallback, sem registrar pergunta, resposta ou conteúdo recuperado;
+9. adicionar regressões com variações linguísticas como `habilito`/`habilitar`, termos de domínio como `guia` e uma fonte próxima porém incompatível, como RIS versus ERP;
+10. testar o caminho completo em que a recuperação encontra a fonte, o verificador falha e o fallback ainda entrega uma orientação segura e citada.
+
+Critérios de aceitação:
+
+- falha do provedor não resulta em orientação inventada nem em fonte não autorizada;
+- quando existir uma única fonte aplicável e segura, o usuário recebe conteúdo útil em vez de uma mensagem genérica;
+- uma mudança de sistema, equipamento ou ambiente continua bloqueando uma fonte apenas lexicalmente parecida;
+- o fallback nunca mistura versões, não expõe segredos e mantém valores e ordem do procedimento;
+- a telemetria permite medir quantas respostas dependeram do fallback e por qual classe de falha.
+
 ## P2 — Recuperação RAG
 
 ### Chunking estrutural
@@ -194,11 +244,13 @@ Também é necessário:
 2. criar o teste episódico do telefone pelo fluxo HTTP;
 3. substituir a consulta contextual concatenada por uma consulta estruturada;
 4. separar `nonclaim` de `unsupported` no verificador;
-5. alinhar o registro de configuração do avaliador com a execução real;
-6. adicionar métricas de naturalidade, repetição e fallback;
-7. implementar chunking estrutural e expansão de vizinhos;
-8. executar avaliação autorizada com modelo real e revisão humana;
-9. calibrar limites, ranking e orçamentos usando os resultados medidos.
+5. migrar o verificador para Structured Outputs com JSON Schema estrito;
+6. consolidar e testar o fallback determinístico para falhas do provedor e do verificador;
+7. alinhar o registro de configuração do avaliador com a execução real;
+8. adicionar métricas de naturalidade, repetição e fallback;
+9. implementar chunking estrutural e expansão de vizinhos;
+10. executar avaliação autorizada com modelo real e revisão humana;
+11. calibrar limites, ranking e orçamentos usando os resultados medidos.
 
 ## Critérios de sucesso
 
@@ -208,6 +260,8 @@ Também é necessário:
 - nenhuma fonte inacessível ou revogada na resposta final;
 - zero vazamento de credenciais pessoais, tokens ou chaves;
 - redução mensurável de falsos bloqueios do verificador;
+- ausência de `claim_shape` causado por saída livre quando o modelo configurado suportar schema estrito;
+- fallback seguro e útil para falha, recusa, interrupção ou saída inválida do provedor;
 - respostas pontuais curtas e procedimentos completos entregues conforme o modo solicitado;
 - ausência de artigo bruto, Markdown escapado e boilerplate interno na interface;
 - baseline reproduzível por modelo, configuração e conjunto de casos.
