@@ -2,15 +2,16 @@ import type OpenAI from 'openai';
 import type {Source} from './retrieval.js';
 import {unsupportedNetworkLiterals,unsupportedNumbers,unsupportedConfigurationField} from './answer-evidence.js';
 import {safeProgressQuestion} from './support-dialogue.js';
+import {sameDocumentedStatement,type EntailmentUnit} from './grounding-entailment.js';
 import {neutralQuestionCandidate} from './dialogue-review.js';
 import {orderKnowledgeEvidence,type KnowledgeSelection} from './knowledge-selection.js';
 import {sourceAlignedProcedureCandidate,sourceAlignedProcedureSource} from './grounding-fallback.js';
 import {GROUNDING_RESPONSE_FORMAT,parseGroundingReview,incompatibleStructuredOutput,indexEvidenceSpans,indexedGroundingResponseFormat,parseIndexedGroundingReview,SOURCE_ALIGNED_REVIEW_FORMAT,parseSourceAlignedReview,type GroundingClaim,type GroundingReviewIssue} from './grounding-contract.js';
 
-export type GroundingFailure='no_current_evidence'|'answer_limit'|'injected_directive'|'fabricated_citation'|'unit_limit'|'claim_shape'|'missing_reference'|'invalid_reference'|'historical_mismatch'|'unsupported_literal'|'invalid_question'|'no_supported_claim'|'model_rejected'|'model_uncertain'|'conflicting_evidence'|'provider_error'|'invalid_json'|'schema_invalid'|'provider_incompatible'|'model_refusal'|'model_interrupted'|'selection_mismatch'|'incomplete_procedure';
+export type GroundingFailure='no_current_evidence'|'answer_limit'|'injected_directive'|'fabricated_citation'|'unit_limit'|'claim_shape'|'missing_reference'|'invalid_reference'|'historical_mismatch'|'unsupported_literal'|'invalid_question'|'no_supported_claim'|'model_rejected'|'model_uncertain'|'conflicting_evidence'|'provider_error'|'invalid_json'|'schema_invalid'|'provider_incompatible'|'model_refusal'|'model_interrupted'|'selection_mismatch'|'incomplete_procedure'|'entailment_rejected'|'entailment_unavailable';
 export type GroundingResult={verdict:'supported';answer:string;sources:Source[];nonclaimsRemoved?:number;unsupportedUnits?:number;clarification?:true;completeProcedureVerified?:true}|
  {verdict:'unsupported'|'uncertain'|'conflict';reason:GroundingFailure;issue?:GroundingReviewIssue};
-export type VerificationTrace={contract?:string;providerVerdict?:'supported'|'unsupported'|'uncertain'|'conflict';coverage?:'complete'|'partial'|'not_applicable';providerIssue?:GroundingReviewIssue;localFailure?:GroundingFailure;unsupportedUnits?:number;allFullDocumentsRead?:boolean;allFullDocumentsCited?:boolean};
+export type VerificationTrace={contract?:string;providerVerdict?:'supported'|'unsupported'|'uncertain'|'conflict';coverage?:'complete'|'partial'|'not_applicable';providerIssue?:GroundingReviewIssue;localFailure?:GroundingFailure;unsupportedUnits?:number;allFullDocumentsRead?:boolean;allFullDocumentsCited?:boolean;entailmentRejectedUnits?:number};
 const rejected=(reason:GroundingFailure,verdict:'unsupported'|'uncertain'|'conflict'='unsupported',issue?:GroundingReviewIssue):GroundingResult=>({verdict,reason,...(issue&&issue!=='none'?{issue}:{})});
 type Passage={source:Source;text:string};
 const segmenter=new Intl.Segmenter('pt-BR',{granularity:'sentence'});
@@ -19,7 +20,7 @@ const currentWording=/\b(?:vigente|atual)\b/i;
 const injectedDirective=/\b(?:ignore|desconsidere)\s+(?:(?:todas?\s+)?as\s+)?(?:regras|permissões|instruções)\b/i;
 const safeNonclaim=(text:string)=>/^(?:(?:#{1,6}\s+)?(?:configuração|configuracao|procedimento|passos|passo a passo|orientações|orientacoes|instruções|instrucoes)[:.]?|(?:claro|certo|vamos por etapas|vamos lá|vamos la)[.!:]?|primeiro,?\s+faça o seguinte[:.]?|(?:passo a passo|procedimento|orientações|orientacoes)(?: completo| completa)?[:.]?)$/i.test(text.trim());
 
-function reviewClaims(question:string,answer:string,units:{text:string;end:number}[],passages:Passage[],claims:GroundingClaim[],selection?:KnowledgeSelection):GroundingResult{
+function reviewClaims(question:string,answer:string,units:{text:string;end:number}[],passages:Passage[],claims:GroundingClaim[],selection?:KnowledgeSelection,entailmentUnits?:EntailmentUnit[]):GroundingResult{
  if(!Array.isArray(claims)||claims.length>units.length)return rejected('claim_shape','uncertain');
  const byUnit=new Map<number,GroundingClaim>();
  for(const claim of claims){
@@ -83,6 +84,10 @@ function reviewClaims(question:string,answer:string,units:{text:string;end:numbe
      unsupportedNumbers(measurable,references.map(ref=>ref.quote))||
      unsupportedConfigurationField(unit.text,references.map(ref=>ref.quote)))return rejected('unsupported_literal');
 
+  // A valid reference and matching numbers do not prove the full claim.
+  // Hand nonliteral statements to a separate, bounded entailment review.
+  if(entailmentUnits&&!references.some(ref=>sameDocumentedStatement(unit.text,ref.quote)))
+   entailmentUnits.push({unit:index+1,statement:unit.text,quotes:references.map(ref=>ref.quote)});
   const labels=new Set<number>();
   for(const ref of references){
    let citation=cited.get(ref.id);
@@ -132,7 +137,7 @@ export function splitGroundingUnits(answer:string):{text:string;end:number}[]{
 
 /** Separate semantic review. The server constructs citations only from exact excerpts of supplied sources. */
 export async function verifyGroundedAnswer(
- provider:OpenAI,question:string,answer:string,sources:Source[],timeoutMs=10_000,maxTokens=1_600,onUsage?:(usage:{prompt_tokens?:number|null;completion_tokens?:number|null}|undefined)=>void,selection?:KnowledgeSelection,conversationContext?:string,repairReason?:GroundingFailure,requireComplete=false,onTrace?:(trace:VerificationTrace)=>void
+ provider:OpenAI,question:string,answer:string,sources:Source[],timeoutMs=10_000,maxTokens=1_600,onUsage?:(usage:{prompt_tokens?:number|null;completion_tokens?:number|null}|undefined)=>void,selection?:KnowledgeSelection,conversationContext?:string,repairReason?:GroundingFailure,requireComplete=false,onTrace?:(trace:VerificationTrace)=>void,onEntailment?:(units:readonly EntailmentUnit[])=>void
 ):Promise<GroundingResult>{
  if(!sources.some(source=>!source.historical))return rejected('no_current_evidence');
  if(answer.length>3500)return rejected('answer_limit');
@@ -174,17 +179,18 @@ export async function verifyGroundedAnswer(
   if(parsed.verdict==='conflict')return rejected('conflicting_evidence','conflict',parsed.issue);
   if(parsed.verdict==='unsupported')return rejected('model_rejected','unsupported',parsed.issue);
   if(parsed.verdict!=='supported')return rejected('model_uncertain','uncertain',parsed.issue);
-  const reviewed=reviewClaims(question,answer,units,passages,parsed.claims,selection);
+  const entailmentUnits:EntailmentUnit[]=[];
+  const reviewed=reviewClaims(question,answer,units,passages,parsed.claims,selection,onEntailment?entailmentUnits:undefined);
   if(reviewed.verdict!=='supported'){
    onTrace?.({localFailure:reviewed.reason});
    return requireComplete&&reviewed.reason==='model_rejected'?rejected('model_rejected','unsupported','unsupported_content'):reviewed;
   }
   onTrace?.({unsupportedUnits:reviewed.unsupportedUnits});
-  if(!requireComplete||reviewed.clarification)return reviewed;
+  if(!requireComplete||reviewed.clarification){onEntailment?.(entailmentUnits);return reviewed;}
   // A proposed partial selection never bypasses the coverage-aware contract.
   // A genuinely grounded partial answer may still be delivered with a clear
   // disclaimer, but cannot be marked as a complete procedure.
-  if(selection?.sufficiency==='partial'&&parsed.coverage==='partial'&&parsed.issue==='missing_coverage'&&!reviewed.unsupportedUnits)return reviewed;
+  if(selection?.sufficiency==='partial'&&parsed.coverage==='partial'&&parsed.issue==='missing_coverage'&&!reviewed.unsupportedUnits){onEntailment?.(entailmentUnits);return reviewed;}
   // Coverage is an independent semantic judgment, plus a deterministic
   // requirement that each cited current version was actually read in full.
   const citedCurrent=reviewed.sources.filter(source=>!source.historical);
@@ -196,6 +202,7 @@ export async function verifyGroundedAnswer(
    onTrace?.({localFailure:'incomplete_procedure'});
    return rejected('incomplete_procedure','unsupported','missing_coverage');
   }
+  onEntailment?.(entailmentUnits);
   return {...reviewed,completeProcedureVerified:true};
  }catch(error){return rejected(incompatibleStructuredOutput(error)?'provider_incompatible':'provider_error','uncertain');}
 }

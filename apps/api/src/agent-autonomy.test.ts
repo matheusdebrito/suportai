@@ -294,11 +294,12 @@ test('focused password follow-up receives an explicit natural concise-answer pol
  const calls:any[]=[];
  const model=scripted([
   {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'senha interface telefone'},'q')]},
-  {role:'assistant',content:'Tente primeiro fixture-primary; se não funcionar, use admin. O usuário é admin.'},
+  {role:'assistant',content:'As opções de senha são fixture-primary ou admin. O usuário é admin.'},
   {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[
    {unit:1,kind:'current',refs:[{evidence:1,quote:'As senhas documentadas são fixture-primary ou admin.'}]},
    {unit:2,kind:'current',refs:[{evidence:1,quote:'Na interface web, use o usuário admin.'}]}
-  ]})}
+  ]})},
+  {role:'assistant',content:JSON.stringify({u1:'entailed',u2:'entailed'})}
  ],calls);
  const result=await respond(actor,randomUUID(),'Qual a senha para acessar a interface do telefone?',[
   {role:'user',content:'Preciso configurar um telefone.'},

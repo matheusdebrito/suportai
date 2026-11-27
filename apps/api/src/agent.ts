@@ -9,6 +9,7 @@ import {getPublishedDocument,getVisibleDocumentVersions,documentToSource,validDo
 import {reviewDraftIntent} from './agent-intent.js';
 import {splitGroundingUnits,verifyGroundedAnswer,verifySourceAlignedProcedure,type GroundingFailure,type VerificationTrace,type GroundingResult} from './agent-verifier.js';
 import type {GroundingReviewIssue} from './grounding-contract.js';
+import {reviewEntailment,type EntailmentUnit} from './grounding-entailment.js';
 import {accessNoteGroundingFallback,completeGroundingFallback,confirmedGuidance,focusedGroundingFallback,guidedGroundingFallback,literalGroundingFallback,semanticEvidenceFallback,sourceAlignedProcedureCandidate} from './grounding-fallback.js';
 import {isFocusedKnowledgeQuestion,lastProgressQuestion,requestsSupportMode,supportPreference,supportContext,structuredSupportQuery,SUPPORT_POLICY} from './support-dialogue.js';
 import {shouldForceKnowledgeLookup,groundedReply} from './llm-policy.js';
@@ -57,7 +58,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  // Semantic intent guides the model, but cannot authorize an unsourced reply.
  const plan=new InvestigationPlan(userMessage,semantic?semantic.intent!=='social':shouldForceKnowledgeLookup(userMessage)||shouldForceKnowledgeLookup(contextualQuery),options.investigation?.hypotheses);
  const shouldVerify=Boolean(options.verifyEvidence||(provider===client&&client!==null));
- let verifierChecks=0,verifierRejections=0,verifierRepairs=0,sourceAlignedReviews=0,recoverySearches=0,literalFallbacks=0,adaptiveRewrites=0,nonclaimsRemoved=0,unsupportedUnits=0;
+ let verifierChecks=0,verifierRejections=0,verifierRepairs=0,sourceAlignedReviews=0,entailmentChecks=0,entailmentRejections=0,recoverySearches=0,literalFallbacks=0,adaptiveRewrites=0,nonclaimsRemoved=0,unsupportedUnits=0;
  const localPreference=supportPreference(userMessage,history,options.investigation?.supportPreference);
  const preference=semantic?(requestsSupportMode(userMessage)?localPreference:semanticPreference(semantic,options.investigation)):localPreference;
  const explicitComplete=requestsSupportMode(userMessage)&&localPreference==='complete'||semantic?.mode==='complete'&&!isFocusedKnowledgeQuestion(userMessage);
@@ -75,11 +76,11 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  const verifierFailures:Partial<Record<GroundingFailure,number>>={};
  let fallbackReason:GroundingFailure|AgentStopReason|undefined;
  // A later structural failure cannot erase a substantive safety rejection.
- const semanticRejectionReasons=new Set<GroundingFailure>(['model_rejected','model_uncertain','conflicting_evidence','selection_mismatch','historical_mismatch','unsupported_literal','invalid_question','no_supported_claim','injected_directive','fabricated_citation','incomplete_procedure']);
+ const semanticRejectionReasons=new Set<GroundingFailure>(['model_rejected','model_uncertain','conflicting_evidence','selection_mismatch','historical_mismatch','unsupported_literal','invalid_question','no_supported_claim','injected_directive','fabricated_citation','incomplete_procedure','entailment_rejected','entailment_unavailable']);
  let semanticRejectionSeen=false,completeProcedureVerified=false;
  const recordVerifierFailure=(reason:GroundingFailure)=>{verifierRejections++;lastVerifierFailure=reason;verifierFailures[reason]=(verifierFailures[reason]??0)+1;if(semanticRejectionReasons.has(reason))semanticRejectionSeen=true;};
  const done=(result:AgentOutput,reason:AgentStopReason):AgentOutput=>({
-   ...result,metrics:{...budget.metrics(reason),...plan.metrics(),verifierChecks,verifierRejections,verifierRepairs,sourceAlignedReviews,completeProcedureVerified,recoverySearches,literalFallbacks,adaptiveRewrites,nonclaimsRemoved,unsupportedUnits,supportPreference:preference,
+   ...result,metrics:{...budget.metrics(reason),...plan.metrics(),verifierChecks,verifierRejections,verifierRepairs,sourceAlignedReviews,entailmentChecks,entailmentRejections,completeProcedureVerified,recoverySearches,literalFallbacks,adaptiveRewrites,nonclaimsRemoved,unsupportedUnits,supportPreference:preference,
      ...(options.semanticTurnStatus?{semanticTurnStatus:options.semanticTurnStatus}:{}),...(semantic?{semanticRoute:semantic.route,semanticIntent:semantic.intent,semanticObservations:semantic.observations.length}:{}),
      selectionRequired,conflictRecoveries,clarificationChecks,
      knowledgeSelectionAttempts,knowledgeSelections,knowledgeSelectionRejections,knowledgeSelectionInvalidations,
@@ -419,13 +420,14 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          const started=Date.now(),promptBefore=budget.promptTokens,completionBefore=budget.completionTokens;
          let verifierUsage:{prompt_tokens?:number|null;completion_tokens?:number|null}|undefined;
          let diagnostic:VerificationTrace={};
+         let entailmentUnits:readonly EntailmentUnit[]=[];
          const observeUsage=(usage:typeof verifierUsage)=>{verifierUsage=usage;};
          const observeTrace=(trace:VerificationTrace)=>{diagnostic={...diagnostic,...trace};};
          let result:GroundingResult=sourceAligned
            ? await verifySourceAlignedProcedure(provider,userMessage,reviewCandidate,[...sources,...historicalSources],
              Math.min(10_000,validation.timeoutMs),validation.maxTokens,observeUsage,selection,verificationContext,observeTrace)
            : await verifyGroundedAnswer(provider,semantic?userMessage:contextualQuery,reviewCandidate,
-             [...sources,...historicalSources],Math.min(10_000,validation.timeoutMs),validation.maxTokens,observeUsage,selection,verificationContext,repairReason,requireComplete,observeTrace);
+             [...sources,...historicalSources],Math.min(10_000,validation.timeoutMs),validation.maxTokens,observeUsage,selection,verificationContext,repairReason,requireComplete,observeTrace,semantic?units=>{entailmentUnits=units;}:undefined);
          // A partially supported guided/complete response must enter the
          // existing correction branch, not be rejected after recovery closes.
          if(semantic&&result.verdict==='supported'&&(preference==='guided'||preference==='complete')&&(result.unsupportedUnits??0)>0){
@@ -440,7 +442,24 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
            ...(result.verdict!=='supported'?{reason:result.reason,...(result.issue?{issue:result.issue}:{})}:{}),diagnostic,durationMs:Date.now()-started,
            promptTokens:budget.promptTokens-promptBefore,completionTokens:budget.completionTokens-completionBefore,
            usageObserved:verifierUsage!==undefined});
-         if(result.verdict!=='supported')recordVerifierFailure(result.reason);
+         if(result.verdict!=='supported'){recordVerifierFailure(result.reason);return result;}
+         if(semantic&&entailmentUnits.length){
+           const auditStarted=Date.now(),auditPrompt=budget.promptTokens,auditCompletion=budget.completionTokens;
+           const audit=await reviewEntailment(provider,budget,entailmentUnits);
+           if(audit.attempted){entailmentChecks++;verifierChecks++;}
+           if(audit.status!=='supported'){
+             entailmentRejections++;
+             const reason:GroundingFailure=audit.status==='unsupported'?'entailment_rejected':'entailment_unavailable';
+             recordVerifierFailure(reason);
+             result={verdict:audit.status==='unsupported'?'unsupported':'uncertain',reason,...(audit.status==='unsupported'?{issue:'unsupported_content' as const}:{})};
+           }
+           if(process.env.NODE_ENV==='test')options.evaluationObserver?.({candidate:reviewCandidate,verdict:result.verdict,
+             ...(result.verdict!=='supported'?{reason:result.reason,...(result.issue?{issue:result.issue}:{})}:{}),
+             diagnostic:{contract:'grounding_entailment_v1',entailmentRejectedUnits:audit.rejectedUnits.length,
+               ...(result.verdict!=='supported'?{localFailure:result.reason}:{})},durationMs:Date.now()-auditStarted,
+             promptTokens:budget.promptTokens-auditPrompt,completionTokens:budget.completionTokens-auditCompletion,
+             usageObserved:false});
+         }
          return result;
        };
        let review=await runVerifier();
@@ -456,7 +475,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
        // omissions. It does not override the previous rejection: only an
        // independent review of the new answer can authorize delivery.
        if(requireComplete&&review.verdict==='unsupported'&&
-          ['model_rejected','incomplete_procedure'].includes(review.reason)&&
+          ['model_rejected','incomplete_procedure','entailment_rejected'].includes(review.reason)&&
           (!review.issue||['unsupported_content','missing_coverage','other'].includes(review.issue))&&
           !plan.metrics().conflicts&&!pendingActions.length&&sourceAlignedReviews===0&&
           (!selection||selection.sufficiency==='sufficient'&&selection.versionIds.length===1)&&!budget.stopCause()){

@@ -385,3 +385,34 @@ test('explicit complete mode takes precedence over conflicting focus and recover
  assert.equal(calls.at(-1).response_format.json_schema.name,'source_aligned_review_v1');
  assert.deepEqual(result.sources[0].excerpts,[doc.content]);
 });
+
+test('a supported first review cannot deliver an invented diagnosis rejected by the independent entailment audit',async()=>{
+ const doc=source('Diagnóstico de climatização','Confira se a grade está livre.');
+ const invented='A grade bloqueada pode indicar falha do compressor.';
+ const calls:any[]=[];
+ const result=await respond(actor,randomUUID(),'O que pode causar a falta de ventilação?',[],scripted([
+  tool('search_knowledge',{query:'diagnóstico de climatização'}),
+  assistant(invented),ground(doc.content),
+  assistant(JSON.stringify({u1:'unsupported'})),
+  assistant(doc.content),ground(doc.content)
+ ],calls),async()=>[doc],{semantic:semantic({query:'diagnóstico de climatização'}),budget:plannedBudget(),verifyEvidence:true});
+ assert.equal(result.metrics?.entailmentChecks,1);
+ assert.equal(result.metrics?.entailmentRejections,1);
+ assert.equal(result.metrics?.verifierFailures?.entailment_rejected,1);
+ assert.equal(result.metrics?.literalFallbacks,0);
+ assert.match(result.answer,/grade está livre/);
+ assert.doesNotMatch(result.answer,/compressor/);
+ const audit=JSON.parse(calls.find(c=>c.response_format?.json_schema?.name==='grounding_entailment_v1').messages[1].content);
+ assert.deepEqual(audit,[{key:'u1',statement:invented,quotes:[doc.content]}]);
+});
+test('an unavailable entailment audit cannot turn an unverified paraphrase into an accepted answer',async()=>{
+ const doc=source('Rotina de inspeção','Confira a luz de estado.');
+ const result=await respond(actor,randomUUID(),'Como faço a inspeção?',[],scripted([
+  tool('search_knowledge',{query:'rotina inspeção'}),
+  assistant('Inspecione a luz indicadora.'),ground(doc.content),
+  assistant(JSON.stringify({u1:'invented'}))
+ ]),async()=>[doc],{semantic:semantic({query:'rotina inspeção'}),budget:new AgentBudget({...DEFAULT_AGENT_LIMITS,maxSteps:4}),verifyEvidence:true});
+ assert.equal(result.metrics?.verifierFailures?.entailment_unavailable,1);
+ assert.equal(result.metrics?.literalFallbacks,0);
+ assert.deepEqual(result.sources,[]);
+});
