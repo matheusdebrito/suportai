@@ -121,7 +121,7 @@ export function splitGroundingUnits(answer:string):{text:string;end:number}[]{
 
 /** Separate semantic review. The server constructs citations only from exact excerpts of supplied sources. */
 export async function verifyGroundedAnswer(
- provider:OpenAI,question:string,answer:string,sources:Source[],timeoutMs=10_000,maxTokens=1_600
+ provider:OpenAI,question:string,answer:string,sources:Source[],timeoutMs=10_000,maxTokens=1_600,onUsage?:(usage:{prompt_tokens?:number|null;completion_tokens?:number|null}|undefined)=>void
 ):Promise<GroundingResult>{
  if(!sources.some(source=>!source.historical))return rejected('no_current_evidence');
  if(answer.length>3500)return rejected('answer_limit');
@@ -141,6 +141,7 @@ export async function verifyGroundedAnswer(
       version:source.versionNumber,status:source.historical?'historical':'current',text}))})}
    ]
   },{timeout:timeoutMs,maxRetries:0,signal:AbortSignal.timeout(timeoutMs)});
+  onUsage?.(result.usage);
   if(result.choices[0]?.finish_reason==='length'||result.choices[0]?.finish_reason==='content_filter')return rejected('model_interrupted','uncertain');
   if(result.choices[0]?.message?.refusal)return rejected('model_refusal','uncertain');
   let raw:unknown;

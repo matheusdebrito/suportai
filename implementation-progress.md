@@ -71,3 +71,6 @@ PR head 78bf151 CI and dependency audit passed. Migrated verifier to versioned s
 
 ## Deterministic recovery checkpoint
 Fallback is now attempted for generation transport failures, interruption, refusal and exhausted model budgets only when existing authorized evidence permits it. Counts and reason codes are captured without raw content. Guided advancement requires explicit confirmation and preserves stage headings and conditions; focused recovery rejects ambiguity, personal values and mismatched subjects. Complete fallback requires a non-truncated document. Added regression tests. CI and real evaluation pending. Next: harness telemetry and expanded scenarios.
+
+## Harness telemetry checkpoint
+Test-only agentResponder wrapper now captures real agent metrics, actual retrieval rankings and verifier candidate/outcome/timing/usage per turn. Production HTTP response unchanged. The phone episode asserts capture exists. Previous baseline remains unchanged and lacks per-turn telemetry; no fabricated historical values. Next: expand synthetic episodes, compare comparable baseline fields, verify CI and execute real evaluation where explicitly authorized.

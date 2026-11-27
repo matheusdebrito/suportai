@@ -1,4 +1,5 @@
 import {captureCalibrationCase} from './calibration-capture.js';
+import {createEpisodeCapture,type TurnCapture} from './episode-harness.js';
 
 import {after,test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -166,7 +167,8 @@ if(!process.env.TEST_DATABASE_URL){
     const {actor,headers}=await createSession();
     const source=await createPublishedSource(actor.id,'SHARED');
     const article='Configuração do telefone de laboratório.\n1. Consulte o IP no menu Status.\n2. Abra o IP no navegador.\n3. Use a senha padrão admin.\n4. Ative Account Active: YES.';
-    const app=await buildApp();
+    const capture=createEpisodeCapture(()=>[source.version],()=>new Set([source.version]));
+    const app=await buildApp({agentResponder:capture.agentResponder});
     try{
       await query('UPDATE documents SET title=$2 WHERE id=$1',[source.document,'Telefone de laboratório']);
       await query('UPDATE document_versions SET content=$2 WHERE id=$1',[source.version,article]);
@@ -177,15 +179,16 @@ if(!process.env.TEST_DATABASE_URL){
       const conversation=await openConversation(app,headers);
       const retrieved=await searchKnowledge(actor,'configurar telefone de laboratório');
       const ranking=retrievalMetrics([source.version],retrieved.map(x=>x.versionId));
-      const turns:{message:string;answer:string;sources:{versionId:string}[];states:{id:string;topic:string;support_preference:string}[];agentMetrics?:import('./agent-budget.js').AgentMetrics;quality:ReturnType<typeof episodeQuality>}[]=[];
+      const turns:{message:string;answer:string;sources:{versionId:string}[];states:{id:string;topic:string;support_preference:string}[];capture:TurnCapture;quality:ReturnType<typeof episodeQuality>}[]=[];
       const previous:string[]=[];
       for(const message of ['Preciso configurar um telefone de laboratório','sim','não entendi a parte da senha','a senha pode ser admin','me dê o passo a passo completo']){
         const response=await postTurn(app,headers,conversation,message);
         assert.equal(response.statusCode,200,response.body);
-        const result=response.json<{answer:string;sources:{versionId:string}[];agentMetrics?:import('./agent-budget.js').AgentMetrics}>();
+        const result=response.json<{answer:string;sources:{versionId:string}[]}>();
         assert.ok(result.sources.every(sourceRef=>sourceRef.versionId===source.version),'Unexpected source in isolated synthetic episode');
         const states=await query('SELECT id,topic,support_preference FROM investigations WHERE conversation_id=$1',[conversation]);
-        turns.push({message,answer:result.answer,sources:result.sources,states:states.rows.map(row=>({id:String(row.id),topic:String(row.topic),support_preference:String(row.support_preference)})),agentMetrics:result.agentMetrics,quality:episodeQuality(result.answer,article,previous)});
+        const observed=capture.take();assert.ok(observed,'Every phone turn must invoke the actual agent and capture metrics');
+        turns.push({message,answer:result.answer,sources:result.sources,states:states.rows.map(row=>({id:String(row.id),topic:String(row.topic),support_preference:String(row.support_preference)})),capture:observed,quality:episodeQuality(result.answer,article,previous)});
         previous.push(result.answer);
       }
       writeFileSync(process.env.EPISODE_REPORT_PATH||'episode-real-report.json',JSON.stringify({mode:'real-http',model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',embeddingModel:process.env.OPENAI_EMBED_MODEL||'text-embedding-3-small',temperature:AGENT_GENERATION_TEMPERATURE,limits:resolveAgentLimits(),corpusHash:createHash('sha256').update(article).digest('hex'),commit:process.env.EVALUATION_COMMIT||null,ranking,turns,humanReview:'pending'},null,2));

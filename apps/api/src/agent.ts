@@ -35,7 +35,8 @@ const tools:OpenAI.Chat.Completions.ChatCompletionTool[]=[
  {type:'function',function:{name:'prepare_article',description:'Prepara prévia de artigo solicitado explicitamente pelo usuário; requer confirmação humana posterior antes de criar rascunho.',parameters:{type:'object',properties:{spaceId:{type:'string'},title:{type:'string'},content:{type:'string'},documentId:{type:'string',description:'Documento a atualizar se aplicável'}},required:['spaceId','title','content'],additionalProperties:false}}}
 ];
 export type AgentOutput={answer:string;sources:Source[];pendingActions:{id:string;title:string;content:string;spaceName:string;documentId?:string;beforeContent?:string}[];metrics?:AgentMetrics&InvestigationMetrics};
-export type AgentOptions={verifyEvidence?:boolean;investigation?:InvestigationDraft};
+export type EvaluationReview={candidate:string;verdict:'supported'|'unsupported'|'uncertain'|'conflict';reason?:GroundingFailure;durationMs:number;promptTokens:number;completionTokens:number;usageObserved:boolean};
+export type AgentOptions={verifyEvidence?:boolean;investigation?:InvestigationDraft;evaluationObserver?:(event:EvaluationReview)=>void};
 export async function respond(actor:Actor,conversationId:string,userMessage:string,history:{role:'user'|'assistant';content:string}[],provider:OpenAI|null=client,knowledgeSearch:typeof searchKnowledge=searchKnowledge,options:AgentOptions={}):Promise<AgentOutput>{
  const sources:Source[]=[];
  const historicalSources:Source[]=[];
@@ -281,11 +282,17 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
        const validation=budget.startModelTurn(true);
        if(!validation)return budgetReply(budget.stopCause()??'token_budget');
        verifierChecks++;
+       const started=Date.now(),promptBefore=budget.promptTokens,completionBefore=budget.completionTokens;
+       let verifierUsage:{prompt_tokens?:number|null;completion_tokens?:number|null}|undefined;
        const review=await verifyGroundedAnswer(provider,contextualQuery,message.content,
-         [...sources,...historicalSources],Math.min(10_000,validation.timeoutMs),validation.maxTokens);
-       budget.recordModelUsage(undefined,
+         [...sources,...historicalSources],Math.min(10_000,validation.timeoutMs),validation.maxTokens,usage=>{verifierUsage=usage;});
+       budget.recordModelUsage(verifierUsage,
          userMessage.length+message.content.length+[...sources,...historicalSources].reduce((sum,source)=>sum+Math.min(source.content.length,source.completeDocument?10000:1800),0),
          review.verdict==='supported'?JSON.stringify(review.sources.map(source=>source.excerpts)).length+120:40);
+       if(process.env.NODE_ENV==='test')options.evaluationObserver?.({candidate:message.content,verdict:review.verdict,
+         ...(review.verdict!=='supported'?{reason:review.reason}:{}),durationMs:Date.now()-started,
+         promptTokens:budget.promptTokens-promptBefore,completionTokens:budget.completionTokens-completionBefore,
+         usageObserved:verifierUsage!==undefined});
        if(review.verdict!=='supported')recordVerifierFailure(review.reason);
        if(review.verdict==='conflict'){
          plan.recordConflict();
