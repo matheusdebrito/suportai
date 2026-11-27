@@ -1,6 +1,6 @@
 import {captureCalibrationCase} from './calibration-capture.js';
 import {createEpisodeCapture,type TurnCapture} from './episode-harness.js';
-import {expandedEpisodes,semanticSelectionEpisodes} from './episode-fixtures.js';
+import {expandedEpisodes,semanticSelectionEpisodes,semanticArchitectureEpisodes} from './episode-fixtures.js';
 import {chunks} from './knowledge.js';
 
 import {after,test} from 'node:test';
@@ -9,6 +9,7 @@ import {randomUUID} from 'node:crypto';
 import type OpenAI from 'openai';
 import {respond} from './agent.js';
 import {client,embedText} from './llm.js';
+import {interpretSemanticTurn,type SemanticTurn} from './semantic-turn.js';
 import {searchKnowledge} from './retrieval.js';
 import {episodeQuality,retrievalMetrics} from './episode-quality.js';
 import {writeFileSync} from 'node:fs';
@@ -170,7 +171,7 @@ if(!process.env.TEST_DATABASE_URL){
     const source=await createPublishedSource(actor.id,'SHARED');
     const article='Configuração do telefone de laboratório.\n1. Consulte o IP no menu Status.\n2. Abra o IP no navegador.\n3. Use a senha padrão admin.\n4. Ative Account Active: YES.';
     const capture=createEpisodeCapture(()=>[source.version],()=>new Set([source.version]),()=>[source.version+':0']);
-    const app=await buildApp({agentResponder:capture.agentResponder});
+    const app=await buildApp({agentResponder:capture.agentResponder,turnInterpreter:(input,budget)=>interpretSemanticTurn(client,input,budget)});
     try{
       await query('UPDATE documents SET title=$2 WHERE id=$1',[source.document,'Telefone de laboratório']);
       await query('UPDATE document_versions SET content=$2 WHERE id=$1',[source.version,article]);
@@ -193,8 +194,9 @@ if(!process.env.TEST_DATABASE_URL){
         turns.push({message,answer:result.answer,sources:result.sources,states:states.rows.map(row=>({id:String(row.id),topic:String(row.topic),support_preference:String(row.support_preference)})),capture:observed,quality:episodeQuality(result.answer,article,previous)});
         previous.push(result.answer);
       }
-      writeFileSync(process.env.EPISODE_REPORT_PATH||'episode-real-report.json',JSON.stringify({mode:'real-http',model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',embeddingModel:process.env.OPENAI_EMBED_MODEL||'text-embedding-3-small',temperature:AGENT_GENERATION_TEMPERATURE,limits:resolveAgentLimits(),corpusHash:createHash('sha256').update(article).digest('hex'),commit:process.env.EVALUATION_COMMIT||null,ranking,turns,humanReview:'pending'},null,2));
+      writeFileSync(process.env.EPISODE_REPORT_PATH||'episode-real-report.json',JSON.stringify({mode:'real-http',architecture:'semantic_turn_v1',model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',embeddingModel:process.env.OPENAI_EMBED_MODEL||'text-embedding-3-small',temperature:AGENT_GENERATION_TEMPERATURE,limits:resolveAgentLimits(),corpusHash:createHash('sha256').update(article).digest('hex'),commit:process.env.EVALUATION_COMMIT||null,ranking,turns,humanReview:'pending'},null,2));
       assert.equal(ranking.recall,1);
+      assert.ok(turns.every(t=>t.capture.agentMetrics.semanticTurnStatus==='accepted'));
       assert.ok(turns.every(t=>t.states.length===1&&t.states[0].id===turns[0].states[0].id));
       assert.ok(turns[3].sources.length>0,'Password answer must cite evidence');
       assert.ok(turns[4].sources.length>0,'Complete procedure must cite evidence');
@@ -205,14 +207,14 @@ if(!process.env.TEST_DATABASE_URL){
   test('expanded real HTTP support episode matrix',{skip:process.env.RUN_REAL_EPISODES!=='1',timeout:900000},async()=>{
     assert.ok(client,'External AI authorization is required');
     const episodes:unknown[]=[],failures:string[]=[];
-    const evaluationCorpus=[...expandedEpisodes,...semanticSelectionEpisodes];
+    const evaluationCorpus=[...expandedEpisodes,...semanticSelectionEpisodes,...semanticArchitectureEpisodes];
     for(const fixture of evaluationCorpus){
       const {actor,headers}=await createSession();
       const docs=new Map<string,{document:string;version:string;article:string;ordinals:number[]}>();
       const allowed=new Set<string>();
       let expected:string[]=[],expectedChunks:string[]=[];
       const capture=createEpisodeCapture(()=>expected,()=>allowed,()=>expectedChunks);
-      const app=await buildApp({agentResponder:capture.agentResponder});
+      const app=await buildApp({agentResponder:capture.agentResponder,turnInterpreter:(input,budget)=>interpretSemanticTurn(client,input,budget)});
       const turns:unknown[]=[],previous:string[]=[];
       const investigationByDoc=new Map<string,string>();
       try{
@@ -252,6 +254,9 @@ if(!process.env.TEST_DATABASE_URL){
           if((turn.required??[]).some(marker=>!result.answer.includes(marker)))checks.push('missing_required_value');
           if(turn.mustClarify&&(observed?.agentMetrics.stopReason!=='clarified'||result.sources.length!==0||!result.answer.trim().endsWith('?')))checks.push('missing_safe_clarification');
           if(!observed&&!turn.mayClarify)checks.push('missing_agent_capture');
+          if(observed&&observed.agentMetrics.semanticTurnStatus!=='accepted')checks.push('semantic_interpretation_missing');
+          if(turn.expectedMode&&observed?.agentMetrics.supportPreference!==turn.expectedMode)checks.push('wrong_support_mode');
+          if(turn.expectedRoute&&observed?.agentMetrics.semanticRoute!==turn.expectedRoute)checks.push('wrong_semantic_route');
           if(turn.context==='same'&&lastId&&investigationId!==lastId)checks.push('investigation_changed');
           if(turn.context==='new'&&(!investigationId||(lastId&&investigationId===lastId)))checks.push('investigation_not_switched');
           if(turn.context==='resume'&&turn.expectedDocument&&investigationId!==investigationByDoc.get(turn.expectedDocument))checks.push('investigation_not_resumed');
@@ -273,10 +278,57 @@ if(!process.env.TEST_DATABASE_URL){
           model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',embeddingModel:process.env.OPENAI_EMBED_MODEL||'text-embedding-3-small',
           temperature:AGENT_GENERATION_TEMPERATURE,limits:resolveAgentLimits(),corpusHash:createHash('sha256').update(JSON.stringify(evaluationCorpus)).digest('hex'),
           baseMatrixHash:createHash('sha256').update(JSON.stringify(expandedEpisodes)).digest('hex'),
+          architecture:'semantic_turn_v1',
           episodes,failures,humanReview:'pending'},null,2));
       }
     }
     assert.deepEqual(failures,[]);
+  });
+
+  test('HTTP semantic routing persists user observations and isolates unrelated investigations',async()=>{
+    const {actor,headers}=await createSession();
+    const seen:{history:string[];state?:InvestigationDraft;semantic?:SemanticTurn}[]=[];
+    const app=await buildApp({
+      turnInterpreter:async(input,budget)=>{
+        const message=input.message;
+        const decision:SemanticTurn={route:'new',investigationId:null,topic:'impressora',intent:'knowledge',mode:'guided',focused:false,
+          query:'diagnosticar fila de impressão',equipment:null,environment:null,observations:[{kind:'fact',quote:message,result:null}]};
+        if(message==='Só dá papel em branco.'){
+          decision.route='existing';decision.investigationId=input.subjects.find(s=>s.topic==='impressora')!.id;decision.topic=null;
+          decision.mode='inherit';
+        }else if(message==='E a rede de visitantes, como emito o acesso?'){
+          decision.topic='rede visitante';decision.query='emitir acesso temporário rede visitante';decision.mode='adaptive';decision.observations=[];
+        }else if(message==='Aquela fila de antes, acho que ela travou.'){
+          decision.route='existing';decision.investigationId=input.subjects.find(s=>s.topic==='impressora')!.id;decision.topic=null;
+          decision.query='diagnosticar fila de impressão travada';decision.mode='inherit';
+          decision.observations=[{kind:'hypothesis',quote:'acho que ela travou',result:null}];
+        }
+        const fake={chat:{completions:{create:async()=>({choices:[{message:{content:JSON.stringify(decision)},finish_reason:'stop'}]})}}} as unknown as OpenAI;
+        return interpretSemanticTurn(fake,input,budget);
+      },
+      agentResponder:async(_actor,_conversation,_message,history,_provider,_search,options)=>{
+        seen.push({history:history.map(m=>m.content),state:options?.investigation,semantic:options?.semantic});
+        assert.equal(options?.budget?.steps,1);
+        return {answer:'Resposta sintética.',sources:[],pendingActions:[]};
+      }
+    });
+    try{
+      const conversation=await openConversation(app,headers);
+      for(const message of ['O trabalho da fila âmbar saiu errado.','Só dá papel em branco.','E a rede de visitantes, como emito o acesso?','Aquela fila de antes, acho que ela travou.']){
+        const response=await postTurn(app,headers,conversation,message);assert.equal(response.statusCode,200,response.body);
+      }
+      const rows=await query('SELECT id,topic FROM investigations WHERE conversation_id=$1',[conversation]);
+      const printerId=rows.rows.find(row=>row.topic==='impressora')?.id;
+      const wifiId=rows.rows.find(row=>row.topic==='rede visitante')?.id;
+      assert.ok(printerId&&wifiId);assert.notEqual(printerId,wifiId);
+      assert.equal(seen[1].state?.topic,'impressora');assert.deepEqual(seen[2].history,[]);
+      assert.equal(seen[3].state?.topic,'impressora');assert.ok(seen[3].history.every(m=>!m.includes('rede de visitantes')));
+      assert.equal(seen[2].semantic?.query,'emitir acesso temporário rede visitante');
+      const stored=await readInvestigationState(actor,conversation,printerId);
+      assert.deepEqual(stored?.reportedFacts,['O trabalho da fila âmbar saiu errado.','Só dá papel em branco.']);
+      assert.deepEqual(stored?.hypotheses,['acho que ela travou']);assert.equal(stored?.supportPreference,'guided');
+      assert.deepEqual((await readInvestigationState(actor,conversation,wifiId))?.reportedFacts,[]);
+    }finally{await app.close();await query('DELETE FROM users WHERE id=$1',[actor.id]);}
   });
 
   test('chat hides a reply derived from a source after that source is archived',async()=>{

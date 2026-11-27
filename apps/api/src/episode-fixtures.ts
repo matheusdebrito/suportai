@@ -1,6 +1,6 @@
 /** Synthetic corpus, never customer/production data. Each case uses a fresh conversation. */
 export type EpisodeDocument={id:string;title:string;article:string;restricted?:boolean};
-export type EpisodeTurn={message:string;expectedDocument:string|null;context:'same'|'new'|'resume'|'none';complete?:boolean;forbidden?:string[];archiveBefore?:string;mayClarify?:boolean;mustClarify?:boolean;required?:string[]};
+export type EpisodeTurn={message:string;expectedDocument:string|null;context:'same'|'new'|'resume'|'none';complete?:boolean;forbidden?:string[];archiveBefore?:string;mayClarify?:boolean;mustClarify?:boolean;required?:string[];expectedMode?:'adaptive'|'guided'|'complete';expectedRoute?:'new'|'existing'|'standalone'|'uncertain'};
 export type EpisodeFixture={id:string;documents:EpisodeDocument[];turns:EpisodeTurn[]};
 export const expandedEpisodes:EpisodeFixture[]=[
  {id:'printer-negative-progress',documents:[{id:'printer',title:'Impressora de etiquetas de laboratório',article:'Antes da calibração, confirme que a impressora pertence ao laboratório de testes.\n# Etapa inicial\n1. Confira o alinhamento da etiqueta.\n2. Feche a tampa.\n# Calibração\n3. Pressione Feed.\n4. Confirme se a etiqueta avançou.'}],turns:[
@@ -54,5 +54,25 @@ export const semanticSelectionEpisodes:EpisodeFixture[]=[
    article:'IP: 192.0.2.40  login: conta-fixture  senha: valor-fixture'}
  ],turns:[
   {message:'Como eu gero um voucher Wi-Fi de laboratório?',expectedDocument:'access',context:'none',required:['192.0.2.40'],forbidden:['conta-fixture','valor-fixture']}
+ ]}
+];
+
+
+/** Complementary real cases exercise semantic routing and context. The
+ * original historical fixtures remain unchanged. */
+export const semanticArchitectureEpisodes:EpisodeFixture[]=[
+ {id:'informal-intent-and-context-switch',documents:[
+  {id:'badge',title:'Emissão de crachá temporário — laboratório Nimbo',article:'No laboratório Nimbo, para emitir crachá temporário, abra Identificação de visitantes e selecione Novo crachá.'},
+  {id:'printer',title:'Fila de impressão — laboratório Nimbo',article:'Para diagnosticar impressão em branco no laboratório Nimbo, consulte a fila Âmbar e confira o trabalho pendente.'}
+ ],turns:[
+  {message:'Tô precisando de ajuda pra tirar um crachá temporário no laboratório Nimbo',expectedDocument:'badge',context:'new',required:['Identificação de visitantes'],forbidden:['fila Âmbar']},
+  {message:'A impressão aqui no Nimbo também saiu toda em branco, me ajuda?',expectedDocument:'printer',context:'new',required:['fila Âmbar'],forbidden:['Novo crachá']},
+  {message:'Quero terminar aquele negócio do crachá, manda todas as instruções juntas',expectedDocument:'badge',context:'resume',complete:true,expectedMode:'complete',expectedRoute:'existing',forbidden:['fila Âmbar']}
+ ]},
+ {id:'semantic-specific-question',documents:[
+  {id:'dns',title:'Resolução de nomes — ambiente Íris',article:'Para o ambiente Íris, DNS de teste: 192.0.2.53. Para configurar, consulte o menu Rede.'}
+ ],turns:[
+  {message:'Me ajuda a colocar o DNS pra funcionar no ambiente Íris',expectedDocument:'dns',context:'new'},
+  {message:'só quero o endereço que vai nesse campo',expectedDocument:'dns',context:'same',expectedRoute:'existing',required:['192.0.2.53']}
  ]}
 ];
