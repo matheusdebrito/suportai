@@ -303,13 +303,36 @@ test('focused password follow-up receives an explicit natural concise-answer pol
  const result=await respond(actor,randomUUID(),'Qual a senha para acessar a interface do telefone?',[
   {role:'user',content:'Preciso configurar um telefone.'},
   {role:'assistant',content:'Conseguiu abrir a interface web?'}
- ],model,async()=>[phone],{verifyEvidence:true});
+ ],model,async()=>[phone],{verifyEvidence:true,semantic:{route:'standalone',investigationId:null,topic:null,intent:'knowledge',mode:'adaptive',focused:false,
+  query:'senha interface telefone',equipment:null,environment:null,observations:[]}});
  const system=String(calls[0].messages[0].content);
  assert.match(system,/PEDIDO PONTUAL/);
  assert.match(system,/uma ou duas frases naturais/);
  assert.match(system,/Não recapitule o artigo ou o procedimento/);
  assert.match(result.answer,/fixture-primary/);
  assert.doesNotMatch(result.answer,/procedimento|segundo a documentação|conforme a fonte/i);
+});
+test('focused confirmation recovers one exact authorized value after an invalid verifier reference',async()=>{
+ const phone:Source={...source,title:'Configurar telefone',content:'Use a senha padrão admin.'};
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'senha telefone'},'q')]},
+  {role:'assistant',content:'Sim, a senha padrão é admin.'},
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[
+   {unit:1,kind:'current',refs:[{evidence:1,quote:'A senha padrão é admin.'}]}
+  ]})},
+  {role:'assistant',content:'A senha padrão para o telefone é admin.'},
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[
+   {unit:1,kind:'current',refs:[{evidence:1,quote:'Senha padrão: admin.'}]}
+  ]})}
+ ],[]);
+ const result=await respond(actor,randomUUID(),'A senha pode ser admin?',[],model,async()=>[phone],{
+  verifyEvidence:true,semantic:{route:'existing',investigationId:randomUUID(),topic:null,intent:'clarify',mode:'adaptive',focused:false,
+   query:'senha telefone',equipment:null,environment:null,observations:[]}
+ });
+ assert.equal(result.answer,'Use a senha padrão admin. [1]');
+ assert.equal(result.sources[0]?.versionId,phone.versionId);
+ assert.equal(result.metrics?.literalFallbacks,1);
+ assert.equal(result.metrics?.fallbackReason,'invalid_reference');
 });
 test('complete follow-up ignores sensitive words from history when recovering the full procedure',async()=>{
  const phone:Source={...source,title:'Configurar telefone',ordinal:-1,completeDocument:true,content:'# Ver o IP\n- Segurar o botão central.\n- Status > Network Status > IPV4\n# Configurar SIP\n- Acessar ACCOUNTS > GENERAL SETTINGS\n- Account Active: YES'};

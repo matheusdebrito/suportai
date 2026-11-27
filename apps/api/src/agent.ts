@@ -57,7 +57,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  const shouldVerify=Boolean(options.verifyEvidence||(provider===client&&client!==null));
  let verifierChecks=0,verifierRejections=0,recoverySearches=0,literalFallbacks=0,adaptiveRewrites=0,nonclaimsRemoved=0,unsupportedUnits=0;
  const preference=semantic?semanticPreference(semantic,options.investigation):supportPreference(userMessage,history,options.investigation?.supportPreference);
- const focused=semantic?semantic.focused:isFocusedKnowledgeQuestion(userMessage);
+ const focused=semantic?semantic.focused||isFocusedKnowledgeQuestion(userMessage):isFocusedKnowledgeQuestion(userMessage);
  const focusedAnswerPolicy=focused
   ? '\nPEDIDO PONTUAL: responda apenas ao dado solicitado na mensagem mais recente, em uma ou duas frases naturais. Não recapitule o artigo ou o procedimento, não use títulos e não explique que consultou uma fonte.'
   : '';
@@ -91,8 +91,10 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
    const available=[...sources,...historicalSources];
    if(semantic&&provider){
      // Never replace a semantic rejection/conflict with a lexical guess.
-     if(pendingActions.length||plan.metrics().conflicts||!['provider_failure','model_timeout','model_interrupted','provider_error','provider_incompatible','invalid_json','schema_invalid','claim_shape'].includes(reason))return null;
-     const safe=semanticEvidenceFallback(contextualQuery,available,preference==='complete');
+     const deterministicReasons=['provider_failure','model_timeout','model_interrupted','provider_error','provider_incompatible','invalid_json','schema_invalid','claim_shape'];
+     if(focused)deterministicReasons.push('invalid_reference','missing_reference');
+     if(pendingActions.length||plan.metrics().conflicts||!deterministicReasons.includes(reason))return null;
+      const safe=focused?focusedGroundingFallback(userMessage,available,contextualQuery):semanticEvidenceFallback(contextualQuery,available,preference==='complete');
      if(safe){literalFallbacks++;fallbackReason=reason;return done({...safe,pendingActions},'answered');}
      return null;
    }
@@ -431,8 +433,18 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
         if((preference==='guided'||preference==='complete')&&(review.unsupportedUnits??0)>0){
           recordVerifierFailure('model_rejected');return fallbackReply();
         }
-        if(preference==='complete'&&selection?.sufficiency!=='partial'&&lastProgressQuestion(review.answer)){recordVerifierFailure('model_rejected');return fallbackReply();}
-       verifiedAnswer=review.answer;
+        let reviewedAnswer=review.answer;
+        if(preference==='complete'&&selection?.sufficiency!=='partial'){
+          const progress=lastProgressQuestion(reviewedAnswer);
+          if(progress){
+            const complete=completeGroundingFallback(contextualQuery,[...sources,...historicalSources]);
+            if(complete){literalFallbacks++;fallbackReason='model_rejected';return done({...complete,pendingActions},'answered');}
+            const start=reviewedAnswer.lastIndexOf(progress);
+            if(start<0){recordVerifierFailure('model_rejected');return fallbackReply();}
+            reviewedAnswer=reviewedAnswer.slice(0,start).trimEnd();
+          }
+        }
+        verifiedAnswer=reviewedAnswer;
        if(selection?.sufficiency==='partial'&&preference==='complete')verifiedAnswer+='\n\nNão consigo confirmar o procedimento completo com as informações disponíveis.';
        replySources=review.sources;
      }
