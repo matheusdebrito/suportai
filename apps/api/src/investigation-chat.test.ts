@@ -1,6 +1,6 @@
 import {captureCalibrationCase} from './calibration-capture.js';
 import {createEpisodeCapture,type TurnCapture} from './episode-harness.js';
-import {expandedEpisodes} from './episode-fixtures.js';
+import {expandedEpisodes,semanticSelectionEpisodes} from './episode-fixtures.js';
 import {chunks} from './knowledge.js';
 
 import {after,test} from 'node:test';
@@ -205,7 +205,8 @@ if(!process.env.TEST_DATABASE_URL){
   test('expanded real HTTP support episode matrix',{skip:process.env.RUN_REAL_EPISODES!=='1',timeout:900000},async()=>{
     assert.ok(client,'External AI authorization is required');
     const episodes:unknown[]=[],failures:string[]=[];
-    for(const fixture of expandedEpisodes){
+    const evaluationCorpus=[...expandedEpisodes,...semanticSelectionEpisodes];
+    for(const fixture of evaluationCorpus){
       const {actor,headers}=await createSession();
       const docs=new Map<string,{document:string;version:string;article:string;ordinals:number[]}>();
       const allowed=new Set<string>();
@@ -248,6 +249,8 @@ if(!process.env.TEST_DATABASE_URL){
           if(target&&!turn.mayClarify&&!result.sources.length)checks.push('missing_expected_source');
           if(turn.complete&&target&&!result.sources.some(source=>source.ordinal===-1))checks.push('missing_complete_document');
           if((turn.forbidden??[]).some(marker=>result.answer.includes(marker)))checks.push('forbidden_content');
+          if((turn.required??[]).some(marker=>!result.answer.includes(marker)))checks.push('missing_required_value');
+          if(turn.mustClarify&&(observed?.agentMetrics.stopReason!=='clarified'||result.sources.length!==0||!result.answer.trim().endsWith('?')))checks.push('missing_safe_clarification');
           if(!observed&&!turn.mayClarify)checks.push('missing_agent_capture');
           if(turn.context==='same'&&lastId&&investigationId!==lastId)checks.push('investigation_changed');
           if(turn.context==='new'&&(!investigationId||(lastId&&investigationId===lastId)))checks.push('investigation_not_switched');
@@ -268,7 +271,8 @@ if(!process.env.TEST_DATABASE_URL){
         writeFileSync(process.env.EXPANDED_EPISODE_REPORT_PATH||'episode-expanded-report.json',JSON.stringify({
           mode:'real-http-expanded',commit:process.env.EVALUATION_COMMIT||null,
           model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',embeddingModel:process.env.OPENAI_EMBED_MODEL||'text-embedding-3-small',
-          temperature:AGENT_GENERATION_TEMPERATURE,limits:resolveAgentLimits(),corpusHash:createHash('sha256').update(JSON.stringify(expandedEpisodes)).digest('hex'),
+          temperature:AGENT_GENERATION_TEMPERATURE,limits:resolveAgentLimits(),corpusHash:createHash('sha256').update(JSON.stringify(evaluationCorpus)).digest('hex'),
+          baseMatrixHash:createHash('sha256').update(JSON.stringify(expandedEpisodes)).digest('hex'),
           episodes,failures,humanReview:'pending'},null,2));
       }
     }

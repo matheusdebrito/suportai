@@ -119,3 +119,15 @@ test('partial selection can return verified access information and a clarificati
  assert.deepEqual(result.sources.map(s=>s.versionId),[partial.versionId]);
  assert.match(result.answer,/192\.0\.2\.40/);assert.match(result.answer,/Não consigo confirmar o procedimento completo/);
 });
+
+
+test('a rejected model selection can be revised using another authorized candidate',async()=>{
+ const calls:any[]=[];
+ const provider=scripted([search,tool('select_knowledge',choose([wrong.versionId]),'wrong-selection'),text(wrong.content),rejected(),text(right.content),supported([{unit:1,kind:'current',refs:[{evidence:2,quote:right.content}]}])],calls);
+ const result=await respond(actor,randomUUID(),'Como emitir acesso temporário para visitantes no controlador Azul?',[],provider,async()=>[wrong,right],{verifyEvidence:true});
+ assert.equal(result.metrics?.stopReason,'answered');
+ assert.equal(result.metrics?.knowledgeSelectionInvalidations,1);
+ assert.equal(result.metrics?.verifierRejections,1);
+ assert.deepEqual(result.sources.map(source=>source.versionId),[right.versionId]);
+ assert.match(result.answer,/Novo acesso temporário/);
+});

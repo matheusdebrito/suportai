@@ -320,6 +320,12 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
        if(review.verdict!=='supported'&&['provider_incompatible','model_refusal','provider_error'].includes(review.reason))return fallbackReply();
        if(review.verdict!=='supported'&&!synthesisRecoveryAttempted&&budget.steps+2<=budget.limits.maxSteps&&!budget.stopCause()){
          synthesisRecoveryAttempted=true;
+         // A proposed source choice is revisable. If semantic verification
+         // rejects it, the next synthesis may use a different authorized
+         // candidate; the independent verifier must still confirm that answer.
+         if(selection&&['selection_mismatch','model_rejected','model_uncertain','no_supported_claim'].includes(review.reason)){
+           selection=undefined;knowledgeSelectionInvalidations++;
+         }
          // Re-search only on a potentially missing-evidence failure, once, using user context.
          if(['model_rejected','model_uncertain','missing_reference','unsupported_literal','no_supported_claim'].includes(review.reason)&&
             !hasSecrets(contextualQuery)&&budget.lookup(contextualQuery).kind==='new'){

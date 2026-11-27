@@ -95,3 +95,7 @@ A seleção do conhecimento passa a ser uma decisão explícita do modelo, por `
 ### Testes de seleção semântica
 
 Adicionados testes focados de contrato, escolha de fonte com ranking inferior, preservação de alternativas, pergunta após recuperação, validação de referências fora da seleção, conflito, pergunta neutra após rejeição, invalidação por evidência nova, IDs inventados e resposta parcial em modo completo. Os modelos simulados verificam o contrato e o loop, não demonstram compreensão real; a rodada autorizada com modelo real continua necessária. Nenhum dado de produção é usado.
+
+### Revisão de escolha e casos complementares reais
+
+A seleção semântica pode ser revisada após rejeição do verificador, sem forçar o modelo a sustentar a primeira escolha. Acrescentados dois episódios sintéticos opt-in com três turnos: esclarecimento entre controladores concorrentes, seleção após a resposta do usuário e ficha de acesso incompleta. A matriz original (18 turnos) e o episódio histórico (5 turnos) foram preservados; a execução completa contém 26 turnos e separa os hashes do corpus original e ampliado. Nenhuma nova medição real foi produzida. CI da correção anterior de voucher (d890035) aprovado; CI da seleção semântica ainda precisa de confirmação no HEAD final.

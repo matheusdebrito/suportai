@@ -4,7 +4,7 @@ import type {Source} from './retrieval.js';
 /** A model's applicability decision is a shortlist, not an authorization or
  * proof of factual support. The independent verifier still sees alternatives. */
 export type KnowledgeSelection={versionIds:string[];sufficiency:'sufficient'|'partial'};
-export const knowledgeSelectionTool:OpenAI.Chat.Completions.ChatCompletionTool={
+export const knowledgeSelectionTool={
  type:'function',function:{
   name:'select_knowledge',strict:true,
   description:'Selecione as versões vigentes recuperadas que realmente se aplicam ao objetivo e contexto do usuário. Compare o conteúdo, finalidade, sistema e ambiente, não apenas a pontuação ou palavras. Use partial quando a fonte só confirmar parte do pedido. Se faltar uma condição para escolher com segurança, pesquise mais, abra um documento ou faça ask_clarification; não chute uma versão. Não concede acesso nem dispensa a verificação independente.',
@@ -13,7 +13,7 @@ export const knowledgeSelectionTool:OpenAI.Chat.Completions.ChatCompletionTool={
    sufficiency:{type:'string',enum:['sufficient','partial']}
   }}
  }
-};
+} satisfies OpenAI.Chat.Completions.ChatCompletionTool;
 export function parseKnowledgeSelection(value:unknown,sources:readonly Source[]):KnowledgeSelection|null{
  if(!value||typeof value!=='object'||Array.isArray(value))return null;
  const input=value as Record<string,unknown>;
