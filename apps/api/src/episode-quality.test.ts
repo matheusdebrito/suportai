@@ -23,3 +23,9 @@ test('a complete citation and mode are insufficient without positive coverage re
  assert.deepEqual(completeProcedureChecks('Abra o painel.',[{ordinal:-1}],'complete',false),['missing_verified_complete_coverage']);
  assert.deepEqual(completeProcedureChecks('Abra o painel. Confirme a emissão.',[{ordinal:-1}],'complete',true),[]);
 });
+
+test('quality flags repeated questions independently of line breaks or citations',()=>{
+ const q=episodeQuality('Confira o painel. Apareceu a tela? [1]','Confira o painel.',['Apareceu a tela?']);
+ assert.equal(q.repeatedQuestions,1);
+ assert.equal(episodeQuality('Apareceu outra tela?','Confira o painel.',['Apareceu a tela?']).repeatedQuestions,0);
+});

@@ -217,3 +217,23 @@ test('source-aligned recovery admits only one explicitly documented equipment-de
   '1. Abra o painel.\n2. Use a senha padrão do usuário demo-default.'
  ])assert.equal(sourceAlignedProcedureCandidate([{...doc,content}]),null);
 });
+
+test('known editorial framing mislabeled unsupported does not invent a missing-detail warning',async()=>{
+ const doc={...source,content:'1. Consulte o IP do telefone.\n2. Abra o painel.'};
+ const draft='Vamos por etapas.\n1. Consulte o IP do telefone.\n2. Abra o painel.';
+ const review=JSON.stringify({verdict:'supported',claims:[
+  {unit:1,kind:'unsupported',refs:[]},
+  {unit:2,kind:'current',refs:[{evidence:1,quote:'1. Consulte o IP do telefone.'}]},
+  {unit:3,kind:'current',refs:[{evidence:1,quote:'2. Abra o painel.'}]}
+ ]});
+ const result=await verifyGroundedAnswer(provider(review),'procedimento',draft,[doc]);
+ assert.equal(result.verdict,'supported');
+ if(result.verdict==='supported'){
+  assert.equal(result.unsupportedUnits,0);
+  assert.equal(result.nonclaimsRemoved,1);
+  assert.doesNotMatch(result.answer,/Não consegui confirmar/);
+ }
+ const withCondition=await verifyGroundedAnswer(provider(review),'procedimento',
+  'Somente com a autorização confirmada.\n1. Consulte o IP do telefone.\n2. Abra o painel.',[doc]);
+ assert.notEqual(withCondition.verdict,'supported');
+});

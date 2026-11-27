@@ -124,7 +124,10 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
    if(fallback){literalFallbacks++;fallbackReason=reason;return done({...fallback,pendingActions},'answered');}
    return null;
  };
- const fallbackReply=():AgentOutput=>tryFallback(lastVerifierFailure??'unsafe_answer')??done({answer:semantic?'Não consegui confirmar uma orientação aplicável com segurança. Podemos continuar se você informar o detalhe do ambiente ou do resultado observado que ainda falta.':'Encontrei documentos, mas não consegui validar uma orientação aplicável. Informe o equipamento ou ambiente para refinar a consulta.',sources:[],pendingActions},'unsafe_answer');
+ const fallbackReply=():AgentOutput=>tryFallback(lastVerifierFailure??'unsafe_answer')??done({
+   answer:semantic?'Encontrei documentação, mas não consegui validar a orientação gerada nesta consulta. Não posso confirmar o procedimento completo ou recomendar etapas sem fundamentação. Você pode pedir uma etapa específica ou reformular o pedido.':
+     'Encontrei documentos, mas não consegui validar uma orientação aplicável. Informe o equipamento ou ambiente para refinar a consulta.',
+   sources:[],pendingActions},'unsafe_answer');
  const runRead=async <T>(read:()=>Promise<T>):Promise<T>=>{
    const remaining=budget.remainingMs();
    if(remaining<1_000)throw new ReadDeadlineError();
@@ -467,9 +470,12 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
        };
        const structuralFailure=(result:GroundingResult)=>result.verdict!=='supported'&&result.verdict!=='conflict'&&
          ['claim_shape','invalid_reference','missing_reference','schema_invalid','invalid_json'].includes(result.reason);
-       const alignedCandidate=()=>requireComplete&&!plan.metrics().conflicts&&!pendingActions.length&&sourceAlignedReviews===0&&
-         (!selection||selection.sufficiency==='sufficient'&&selection.versionIds.length===1)
-         ? sourceAlignedProcedureCandidate([...sources,...historicalSources],selection?.versionIds[0]):null;
+       const alignedCandidate=()=>{
+         if(!requireComplete||plan.metrics().conflicts||pendingActions.length||sourceAlignedReviews!==0||
+            (selection&&(selection.sufficiency!=='sufficient'||selection.versionIds.length!==1)))return null;
+         const candidate=sourceAlignedProcedureCandidate([...sources,...historicalSources],selection?.versionIds[0]);
+         return candidate&&splitGroundingUnits(candidate).length<=20?candidate:null;
+       };
        let alignedAccepted=false;
        const runAligned=async (aligned:string)=>{
          if(splitGroundingUnits(aligned).length>20)return null;

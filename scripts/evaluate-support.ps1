@@ -39,6 +39,7 @@ $summary = [ordered]@{
     stages = [ordered]@{}
     coverage = $null
     rag = $null
+    entailment = $null
     comparisonComparable = $null
     conversationalChecksPassed = $false
     automatedChecksPassed = $false
@@ -200,6 +201,7 @@ try {
         EPISODE_REPORT_PATH = (Join-Path $reportDir 'phone-report.json')
         EXPANDED_EPISODE_REPORT_PATH = (Join-Path $reportDir 'expanded-report.json')
         CALIBRATION_REPORT_PATH = (Join-Path $reportDir 'calibration-report.json')
+        ENTAILMENT_REPORT_PATH = (Join-Path $reportDir 'entailment-report.json')
         RAG_SPLIT = 'all'
         RAG_INCLUDE_SECURITY = '1'
         RAG_CANDIDATE_SEMANTIC_MINIMUM = '0.45'
@@ -248,12 +250,23 @@ try {
         $expanded = Read-Report 'expanded-report.json'
         $calibration = Read-Report 'calibration-report.json'
         $rag = Read-Report 'rag-report.json'
+        $entailment = Read-Report 'entailment-report.json'
         $comparison = Read-Report 'comparison.json'
         $phoneTurns = @($phone.turns | Where-Object { $null -ne $_ }).Count
         $expandedEpisodes = @($expanded.episodes | Where-Object { $null -ne $_ }).Count
         $expandedTurns = @($expanded.episodes | ForEach-Object { $_.turns } | Where-Object { $null -ne $_ }).Count
         $expandedFailures = @($expanded.failures | Where-Object { $null -ne $_ }).Count
         $calibrationCases = @($calibration | Where-Object { $null -ne $_ }).Count
+        $supplementalFailures = @(@($phone.supplementalFailures) + @($expanded.supplementalFailures) | Where-Object { $null -ne $_ }).Count
+        $supplementalOk = ($phone.qualityContract -eq 'episode-material-regression-v1' -and $expanded.qualityContract -eq 'episode-material-regression-v1' -and
+            $null -ne $phone.supplementalFailures -and $null -ne $expanded.supplementalFailures -and $supplementalFailures -eq 0)
+        $entailmentOk = ($null -ne $entailment -and $entailment.commit -eq $commit -and $entailment.model -eq $summary.chatModel -and
+            $entailment.caseSet -eq 'entailment-challenge-v1' -and $entailment.complete -eq $true -and $entailment.expectedCaseCount -eq 10 -and
+            $entailment.metrics.cases -eq 10 -and @($entailment.rows).Count -eq 10 -and
+            $null -ne $entailment.metrics.falseAcceptances -and $entailment.metrics.falseAcceptances -eq 0 -and
+            $null -ne $entailment.metrics.falseRejections -and $entailment.metrics.falseRejections -eq 0 -and
+            $null -ne $entailment.metrics.unavailable -and $entailment.metrics.unavailable -eq 0)
+        if ($entailment) { $summary.entailment = $entailment.metrics }
         $coverageOk = ($phone.complete -eq $true -and $phone.commit -eq $commit -and $phoneTurns -eq 5 -and
             $expanded.complete -eq $true -and $expanded.commit -eq $commit -and $expandedEpisodes -eq 9 -and
             $expandedTurns -eq 26 -and $calibrationCases -eq 4)
@@ -262,6 +275,9 @@ try {
             expandedEpisodes = $expandedEpisodes
             expandedTurns = $expandedTurns
             expandedFailedChecks = $expandedFailures
+            supplementalFailedChecks = $supplementalFailures
+            supplementalPassed = $supplementalOk
+            entailmentPassed = $entailmentOk
             calibrationCases = $calibrationCases
             complete = $coverageOk
         }
@@ -279,7 +295,7 @@ try {
         if ($comparison) { $summary.comparisonComparable = $comparison.comparable }
         $summary.conversationalChecksPassed = ($summary.stages.episodes -eq 0 -and
             $summary.stages.comparison -eq 0 -and $coverageOk -and $expandedFailures -eq 0 -and
-            $comparison.comparable -eq $true)
+            $comparison.comparable -eq $true -and $supplementalOk -and $entailmentOk)
         $summary.automatedChecksPassed = (-not $ConversationOnly -and $summary.conversationalChecksPassed -and
             $summary.stages.rag -eq 0 -and $ragOk)
         if ($ConversationOnly -and $summary.conversationalChecksPassed) {

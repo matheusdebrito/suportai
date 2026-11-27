@@ -49,12 +49,11 @@ function reviewClaims(question:string,answer:string,units:{text:string;end:numbe
   if(claim.kind==='nonclaim'||claim.kind==='unsupported'){
    if(claim.refs.length)return rejected('claim_shape','uncertain');
    flushLabels();
-   if(claim.kind==='nonclaim'){
-    // Only narrow, nontechnical framing is permitted to disappear silently.
-    // Unknown classifications fail closed as unsupported rather than hiding a claim.
-    if(safeNonclaim(unit.text))nonclaimsRemoved++;
-    else unsupportedUnits++;
-   }else unsupportedUnits++;
+   // Only the existing narrow, independently recognized editorial shapes
+   // disappear silently. Unknown omissions still fail closed regardless of
+   // the label supplied by the reviewer.
+   if(safeNonclaim(unit.text))nonclaimsRemoved++;
+   else unsupportedUnits++;
    continue;
   }
   if(claim.kind==='question'){
