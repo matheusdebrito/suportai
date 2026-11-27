@@ -367,7 +367,8 @@ test('complete mode removes an unnecessary progress question by using the verifi
   ]})}
  ],[]);
  const result=await respond(actor,randomUUID(),'Me dê o passo a passo completo',[],model,async()=>[phone],{verifyEvidence:true,
-  semantic:{route:'existing',investigationId:randomUUID(),topic:null,intent:'knowledge',mode:'adaptive',focused:false,query:'telefone',equipment:null,environment:null,observations:[]}});
+  investigation:{topic:'Configurar telefone',supportPreference:'adaptive',reportedFacts:[],hypotheses:[],openQuestions:[],tests:[],sourceVersionIds:[]},
+  semantic:{route:'existing',investigationId:randomUUID(),topic:null,intent:'knowledge',mode:'adaptive',focused:false,query:'procedimento completo',equipment:null,environment:null,observations:[]}});
  assert.equal(result.metrics?.supportPreference,'complete');
  assert.match(result.answer,/passo a passo completo/i);
  assert.match(result.answer,/1\. Consulte o IP/);

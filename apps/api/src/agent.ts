@@ -51,7 +51,8 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  let selectionRepairAttempted=false,recoveryReadOnly=false,dialogueRepairAttempted=false;
  const budget=options.budget??new AgentBudget();
  const semantic=options.semantic;
- const contextualQuery=semantic?semantic.query||structuredSupportQuery(userMessage,history,options.investigation):structuredSupportQuery(userMessage,history,options.investigation);
+ const fallbackQuery=structuredSupportQuery(userMessage,history,options.investigation);
+ const contextualQuery=semantic?semantic.query||fallbackQuery:fallbackQuery;
  // Semantic intent guides the model, but cannot authorize an unsourced reply.
  const plan=new InvestigationPlan(userMessage,semantic?semantic.intent!=='social':shouldForceKnowledgeLookup(userMessage)||shouldForceKnowledgeLookup(contextualQuery),options.investigation?.hypotheses);
  const shouldVerify=Boolean(options.verifyEvidence||(provider===client&&client!==null));
@@ -97,17 +98,17 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      if(focused)deterministicReasons.push('invalid_reference','missing_reference');
      if(preference==='complete')deterministicReasons.push('invalid_reference','missing_reference');
      if(pendingActions.length||plan.metrics().conflicts||!deterministicReasons.includes(reason))return null;
-      const safe=focused?focusedGroundingFallback(userMessage,available,contextualQuery):semanticEvidenceFallback(contextualQuery,available,preference==='complete');
+      const safe=focused?focusedGroundingFallback(userMessage,available,fallbackQuery):semanticEvidenceFallback(fallbackQuery,available,preference==='complete');
      if(safe){literalFallbacks++;fallbackReason=reason;return done({...safe,pendingActions},'answered');}
      return null;
    }
    const fallback=!pendingActions.length&&available.length>0&&(focused
-     ? focusedGroundingFallback(userMessage,available,contextualQuery)
+     ? focusedGroundingFallback(userMessage,available,fallbackQuery)
      : preference==='guided'
-       ? guidedGroundingFallback(contextualQuery,available,confirmedGuidance(history,userMessage))
+       ? guidedGroundingFallback(fallbackQuery,available,confirmedGuidance(history,userMessage))
        : preference==='complete'
-         ? completeGroundingFallback(contextualQuery,available)
-         : literalGroundingFallback(contextualQuery,available));
+         ? completeGroundingFallback(fallbackQuery,available)
+         : literalGroundingFallback(fallbackQuery,available));
    if(fallback){literalFallbacks++;fallbackReason=reason;return done({...fallback,pendingActions},'answered');}
    return null;
  };
@@ -374,7 +375,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      let verifiedAnswer=message.content;
      let replySources=sources;
      if(sources.length>0&&shouldVerify){
-       const accessOnly=accessNoteGroundingFallback(contextualQuery,selection?.versionIds.length?sources.filter(source=>selection!.versionIds.includes(source.versionId)):sources,preference==='complete');
+       const accessOnly=accessNoteGroundingFallback(fallbackQuery,selection?.versionIds.length?sources.filter(source=>selection!.versionIds.includes(source.versionId)):sources,preference==='complete');
        if(accessOnly){literalFallbacks++;fallbackReason='model_rejected';return done({...accessOnly,pendingActions},'answered');}
        const validation=budget.startModelTurn(true);
        if(!validation)return budgetReply(budget.stopCause()??'token_budget');
@@ -448,7 +449,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
           const progress=lastProgressQuestion(reviewedAnswer);
           if(progress){
             const completeSources=selection?.versionIds.length?[...sources,...historicalSources].filter(source=>source.historical||selection!.versionIds.includes(source.versionId)):[...sources,...historicalSources];
-            const complete=completeGroundingFallback(contextualQuery,completeSources);
+            const complete=completeGroundingFallback(fallbackQuery,completeSources);
             if(complete){literalFallbacks++;fallbackReason='model_rejected';return done({...complete,pendingActions},'answered');}
             const start=reviewedAnswer.lastIndexOf(progress);
             if(start<0){recordVerifierFailure('model_rejected');return fallbackReply();}
