@@ -42,23 +42,29 @@ export function parseSemanticTurn(value:unknown,input:SemanticTurnInput):Semanti
  if(!exact(value,keys)||!routes.includes(value.route as SemanticTurn['route'])||!intents.includes(value.intent as SemanticTurn['intent'])||
     !modes.includes(value.mode as SemanticTurn['mode'])||typeof value.focused!=='boolean'||typeof value.query!=='string'||
     (value.query!==''&&!safeText(value.query,500))||!Array.isArray(value.observations)||value.observations.length>4)return null;
- let topic=value.topic,investigationId=value.investigationId;
- if(value.route==='existing'){
+ let route=value.route,topic=value.topic,investigationId=value.investigationId;
+ const normalized=(text:string)=>text.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+ const normalizedMessage=` ${normalized(input.message)} `;
+ if(route==='existing'&&/\btambem\b/.test(normalizedMessage)&&input.message.trim().length>30&&/[?]/.test(input.message)){
+  route='new';investigationId=null;topic=input.message.replace(/[?!.]+$/,'').trim().slice(0,160);
+ }
+ if(route==='existing'){
   if(typeof investigationId!=='string')return null;
-  const normalized=(text:string)=>text.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
   if(/^\s*(?:(?:vamos\s+)?(?:voltar|retomar)|voltando|retomando)\b/i.test(input.message)){
-   const message=` ${normalized(input.message)} `;
-   const mentioned=input.subjects.filter(candidate=>{const name=normalized(candidate.topic);return name&&message.includes(` ${name} `);});
+   const mentioned=input.subjects.filter(candidate=>{const name=normalized(candidate.topic);return name&&normalizedMessage.includes(` ${name} `);});
    if(mentioned.length===1)investigationId=mentioned[0].id;
   }
+  const generic=new Set(['laboratorio','ambiente','sistema','equipamento','problema','temporario','temporaria','configuracao','acesso']);
+  const mentionedByTerm=input.subjects.filter(candidate=>normalized(candidate.topic).split(' ').some(term=>term.length>=5&&!generic.has(term)&&normalizedMessage.includes(` ${term} `)));
+  if(mentionedByTerm.length===1)investigationId=mentionedByTerm[0].id;
   const subject=input.subjects.find(s=>s.id===investigationId);if(!subject)return null;
   if(value.topic!==null&&value.topic!==subject.topic)return null;
   topic=null;
- }else if(value.investigationId!==null)return null;
- if(value.route==='new'){if(!safeText(topic,160))return null;}
+ }else if(investigationId!==null)return null;
+ if(route==='new'){if(!safeText(topic,160))return null;}
  else if(topic!==null)return null;
- if(value.route==='uncertain'&&value.intent!=='clarify')return null;
- if(value.intent==='knowledge'&&!safeText(value.query,500)&&!(value.route==='existing'&&value.query===''))return null;
+ if(route==='uncertain'&&value.intent!=='clarify')return null;
+ if(value.intent==='knowledge'&&!safeText(value.query,500)&&!(route==='existing'&&value.query===''))return null;
  for(const item of value.observations){
   if(!exact(item,['kind','quote','result'])||!['fact','hypothesis','question','test'].includes(item.kind as string)||typeof item.quote!=='string'||(item.result!==null&&typeof item.result!=='string'))return null;
  }
@@ -67,7 +73,7 @@ export function parseSemanticTurn(value:unknown,input:SemanticTurnInput):Semanti
  const observations=value.observations.filter(item=>userQuote(item.quote,input.message,400)&&
    (item.result===null||(item.kind==='test'&&userQuote(item.result,input.message,400)))) as Observation[];
  if(value.intent==='social'&&(value.route!=='standalone'||value.query!==''||observations.length||equipment!==null||environment!==null))return null;
- return {...value,investigationId,topic,equipment,environment,observations} as SemanticTurn;
+ return {...value,route,investigationId,topic,equipment,environment,observations} as SemanticTurn;
 }
 export function semanticPreference(decision:SemanticTurn,previous?:InvestigationDraft):SupportPreference{
  return decision.mode==='inherit'?previous?.supportPreference??'adaptive':decision.mode;

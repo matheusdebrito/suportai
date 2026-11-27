@@ -74,6 +74,19 @@ test('semantic turn honors an explicit named resume over the currently active su
  assert.equal(result?.investigationId,ris);
  assert.equal(result?.topic,null);
 });
+test('semantic turn isolates an explicit additional incident and resumes a uniquely named subject',()=>{
+ const badge=randomUUID(),printer=randomUUID();
+ const subjects=[{id:badge,topic:'Crachá temporário no laboratório Nimbo'},{id:printer,topic:'Impressão em branco no laboratório Nimbo'}];
+ const additional:SemanticTurnInput={message:'A impressão aqui no Nimbo também saiu toda em branco, me ajuda?',activeId:badge,history:[],subjects};
+ const created=parseSemanticTurn({...semantic(),investigationId:badge,query:'impressão em branco laboratório Nimbo',observations:[{kind:'fact',quote:'A impressão aqui no Nimbo também saiu toda em branco',result:null}]},additional);
+ assert.equal(created?.route,'new');
+ assert.equal(created?.investigationId,null);
+ assert.match(created?.topic??'',/impressão/i);
+ const resume:SemanticTurnInput={message:'Quero terminar aquele negócio do crachá',activeId:printer,history:[],subjects};
+ const resumed=parseSemanticTurn({...semantic(),investigationId:printer,query:'emitir crachá temporário'},resume);
+ assert.equal(resumed?.route,'existing');
+ assert.equal(resumed?.investigationId,badge);
+});
 test('semantic interpreter uses strict structured outputs and charges the shared budget',async()=>{
  const calls:any[]=[];
  const budget=new AgentBudget();

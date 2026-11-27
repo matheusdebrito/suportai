@@ -95,6 +95,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      // Never replace a semantic rejection/conflict with a lexical guess.
      const deterministicReasons=['provider_failure','model_timeout','model_interrupted','provider_error','provider_incompatible','invalid_json','schema_invalid','claim_shape'];
      if(focused)deterministicReasons.push('invalid_reference','missing_reference');
+     if(preference==='complete')deterministicReasons.push('invalid_reference','missing_reference');
      if(pendingActions.length||plan.metrics().conflicts||!deterministicReasons.includes(reason))return null;
       const safe=focused?focusedGroundingFallback(userMessage,available,contextualQuery):semanticEvidenceFallback(contextualQuery,available,preference==='complete');
      if(safe){literalFallbacks++;fallbackReason=reason;return done({...safe,pendingActions},'answered');}
