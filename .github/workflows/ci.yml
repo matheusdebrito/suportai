@@ -42,6 +42,13 @@ jobs:
           if ($LASTEXITCODE -ne 2) { throw 'Real evaluation must require explicit external AI opt-in' }
           exit 0
       - run: npm ci --no-audit --no-fund
+      - name: Exercise evaluation runner database preparation without AI
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          pwsh -NoProfile -File scripts/evaluate-support.ps1 -DatabaseSmoke -SkipInstall
+          if ($LASTEXITCODE -ne 0) { throw 'Disposable evaluation database preparation failed' }
+          exit 0
       - run: npm run db:migrate
       - run: npm run db:migrate # Deve ser idempotente sem reaplicar DDL
       - run: npm run typecheck

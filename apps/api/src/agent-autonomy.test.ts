@@ -320,6 +320,12 @@ test('focused confirmation recovers one exact authorized value after an invalid 
   {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[
    {unit:1,kind:'current',refs:[{evidence:1,quote:'A senha padrão é admin.'}]}
   ]})},
+  // Structural recovery now also runs in focused mode. Simulate an
+  // unresolvable indexed reference, then a failed rewritten candidate;
+  // the safe exact-value fallback must still be available.
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:{
+   u1:{kind:'current',refs:['unknown-span']}
+  }})},
   {role:'assistant',content:'A senha padrão para o telefone é admin.'},
   {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[
    {unit:1,kind:'current',refs:[{evidence:1,quote:'Senha padrão: admin.'}]}
@@ -332,6 +338,9 @@ test('focused confirmation recovers one exact authorized value after an invalid 
  assert.equal(result.answer,'Use a senha padrão admin. [1]');
  assert.equal(result.sources[0]?.versionId,phone.versionId);
  assert.equal(result.metrics?.literalFallbacks,1);
+ assert.equal(result.metrics?.verifierRepairs,1);
+ assert.equal(result.metrics?.verifierChecks,3);
+ assert.equal(result.metrics?.verifierFailures?.schema_invalid,1);
  assert.equal(result.metrics?.fallbackReason,'invalid_reference');
 });
 test('complete follow-up ignores sensitive words from history when recovering the full procedure',async()=>{

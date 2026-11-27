@@ -8,12 +8,17 @@
 [CmdletBinding()]
 param(
     [switch]$ApproveExternalAI,
-    [switch]$SkipInstall
+    [switch]$SkipInstall,
+    [switch]$DatabaseSmoke
 )
 $ErrorActionPreference = 'Stop'
 # Native nonzero exit codes are handled explicitly, including on PowerShell 7.
 $PSNativeCommandUseErrorActionPreference = $false
-if (-not $ApproveExternalAI) {
+if ($ApproveExternalAI -and $DatabaseSmoke) {
+    Write-Host 'Escolha -ApproveExternalAI para avaliacao real ou -DatabaseSmoke para preparar bancos sem IA.'
+    exit 2
+}
+if (-not $ApproveExternalAI -and -not $DatabaseSmoke) {
     Write-Host 'A avaliacao usa fixtures sinteticas e uma chave de API com cobranca. Execute com -ApproveExternalAI se estiver autorizado.'
     exit 2
 }
@@ -26,6 +31,7 @@ $dbPassword = $null
 $savedEnv = @{}
 $summary = [ordered]@{
     schemaVersion = 1
+    mode = $(if ($DatabaseSmoke) { 'database_smoke' } else { 'real' })
     commit = $null
     chatModel = 'gpt-4.1-mini'
     embeddingModel = 'text-embedding-3-small'
@@ -72,6 +78,21 @@ function Require-Success([int]$Code, [string]$Stage) {
     if ($Code -ne 0) { throw "Falha em $Stage (codigo $Code). Consulte os logs." }
 }
 
+function Wait-EvalDatabase {
+    param([string]$Id, [string]$Password)
+    $ErrorActionPreference = 'Continue'
+    # The image initializes with a temporary PostgreSQL server listening only
+    # on a Unix socket. Probe the final TCP server with a real SQL query.
+    # In particular, do not accept pg_isready on that temporary socket.
+    for ($attempt = 0; $attempt -lt 60; $attempt++) {
+        $probe = & docker exec -e "PGPASSWORD=$Password" -e 'PGCONNECT_TIMEOUT=2' $Id psql -X -w -h 127.0.0.1 -p 5432 -U suportai -d suportai_eval -tAc 'SELECT 1' 2>&1
+        $code = $LASTEXITCODE
+        if ($code -eq 0 -and ($probe -join '').Trim() -eq '1') { return $true }
+        Start-Sleep -Seconds 1
+    }
+    return $false
+}
+
 function Read-Report([string]$Name) {
     $path = Join-Path $reportDir $Name
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $null }
@@ -109,17 +130,20 @@ try {
     & docker info --format '{{.ServerVersion}}' | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Docker indisponivel. Abra o Docker Desktop.' }
 
-    $apiKey = $env:OPENAI_API_KEY
-    if ([string]::IsNullOrWhiteSpace($apiKey)) {
-        $secureKey = Read-Host 'Chave da API OpenAI autorizada para este teste' -AsSecureString
-        try { $apiKey = [System.Net.NetworkCredential]::new('', $secureKey).Password }
-        finally { $secureKey.Dispose() }
+    if (-not $DatabaseSmoke) {
+        $apiKey = $env:OPENAI_API_KEY
+        if ([string]::IsNullOrWhiteSpace($apiKey)) {
+            $secureKey = Read-Host 'Chave da API OpenAI autorizada para este teste' -AsSecureString
+            try { $apiKey = [System.Net.NetworkCredential]::new('', $secureKey).Password }
+            finally { $secureKey.Dispose() }
+        }
+        if ([string]::IsNullOrWhiteSpace($apiKey)) { throw 'Chave da API ausente.' }
+        $apiKey = $apiKey.Trim()
     }
-    if ([string]::IsNullOrWhiteSpace($apiKey)) { throw 'Chave da API ausente.' }
-    $apiKey = $apiKey.Trim()
 
     $runId = (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + $commit.Substring(0,7) + '-' + [guid]::NewGuid().ToString('N').Substring(0,8)
-    $reportDir = Join-Path $root "test-results\support-eval-$runId"
+    $reportPrefix = if ($DatabaseSmoke) { 'support-eval-smoke' } else { 'support-eval' }
+    $reportDir = Join-Path (Join-Path $root 'test-results') "$reportPrefix-$runId"
     New-Item -ItemType Directory -Path $reportDir | Out-Null
     $containerName = "suportai-eval-$runId"
 
@@ -138,30 +162,30 @@ try {
     $created = & docker run -d --rm --name $containerName --label 'suportai.purpose=synthetic-evaluation' -p '127.0.0.1::5432' -e 'POSTGRES_USER=suportai' -e "POSTGRES_PASSWORD=$dbPassword" -e 'POSTGRES_DB=suportai_eval' 'pgvector/pgvector:pg17'
     if ($LASTEXITCODE -ne 0 -or "$created" -notmatch '^[a-f0-9]{64}$') { throw 'Falha ao criar o banco descartavel.' }
     $containerId = "$created"
-    $ready = $false
-    for ($attempt = 0; $attempt -lt 60; $attempt++) {
-        & docker exec $containerId pg_isready -U suportai -d suportai_eval | Out-Null
-        if ($LASTEXITCODE -eq 0) { $ready = $true; break }
-        Start-Sleep -Seconds 1
+    if (-not (Wait-EvalDatabase -Id $containerId -Password $dbPassword)) {
+        $summary.stages.databaseReadiness = 1
+        $null = Invoke-Logged 'docker' @('logs','--tail','80',$containerId) 'database-startup.log'
+        throw 'O PostgreSQL de teste nao ficou pronto por TCP. Consulte database-startup.log.'
     }
-    if (-not $ready) { throw 'O PostgreSQL de teste nao ficou pronto.' }
+    $summary.stages.databaseReadiness = 0
+    Write-Host 'PostgreSQL pronto: consulta SQL por TCP aprovada.'
     $binding = & docker port $containerId '5432/tcp'
     if ($LASTEXITCODE -ne 0 -or "$binding" -notmatch '^127\.0\.0\.1:([0-9]+)$') { throw 'Porta local isolada nao confirmada.' }
     $port = $Matches[1]
     $baseUrl = "postgres://suportai:$dbPassword@127.0.0.1:$port"
     # Separate RAG corpus database: an interrupted conversational suite must
     # not contaminate the subsequent ranking experiment.
-    Require-Success (Invoke-Logged 'docker' @('exec',$containerId,'createdb','-U','suportai','suportai_rag_eval') 'create-rag-db.log') 'createRagDatabase'
+    Require-Success (Invoke-Logged 'docker' @('exec','-e',"PGPASSWORD=$dbPassword",'-e','PGCONNECT_TIMEOUT=5',$containerId,'createdb','-w','-h','127.0.0.1','-p','5432','-U','suportai','suportai_rag_eval') 'create-rag-db.log') 'createRagDatabase'
 
     $settings = @{
         NODE_ENV = 'test'
         APP_ORIGIN = 'http://localhost:5173'
-        OPENAI_API_KEY = $apiKey
+        OPENAI_API_KEY = $(if ($DatabaseSmoke) { 'synthetic-disabled' } else { $apiKey })
         OPENAI_BASE_URL = 'https://api.openai.com/v1'
-        ALLOW_EXTERNAL_AI_DATA_PROCESSING = 'true'
+        ALLOW_EXTERNAL_AI_DATA_PROCESSING = $(if ($DatabaseSmoke) { 'false' } else { 'true' })
         OPENAI_CHAT_MODEL = $summary.chatModel
         OPENAI_EMBED_MODEL = $summary.embeddingModel
-        RUN_REAL_EPISODES = '1'
+        RUN_REAL_EPISODES = $(if ($DatabaseSmoke) { '0' } else { '1' })
         AGENT_MAX_STEPS = '8'
         AGENT_MAX_RAG_SEARCHES = '5'
         AGENT_TIMEOUT_MS = '60000'
@@ -184,64 +208,76 @@ try {
     foreach ($name in $settings.Keys) { Set-EvalEnv $name $settings[$name] }
     Require-Success (Invoke-Logged $npm @('run','db:migrate') 'migrate.log') 'migrate'
     Require-Success (Invoke-Logged $npm @('run','db:migrate') 'migrate-repeat.log') 'migrateRepeat'
-
-    Write-Host '3/5 - Avaliando os episodios HTTP com o modelo real...'
-    Push-Location (Join-Path $root 'apps/api')
-    try {
-        $summary.stages.episodes = Invoke-Logged 'node' @('--import','tsx','--test','src/investigation-chat.test.ts') 'execution.log'
-    } finally { Pop-Location }
-
-    # Preserve reports and continue independent evaluations even if assertions fail.
-    Write-Host '4/5 - Avaliando os 100 casos positivos e 20 casos de seguranca do RAG...'
     Set-EvalEnv 'DATABASE_URL' "$baseUrl/suportai_rag_eval"
     Set-EvalEnv 'TEST_DATABASE_URL' "$baseUrl/suportai_rag_eval"
     Require-Success (Invoke-Logged $npm @('run','db:migrate') 'migrate-rag.log') 'migrateRag'
-    $summary.stages.rag = Invoke-Logged $npm @('run','rag:baseline','-w','@suportai/api','--',$corpus,(Join-Path $reportDir 'rag-report.json'),$commit) 'rag.log'
+    Set-EvalEnv 'DATABASE_URL' "$baseUrl/suportai_eval"
+    Set-EvalEnv 'TEST_DATABASE_URL' "$baseUrl/suportai_eval"
 
-    Write-Host '5/5 - Comparando com o baseline e verificando cobertura...'
-    if (Test-Path -LiteralPath $env:EPISODE_REPORT_PATH -PathType Leaf) {
-        $summary.stages.comparison = Invoke-Logged $npm @('run','episode:compare','-w','@suportai/api','--',$baseline,$env:EPISODE_REPORT_PATH,(Join-Path $reportDir 'comparison.json')) 'comparison.log'
-    } else { $summary.stages.comparison = 'missing_phone_report' }
-    $phone = Read-Report 'phone-report.json'
-    $expanded = Read-Report 'expanded-report.json'
-    $calibration = Read-Report 'calibration-report.json'
-    $rag = Read-Report 'rag-report.json'
-    $comparison = Read-Report 'comparison.json'
-    $phoneTurns = @($phone.turns | Where-Object { $null -ne $_ }).Count
-    $expandedEpisodes = @($expanded.episodes | Where-Object { $null -ne $_ }).Count
-    $expandedTurns = @($expanded.episodes | ForEach-Object { $_.turns } | Where-Object { $null -ne $_ }).Count
-    $expandedFailures = @($expanded.failures | Where-Object { $null -ne $_ }).Count
-    $calibrationCases = @($calibration | Where-Object { $null -ne $_ }).Count
-    $coverageOk = ($phone.complete -eq $true -and $phone.commit -eq $commit -and $phoneTurns -eq 5 -and
-        $expanded.complete -eq $true -and $expanded.commit -eq $commit -and $expandedEpisodes -eq 9 -and
-        $expandedTurns -eq 26 -and $calibrationCases -eq 4)
-    $summary.coverage = [ordered]@{
-        phoneTurns = $phoneTurns
-        expandedEpisodes = $expandedEpisodes
-        expandedTurns = $expandedTurns
-        expandedFailedChecks = $expandedFailures
-        calibrationCases = $calibrationCases
-        complete = $coverageOk
-    }
-    $ragOk = ($null -ne $rag -and $rag.commit -eq $commit -and $rag.pilot.cases -eq 60 -and
-        $rag.holdout.cases -eq 40 -and $rag.security.cases -eq 20 -and
-        $null -ne $rag.security.unauthorizedOrRevokedReturned -and $rag.security.unauthorizedOrRevokedReturned -eq 0)
-    if ($rag) {
-        $summary.rag = [ordered]@{
-            pilot = $rag.pilot
-            holdout = $rag.holdout
-            securityCases = $rag.security.cases
-            unauthorizedOrRevokedReturned = $rag.security.unauthorizedOrRevokedReturned
-        }
-    }
-    if ($comparison) { $summary.comparisonComparable = $comparison.comparable }
-    $summary.automatedChecksPassed = ($summary.stages.episodes -eq 0 -and $summary.stages.rag -eq 0 -and
-        $summary.stages.comparison -eq 0 -and $coverageOk -and $expandedFailures -eq 0 -and $ragOk -and
-        $comparison.comparable -eq $true)
-    if ($summary.automatedChecksPassed) {
-        $summary.status = 'automated_checks_passed_review_pending'
+    if ($DatabaseSmoke) {
+        # Exercise the actual setup/migrations and cleanup without a provider,
+        # embeddings, or any conversational assertions.
+        $summary.status = 'database_smoke_passed'
         $exitCode = 0
-    } else { $summary.status = 'evaluation_requires_review' }
+        Write-Host 'Preparacao dos dois bancos aprovada. Nenhuma avaliacao de IA executada.'
+    } else {
+        Write-Host '3/5 - Avaliando os episodios HTTP com o modelo real...'
+        Push-Location (Join-Path $root 'apps/api')
+        try {
+            $summary.stages.episodes = Invoke-Logged 'node' @('--import','tsx','--test','src/investigation-chat.test.ts') 'execution.log'
+        } finally { Pop-Location }
+
+        # Preserve reports and continue independent evaluations even if assertions fail.
+        Write-Host '4/5 - Avaliando os 100 casos positivos e 20 casos de seguranca do RAG...'
+        Set-EvalEnv 'DATABASE_URL' "$baseUrl/suportai_rag_eval"
+        Set-EvalEnv 'TEST_DATABASE_URL' "$baseUrl/suportai_rag_eval"
+        $summary.stages.rag = Invoke-Logged $npm @('run','rag:baseline','-w','@suportai/api','--',$corpus,(Join-Path $reportDir 'rag-report.json'),$commit) 'rag.log'
+
+        Write-Host '5/5 - Comparando com o baseline e verificando cobertura...'
+        if (Test-Path -LiteralPath $env:EPISODE_REPORT_PATH -PathType Leaf) {
+            $summary.stages.comparison = Invoke-Logged $npm @('run','episode:compare','-w','@suportai/api','--',$baseline,$env:EPISODE_REPORT_PATH,(Join-Path $reportDir 'comparison.json')) 'comparison.log'
+        } else { $summary.stages.comparison = 'missing_phone_report' }
+        $phone = Read-Report 'phone-report.json'
+        $expanded = Read-Report 'expanded-report.json'
+        $calibration = Read-Report 'calibration-report.json'
+        $rag = Read-Report 'rag-report.json'
+        $comparison = Read-Report 'comparison.json'
+        $phoneTurns = @($phone.turns | Where-Object { $null -ne $_ }).Count
+        $expandedEpisodes = @($expanded.episodes | Where-Object { $null -ne $_ }).Count
+        $expandedTurns = @($expanded.episodes | ForEach-Object { $_.turns } | Where-Object { $null -ne $_ }).Count
+        $expandedFailures = @($expanded.failures | Where-Object { $null -ne $_ }).Count
+        $calibrationCases = @($calibration | Where-Object { $null -ne $_ }).Count
+        $coverageOk = ($phone.complete -eq $true -and $phone.commit -eq $commit -and $phoneTurns -eq 5 -and
+            $expanded.complete -eq $true -and $expanded.commit -eq $commit -and $expandedEpisodes -eq 9 -and
+            $expandedTurns -eq 26 -and $calibrationCases -eq 4)
+        $summary.coverage = [ordered]@{
+            phoneTurns = $phoneTurns
+            expandedEpisodes = $expandedEpisodes
+            expandedTurns = $expandedTurns
+            expandedFailedChecks = $expandedFailures
+            calibrationCases = $calibrationCases
+            complete = $coverageOk
+        }
+        $ragOk = ($null -ne $rag -and $rag.commit -eq $commit -and $rag.pilot.cases -eq 60 -and
+            $rag.holdout.cases -eq 40 -and $rag.security.cases -eq 20 -and
+            $null -ne $rag.security.unauthorizedOrRevokedReturned -and $rag.security.unauthorizedOrRevokedReturned -eq 0)
+        if ($rag) {
+            $summary.rag = [ordered]@{
+                pilot = $rag.pilot
+                holdout = $rag.holdout
+                securityCases = $rag.security.cases
+                unauthorizedOrRevokedReturned = $rag.security.unauthorizedOrRevokedReturned
+            }
+        }
+        if ($comparison) { $summary.comparisonComparable = $comparison.comparable }
+        $summary.automatedChecksPassed = ($summary.stages.episodes -eq 0 -and $summary.stages.rag -eq 0 -and
+            $summary.stages.comparison -eq 0 -and $coverageOk -and $expandedFailures -eq 0 -and $ragOk -and
+            $comparison.comparable -eq $true)
+        if ($summary.automatedChecksPassed) {
+            $summary.status = 'automated_checks_passed_review_pending'
+            $exitCode = 0
+        } else { $summary.status = 'evaluation_requires_review' }
+    }
 } catch {
     Write-Warning (Protect-Log $_.Exception.Message)
     $summary.error = Protect-Log $_.Exception.Message
