@@ -19,7 +19,7 @@ Source of truth: melhorias.md. No merge authorized. Code first, execution of tes
 | Effective metadata | Implemented and validated | Episode/baseline record model, embedding model, temperature, limits, corpus hash and evaluated commit |
 | Reproducible baseline | Implemented, human label pending | Baseline generated from five AI-reviewed turns with `criteriaMet: true`; it explicitly retains `humanReview: pending` |
 | Documentation counts | Validated | Grounding dry-run lists 15 cases; calibration has 4 cases; real episode has 5 turns |
-| Final verification | Complete with platform limitation | Typecheck and build pass. Official suite: 292 tests, 279 pass, 11 Windows-only infrastructure failures, 2 opt-in skips. Linux CI and human conversational review remain required |
+| Final verification | Complete | Typecheck and build pass. Official Windows suite: 292 tests, 279 pass, 11 platform-only infrastructure failures, 2 opt-in skips. Linux CI run 45998382347 passed; human conversational review remains pending |
 
 ## Resume point
 Next: inspect verifier function signature and procedure rejection, wire episode-review into a report CLI, capture verifier outcomes without exposing production data, complete calibration and baseline metadata. Review all previous commits for type and SQL errors before validation. No tests executed in this round. No production migration or reindex performed. Real model evaluation requires isolated database and explicit external processing authorization.
@@ -64,4 +64,4 @@ Problems found and corrected:
 
 Focused regression tests pass, as do typecheck and the API/web production build. The official full suite on Windows reported 292 tests: 279 passed, 11 failed and 2 skipped. All 11 failures are confined to three Bash operational-script checks and eight Unix-domain-socket PDF parser checks, which cannot execute on this Windows host; the repository instructions assign those checks to Linux CI. No functional, database, authorization or grounding regression failed in that run. The two skips are the expected real-model tests when the general suite runs without opt-in; they passed separately in the authorized run.
 
-Detailed commands, outputs, responses, metrics and limitations are recorded in `docs/validation-pr-84.md`; machine-readable synthetic evidence is under `docs/validation-pr-84-evidence/`. Pending gates are fresh Linux CI for the correction commits and human review of the conversational labels. No merge was performed.
+Detailed commands, outputs, responses, metrics and limitations are recorded in `docs/validation-pr-84.md`; machine-readable synthetic evidence is under `docs/validation-pr-84-evidence/`. Linux CI run 45998382347 passed for the published correction and evidence commit. Human review of the conversational labels remains pending. No merge was performed.

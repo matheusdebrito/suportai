@@ -12,7 +12,7 @@ SHA do código após as correções e usado na avaliação definitiva: `036f2fa7
 
 As mudanças do PR estão tecnicamente coerentes e a avaliação sintética com modelo real atendeu aos critérios automatizados de continuidade, grounding, recuperação e formato. Foram encontrados e corrigidos seis grupos de regressões no verificador, na recuperação contextual e nos modos guiado/completo, incluindo um caminho sem evidência para respostas técnicas pontuais. As correções mantêm a decisão de autorização no backend e falham de forma fechada quando falta evidência factual.
 
-O PR fica **tecnicamente pronto após CI Linux verde**, com uma pendência não bloqueante para a implementação: revisão humana das cinco respostas conversacionais. A avaliação por IA não substitui essa revisão. Nenhum merge foi realizado.
+O PR está **tecnicamente pronto para merge**: o CI Linux do SHA publicado passou (`validate`, execução 45998382347) e a auditoria de dependências de produção também passou. Permanece uma pendência não bloqueante para a implementação: revisão humana das cinco respostas conversacionais. A avaliação por IA não substitui essa revisão. Nenhum merge foi realizado.
 
 ## Ambiente e proteção de dados
 
@@ -137,7 +137,7 @@ As correções estão nos commits `afcb5a0`, `dad8da0`, `0a38b0f` e `036f2fa`, a
 | Avaliação/calibração/baseline RAG | Concluídos; política inalterada |
 | `git diff --check` | Aprovado após remoção de whitespace residual |
 
-As 11 falhas da suíte completa são exclusivamente de plataforma: três verificações de scripts Bash e oito verificações do parser por socket Unix retornaram indisponibilidade/EACCES no Windows. Elas não atingem o fluxo alterado pelo PR e devem ser confirmadas pelo workflow Linux. Os dois ignorados são os testes reais quando a suíte geral é executada sem o opt-in; ambos foram aprovados na execução separada autorizada.
+As 11 falhas da suíte completa são exclusivamente de plataforma: três verificações de scripts Bash e oito verificações do parser por socket Unix retornaram indisponibilidade/EACCES no Windows. Elas não atingem o fluxo alterado pelo PR e foram confirmadas pelo workflow Linux: `validate` passou na execução 45998382347. Os dois ignorados são os testes reais quando a suíte geral é executada sem o opt-in; ambos foram aprovados na execução separada autorizada.
 
 ## Critérios atendidos e pendências
 
@@ -154,7 +154,6 @@ Atendidos com evidência automatizada e sintética:
 
 Pendências:
 
-- CI Linux verde no SHA final da branch, especialmente para Bash e sockets Unix;
 - revisão humana das cinco respostas e dos rótulos de qualidade;
 - corpus maior e humanamente revisado antes de qualquer ajuste de limiar;
 - eventual reindexação controlada dos documentos existentes, fora deste PR/rodada.
@@ -170,4 +169,4 @@ Pendências:
 
 ## Conclusão
 
-Não foi identificada regressão funcional remanescente no escopo do PR. O código avaliado está pronto para integração **desde que o novo CI Linux fique verde**. A revisão humana conversacional deve ser concluída para homologar a qualidade, mas não invalida a evidência automatizada nem autoriza declarar os rótulos de IA como humanos. O merge permanece deliberadamente não executado.
+Não foi identificada regressão funcional remanescente no escopo do PR. O código avaliado está tecnicamente pronto para integração, com CI Linux e auditoria de dependências verdes. A revisão humana conversacional deve ser concluída para homologar a qualidade, mas não invalida a evidência automatizada nem autoriza declarar os rótulos de IA como humanos. O merge permanece deliberadamente não executado.
