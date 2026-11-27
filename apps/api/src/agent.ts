@@ -7,9 +7,9 @@ import type OpenAI from 'openai';
 import {buildConversationMemory,memoryMessage} from './conversation-memory.js';
 import {getPublishedDocument,getVisibleDocumentVersions,documentToSource,validDocumentId} from './agent-knowledge-tools.js';
 import {reviewDraftIntent} from './agent-intent.js';
-import {verifyGroundedAnswer,type GroundingFailure} from './agent-verifier.js';
+import {splitGroundingUnits,verifyGroundedAnswer,type GroundingFailure} from './agent-verifier.js';
 import {completeGroundingFallback,guidedGroundingFallback,literalGroundingFallback} from './grounding-fallback.js';
-import {isFocusedKnowledgeQuestion,supportPreference,supportContext,structuredSupportQuery,SUPPORT_POLICY} from './support-dialogue.js';
+import {isFocusedKnowledgeQuestion,lastProgressQuestion,supportPreference,supportContext,structuredSupportQuery,SUPPORT_POLICY} from './support-dialogue.js';
 import {shouldForceKnowledgeLookup,groundedReply} from './llm-policy.js';
 import {unsupportedNetworkLiterals} from './answer-evidence.js';
 import {explicitlyTargetedSpace} from './space-targeting.js';
@@ -260,8 +260,10 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      // When a guided request receives a document dump, give the model one
      // bounded opportunity to adapt it BEFORE semantic verification.
      if(shouldVerify&&preference==='guided'&&sources.length&&!pendingActions.length&&!adaptiveRewrites&&
-        (message.content.length>650||message.content.split('\n').filter(line=>line.trim()).length>7)&&
-        !message.content.trim().endsWith('?')&&budget.steps+2<=budget.limits.maxSteps&&!budget.stopCause()){
+         (message.content.length>650||message.content.split('\n').filter(line=>line.trim()).length>7||
+          (!isFocusedKnowledgeQuestion(userMessage)&&splitGroundingUnits(message.content).length>3))&&
+         (!message.content.trim().endsWith('?')||splitGroundingUnits(message.content).length>3)&&
+         budget.steps+2<=budget.limits.maxSteps&&!budget.stopCause()){
        adaptiveRewrites++;
        messages.push({role:'system',content:responseContract+'\nO pedido é de atendimento guiado, não de reprodução integral do manual. Responda apenas com a próxima etapa aplicável, preserve pré-requisitos e valores necessários, e faça uma pergunta curta sobre o resultado. Se o usuário pediu um dado específico, responda diretamente. Não invente informações.'});
        finalAnswerNext=true;continue;
@@ -303,6 +305,10 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
        if(review.verdict!=='supported')return fallbackReply();
        nonclaimsRemoved+=review.nonclaimsRemoved??0;
        unsupportedUnits+=review.unsupportedUnits??0;
+        if(preference==='guided'&&(review.unsupportedUnits??0)>0){
+          verifierRejections++;lastVerifierFailure='model_rejected';return fallbackReply();
+        }
+        if(preference==='complete'&&lastProgressQuestion(review.answer))return fallbackReply();
        verifiedAnswer=review.answer;
        replySources=review.sources;
      }

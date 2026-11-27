@@ -245,19 +245,19 @@ test('verified guided response includes next action and a neutral progress quest
  assert.equal((result.answer.match(/\[1\]/g)??[]).length,1);
  assert.doesNotMatch(result.answer,/Abra a interface web/);
 });
-test('guided request reformulates an oversized article dump before verification',async()=>{
+test('guided request reformulates a multi-stage answer before verification',async()=>{
  const phone:Source={...source,title:'Configurar telefone',content:'Segure o botão central. Acesse Status > Network Status > IPV4.'};
  const calls:any[]=[];
  const model=scripted([
   {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'configurar telefone'},'q')]},
-  {role:'assistant',content:'Orientações do manual.\n'.repeat(10)},
+  {role:'assistant',content:'Segure o botão central. Acesse o menu Status. Abra o navegador. Ative a conta. Conseguiu concluir?'},
   {role:'assistant',content:'Segure o botão central. Conseguiu identificar o endereço?'},
   {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[{unit:1,kind:'current',refs:[{evidence:1,quote:'Segure o botão central.'}]},{unit:2,kind:'question',refs:[]}]})}
  ],calls);
  const result=await respond(actor,randomUUID(),'Preciso configurar um telefone',[],model,async()=>[phone],{verifyEvidence:true});
  assert.equal(result.metrics?.adaptiveRewrites,1);assert.equal(result.metrics?.stopReason,'answered');
  assert.match(result.answer,/Conseguiu identificar/);
- assert.doesNotMatch(result.answer,/Orientações do manual/);
+ assert.doesNotMatch(result.answer,/Abra o navegador|Ative a conta/);
 });
 test('focused password follow-up receives an explicit natural concise-answer policy',async()=>{
  const phone:Source={...source,title:'Configurar telefone',content:'Na interface web, use o usuário admin. As senhas documentadas são fixture-primary ou admin.'};
@@ -299,4 +299,22 @@ test('complete follow-up ignores sensitive words from history when recovering th
  assert.match(result.answer,/Segure o botão central/);
  assert.match(result.answer,/Account Active: YES/);
  assert.doesNotMatch(result.answer,/Informe o equipamento|trecho original/);
+});
+
+test('complete mode removes an unnecessary progress question by using the verified full document',async()=>{
+ const phone:Source={...source,title:'Configurar telefone',ordinal:-1,completeDocument:true,
+  content:'Configurar telefone\n1. Consulte o IP no menu Status.\n2. Abra o IP no navegador.'};
+ const model=scripted([
+  {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'procedimento completo telefone'},'q')]},
+  {role:'assistant',content:'Consulte o IP no menu Status. Abra o IP no navegador. Conseguiu concluir essa etapa?'},
+  {role:'assistant',content:JSON.stringify({verdict:'supported',claims:[
+   {unit:1,kind:'current',refs:[{evidence:1,quote:'1. Consulte o IP no menu Status.'}]},
+   {unit:2,kind:'current',refs:[{evidence:1,quote:'2. Abra o IP no navegador.'}]},
+   {unit:3,kind:'question',refs:[]}
+  ]})}
+ ],[]);
+ const result=await respond(actor,randomUUID(),'Me dê o passo a passo completo',[],model,async()=>[phone],{verifyEvidence:true});
+ assert.match(result.answer,/passo a passo completo/i);
+ assert.match(result.answer,/1\. Consulte o IP/);
+ assert.doesNotMatch(result.answer,/Conseguiu concluir/);
 });
