@@ -52,14 +52,17 @@ test('semantic turn accepts an authorized subject, original operation and litera
 test('semantic turn rejects unknown IDs, fabricated observations, test results, unsafe fields and malformed outputs',()=>{
  for(const decision of [
   semantic({investigationId:randomUUID()}),
-  semantic({observations:[{kind:'fact',quote:'A IA confirmou o resultado.',result:null}]}),
-  semantic({observations:[{kind:'test',quote:'Acho que a tela mudou.',result:'funcionou'}]}),
-  semantic({equipment:'equipamento não relatado'}),
+  semantic({topic:'Outro assunto'}),
   semantic({query:'token: abcdefghijklmnopqrstuvwxyz'}),
   semantic({query:''}),
   semantic({route:'uncertain',investigationId:null,intent:'knowledge'}),
   {...semantic(),extra:'unexpected'}
  ])assert.equal(parseSemanticTurn(decision,input),null);
+});
+test('semantic turn canonicalizes redundant routing and drops untrusted optional memory fields',()=>{
+ const result=parseSemanticTurn(semantic({topic:'Visitantes',equipment:'equipamento não relatado',
+  observations:[{kind:'fact',quote:'A IA confirmou o resultado.',result:null},{kind:'test',quote:'Acho que a tela mudou.',result:'funcionou'}]}),input);
+ assert.deepEqual(result,semantic({equipment:null,observations:[]}));
 });
 test('semantic interpreter uses strict structured outputs and charges the shared budget',async()=>{
  const calls:any[]=[];

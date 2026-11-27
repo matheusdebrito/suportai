@@ -21,10 +21,15 @@ const keys=['route','investigationId','topic','intent','mode','focused','query',
 const stringOrNull={type:['string','null']};
 export const SEMANTIC_TURN_FORMAT={type:'json_schema' as const,json_schema:{name:'semantic_turn_v1',strict:true,schema:{
  type:'object',additionalProperties:false,required:keys,properties:{
-  route:{type:'string',enum:[...routes]},investigationId:stringOrNull,topic:stringOrNull,
-  intent:{type:'string',enum:[...intents]},mode:{type:'string',enum:[...modes]},
-  focused:{type:'boolean'},query:{type:'string'},equipment:stringOrNull,environment:stringOrNull,
-  observations:{type:'array',items:{type:'object',additionalProperties:false,required:['kind','quote','result'],
+  route:{type:'string',enum:[...routes],description:'existing usa um investigationId fornecido; new cria assunto; standalone não persiste assunto; uncertain pede desambiguação.'},
+  investigationId:{...stringOrNull,description:'ID exato fornecido somente para route existing; null nas demais rotas.'},
+  topic:{...stringOrNull,description:'Assunto curto somente para route new; null em existing, standalone e uncertain.'},
+  intent:{type:'string',enum:[...intents],description:'knowledge para buscar orientação; social apenas conversa; write apenas pedido editorial explícito; clarify somente quando falta contexto essencial.'},
+  mode:{type:'string',enum:[...modes],description:'inherit em seguimentos sem mudança; complete quando o usuário pede procedimento integral; guided quando pede orientação passo a passo; adaptive nos demais casos.'},
+  focused:{type:'boolean'},query:{type:'string',description:'Consulta curta de busca; vazia apenas quando não deve haver busca.'},
+  equipment:{...stringOrNull,description:'Substring literal da mensagem atual ou null; nunca copie do histórico.'},
+  environment:{...stringOrNull,description:'Substring literal da mensagem atual ou null; nunca copie do histórico.'},
+  observations:{type:'array',description:'Somente informações materiais literalmente relatadas na mensagem atual. Confirmações curtas e pedidos de orientação não são fatos.',items:{type:'object',additionalProperties:false,required:['kind','quote','result'],
    properties:{kind:{type:'string',enum:['fact','hypothesis','question','test']},quote:{type:'string'},result:stringOrNull}}}
  }
 }}};
@@ -37,21 +42,26 @@ export function parseSemanticTurn(value:unknown,input:SemanticTurnInput):Semanti
  if(!exact(value,keys)||!routes.includes(value.route as SemanticTurn['route'])||!intents.includes(value.intent as SemanticTurn['intent'])||
     !modes.includes(value.mode as SemanticTurn['mode'])||typeof value.focused!=='boolean'||typeof value.query!=='string'||
     (value.query!==''&&!safeText(value.query,500))||!Array.isArray(value.observations)||value.observations.length>4)return null;
+ let topic=value.topic;
  if(value.route==='existing'){
-  if(typeof value.investigationId!=='string'||!input.subjects.some(s=>s.id===value.investigationId)||value.topic!==null)return null;
+  if(typeof value.investigationId!=='string')return null;
+  const subject=input.subjects.find(s=>s.id===value.investigationId);if(!subject)return null;
+  if(value.topic!==null&&value.topic!==subject.topic)return null;
+  topic=null;
  }else if(value.investigationId!==null)return null;
- if(value.route==='new'){if(!safeText(value.topic,160))return null;}
- else if(value.topic!==null)return null;
+ if(value.route==='new'){if(!safeText(topic,160))return null;}
+ else if(topic!==null)return null;
  if(value.route==='uncertain'&&value.intent!=='clarify')return null;
- if(value.intent==='social'&&(value.route!=='standalone'||value.query!==''||value.observations.length||value.equipment!==null||value.environment!==null))return null;
  if(value.intent==='knowledge'&&!safeText(value.query,500))return null;
- if(value.equipment!==null&&!userQuote(value.equipment,input.message,160))return null;
- if(value.environment!==null&&!userQuote(value.environment,input.message,160))return null;
  for(const item of value.observations){
-  if(!exact(item,['kind','quote','result'])||!['fact','hypothesis','question','test'].includes(item.kind as string)||!userQuote(item.quote,input.message,400))return null;
-  if(item.result!==null&&(item.kind!=='test'||!userQuote(item.result,input.message,400)))return null;
+  if(!exact(item,['kind','quote','result'])||!['fact','hypothesis','question','test'].includes(item.kind as string)||typeof item.quote!=='string'||(item.result!==null&&typeof item.result!=='string'))return null;
  }
- return value as SemanticTurn;
+ const equipment=value.equipment!==null&&userQuote(value.equipment,input.message,160)?value.equipment:null;
+ const environment=value.environment!==null&&userQuote(value.environment,input.message,160)?value.environment:null;
+ const observations=value.observations.filter(item=>userQuote(item.quote,input.message,400)&&
+   (item.result===null||(item.kind==='test'&&userQuote(item.result,input.message,400)))) as Observation[];
+ if(value.intent==='social'&&(value.route!=='standalone'||value.query!==''||observations.length||equipment!==null||environment!==null))return null;
+ return {...value,topic,equipment,environment,observations} as SemanticTurn;
 }
 export function semanticPreference(decision:SemanticTurn,previous?:InvestigationDraft):SupportPreference{
  return decision.mode==='inherit'?previous?.supportPreference??'adaptive':decision.mode;
