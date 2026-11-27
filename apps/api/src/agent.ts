@@ -9,7 +9,7 @@ import {getPublishedDocument,getVisibleDocumentVersions,documentToSource,validDo
 import {reviewDraftIntent} from './agent-intent.js';
 import {splitGroundingUnits,verifyGroundedAnswer,type GroundingFailure} from './agent-verifier.js';
 import {completeGroundingFallback,confirmedGuidance,focusedGroundingFallback,guidedGroundingFallback,literalGroundingFallback,semanticEvidenceFallback} from './grounding-fallback.js';
-import {isFocusedKnowledgeQuestion,lastProgressQuestion,supportPreference,supportContext,structuredSupportQuery,SUPPORT_POLICY,safeProgressQuestion} from './support-dialogue.js';
+import {isFocusedKnowledgeQuestion,lastProgressQuestion,supportPreference,supportContext,structuredSupportQuery,SUPPORT_POLICY} from './support-dialogue.js';
 import {shouldForceKnowledgeLookup,groundedReply} from './llm-policy.js';
 import {unsupportedNetworkLiterals} from './answer-evidence.js';
 import {explicitlyTargetedSpace} from './space-targeting.js';
@@ -20,7 +20,7 @@ import {investigationContextMessage} from './investigation-dialogue.js';
 import type {InvestigationDraft} from './investigation-state.js';
 import {knowledgeSelectionTool,parseKnowledgeSelection,type KnowledgeSelection} from './knowledge-selection.js';
 import {semanticContext,semanticPreference,type SemanticTurn,type SemanticTurnResult} from './semantic-turn.js';
-import {reviewDialogueReply} from './dialogue-review.js';
+import {reviewDialogueReply,neutralQuestionCandidate} from './dialogue-review.js';
 export const AGENT_GENERATION_TEMPERATURE=0.2;
 const SYSTEM=`IDENTIDADE E TOM: Você é o SuportAI, assistente interno de conhecimento. Converse naturalmente em português do Brasil, inclusive com gírias, abreviações e mensagens curtas. Use o histórico recente para compreender referências como "isso", "aquele problema" e "é a impressora".
 POLÍTICA DE FERRAMENTAS E EVIDÊNCIA: Decida livremente entre conversar sem consulta (respond_social), pesquisar conhecimento (search_knowledge), abrir um documento ou suas versões, e perguntar quando faltar contexto. Para qualquer procedimento, política ou orientação técnica interna, use fontes publicadas e autorizadas antes de responder. Para conversa social use respond_social; nunca use essa ferramenta para instruções operacionais. Reescreva as buscas com o assunto do histórico; caso uma busca não ajude, use termos equivalentes ou pergunte por detalhes, sem repetir buscas inúteis.
@@ -126,17 +126,23 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
    return outcome;
  };
  const collect=(target:Source[],candidates:Source[],limit:number):number=>{
-   const count=target.length;
+   let added=0;
    for(const item of candidates){
-     if(target.length>=limit)break;
      if(!target.some(found=>found.versionId===item.versionId&&found.ordinal===item.ordinal)){
+       // A complete authorized document can replace its own redundant chunk
+       // at capacity, but never evict an alternative version to force a choice.
+       if(target.length>=limit){
+         const redundant=semantic&&item.completeDocument?target.findIndex(s=>s.versionId===item.versionId&&!s.completeDocument):-1;
+         if(redundant<0)continue;
+         target.splice(redundant,1);
+       }
        if(target===sources&&selection&&!target.some(found=>found.versionId===item.versionId)){
          selection=undefined;knowledgeSelectionInvalidations++;
        }
-       target.push(item);
+       target.push(item);added++;
      }
    }
-   return target.length-count;
+   return added;
  };
  let writableSpaces:Promise<{id:string;name:string}[]>|undefined;
  const readWritableSpaces=()=>writableSpaces??=runRead(()=>query(`SELECT s.id,s.name FROM spaces s
@@ -310,7 +316,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          sources:[],pendingActions},'provider_failure');
      const unresolved=unresolvedReply();
      if(unresolved)return unresolved;
-     if(semantic&&!pendingActions.length&&safeProgressQuestion(message.content.trim())){
+     if(semantic&&!pendingActions.length&&neutralQuestionCandidate(message.content.trim())){
        clarificationChecks++;
        const accepted=await reviewDialogueReply(provider,budget,'question',message.content.trim(),verificationContext??userMessage,sources);
        if(accepted){plan.requestClarification();return done({answer:message.content.trim(),sources:[],pendingActions},'clarified');}
@@ -485,8 +491,9 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          }
          const added=collect(sources,results,budget.limits.maxSources);
          plan.recordRead(added?'evidence':results.length?'unchanged':'empty',added,true);
-         output=results.filter(item=>sources.some(source=>source.versionId===item.versionId&&source.ordinal===item.ordinal))
+         const admitted=results.filter(item=>sources.some(source=>source.versionId===item.versionId&&source.ordinal===item.ordinal))
            .map(x=>({title:x.title,versionId:x.versionId,documentId:x.documentId,content:x.content,ordinal:x.ordinal,...(x.completeDocument?{completeDocument:true}:{})}));
+         output=semantic&&admitted.length<results.length?{candidates:admitted,omittedByBudget:results.length-admitted.length,note:'Pool limitado. Nem todos os candidatos couberam. Não afirme que a consulta foi exaustiva; esclareça se houver dúvida.'}:admitted;
        } else if(call.function.name==='select_knowledge'){
          knowledgeSelectionAttempts++;
          const proposed=knowledgeSelectionAttempts<=2?parseKnowledgeSelection(args,sources):null;
@@ -575,6 +582,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          plan.recordRead(added?'evidence':'unchanged',added);
          output={versions,note:'Versões antigas são históricas, não necessariamente procedimentos atuais.'};
        } else if(call.function.name==='prepare_article'){
+         if(semantic&&semantic.intent!=='write')throw new Error('O usuário não solicitou a criação ou atualização de conhecimento nesta mensagem');
          if(!plan.beginWrite())throw new Error('A preparação já foi tentada neste turno. Uma nova tentativa exige outra mensagem do usuário.');
          const writableSpaces=await readWritableSpaces();
          if(!writableSpaces.length)throw new Error('O usuário não tem autorização para preparar artigos');

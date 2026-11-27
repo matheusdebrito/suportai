@@ -104,6 +104,18 @@ export async function retrieveKnowledgeCandidates(actor:Actor,text:string,limit:
   }));
 }
 
+/** Preserve independent candidate versions before spending slots on
+ * neighboring chunks of the top-ranked document. Never broaden access. */
+export function expandCandidateContext(ranked:Source[],adjacent:Source[],cap:number):Source[]{
+ if(cap<=0)return [];
+ const primary=ranked.filter((source,index)=>ranked.findIndex(other=>other.versionId===source.versionId)===index);
+ const result:Source[]=[];
+ for(const source of [...primary,...adjacent,...ranked]){
+  if(!result.some(x=>x.versionId===source.versionId&&x.ordinal===source.ordinal))result.push(source);
+  if(result.length===cap)break;
+ }
+ return result;
+}
 export async function searchKnowledge(actor:Actor,text:string,limit=5):Promise<Source[]>{
  if(hasSecrets(text)||!text.trim())return [];
  let vector:string|null=null;
@@ -113,9 +125,9 @@ export async function searchKnowledge(actor:Actor,text:string,limit=5):Promise<S
  const cap=Math.min(Math.max(1,limit),8);
  const ranked=rerankKnowledgeCandidates(text.trim().slice(0,500),candidates,cap);
  if(!ranked.length||cap<2)return ranked;
- // Reserve at most two slots for adjacent evidence; never expand across versions.
- const seeds=ranked.slice(0,Math.max(1,cap-2));
- const anchor=seeds[0];
+ // Preserve distinct candidates; only unused slots expand the top version.
+ const anchor=ranked[0];
+ if(new Set(ranked.map(s=>s.versionId)).size>=cap)return ranked;
  if(!/\n|procedimento|configur|etapa|passo/i.test(anchor.content+' '+text))return ranked;
  const neighbors=await query(`SELECT d.id AS document_id,v.id AS version_id,v.version_number,d.title,c.ordinal,c.content
  FROM knowledge_chunks c JOIN document_versions v ON v.id=c.version_id
@@ -127,11 +139,7 @@ export async function searchKnowledge(actor:Actor,text:string,limit=5):Promise<S
  AND d.archived_at IS NULL AND (s.visibility='SHARED' OR COALESCE(g.can_read,false))
  ORDER BY c.ordinal`,[actor.id,actor.auth_revision,actor.role,anchor.versionId,anchor.ordinal]);
  const adjacent=safeRetrievedSources(neighbors.rows.map(x=>({documentId:x.document_id,versionId:x.version_id,versionNumber:Number(x.version_number),title:x.title,ordinal:Number(x.ordinal),content:x.content,score:0})),2);
- const result:Source[]=[];
- for(const source of [...seeds,...adjacent,...ranked]){
-  if(!result.some(x=>x.versionId===source.versionId&&x.ordinal===source.ordinal))result.push(source);
-  if(result.length===cap)break;
- }
+ const result=expandCandidateContext(ranked,adjacent,cap);
  const positions=result.map((source,index)=>({source,index})).filter(x=>x.source.versionId===anchor.versionId);
  const ordered=positions.map(x=>x.source).sort((a,b)=>a.ordinal-b.ordinal);
  positions.forEach((position,index)=>{result[position.index]=ordered[index];});

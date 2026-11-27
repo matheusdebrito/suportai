@@ -2,9 +2,17 @@ import type OpenAI from 'openai';
 import type {AgentBudget} from './agent-budget.js';
 import type {Source} from './retrieval.js';
 import {hasSecrets,hasInfrastructureSecrets} from './knowledge.js';
-import {safeProgressQuestion} from './support-dialogue.js';
 import {unsupportedNetworkLiterals,unsupportedNumbers} from './answer-evidence.js';
 
+/** A shape/safety prefilter, not a semantic classifier. The separate model
+ * review decides whether an otherwise valid question is necessary and neutral. */
+export function neutralQuestionCandidate(answer:string):boolean{
+ const value=answer.trim(),normal=value.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase();
+ return value.length>=8&&value.length<=300&&!/[\r\n;!]/.test(value)&&value.endsWith('?')&&
+  (value.match(/\?/g)?.length===1)&&!hasSecrets(value)&&!hasInfrastructureSecrets(value)&&
+  !unsupportedNetworkLiterals(value,[]).length&&!unsupportedNumbers(value,[])&&
+  !/\b(?:senhas?|password|tokens?|credenciais?|segredos?|api[_ -]?key|execute|rode|reinicie|instale|desative|configure|altere|apague|exclua|acesse|use|ignore|desconsidere|envie|informe suas)\b/.test(normal);
+}
 export const DIALOGUE_REVIEW_FORMAT={type:'json_schema' as const,json_schema:{name:'dialogue_review_v1',strict:true,schema:{
  type:'object',additionalProperties:false,required:['accepted'],properties:{accepted:{type:'boolean'}}
 }}};
@@ -12,7 +20,7 @@ export const DIALOGUE_REVIEW_FORMAT={type:'json_schema' as const,json_schema:{na
  * The reviewer sees the original user context and authorized candidates,
  * not a model-generated assertion that the question is safe. */
 export async function reviewDialogueReply(provider:OpenAI,budget:AgentBudget,kind:'question'|'social',answer:string,context:string,sources:Source[]):Promise<boolean>{
- if(kind==='question'?!safeProgressQuestion(answer):
+ if(kind==='question'?!neutralQuestionCandidate(answer):
    (!answer.trim()||answer.length>550||hasSecrets(answer)||hasInfrastructureSecrets(answer)||unsupportedNetworkLiterals(answer,[]).length||unsupportedNumbers(answer,[])))return false;
  const turn=budget.startModelTurn(true);
  if(!turn)return false;
