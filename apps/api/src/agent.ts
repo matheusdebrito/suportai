@@ -412,7 +412,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          const added=collect(sources,results,budget.limits.maxSources);
          plan.recordRead(added?'evidence':results.length?'unchanged':'empty',added,true);
          output=results.filter(item=>sources.some(source=>source.versionId===item.versionId&&source.ordinal===item.ordinal))
-           .map(x=>({title:x.title,versionId:x.versionId,documentId:x.documentId,content:x.content,ordinal:x.ordinal,completeDocument:x.completeDocument===true}));
+           .map(x=>({title:x.title,versionId:x.versionId,documentId:x.documentId,content:x.content,ordinal:x.ordinal,...(x.completeDocument?{completeDocument:true}:{})}));
        } else if(call.function.name==='select_knowledge'){
          knowledgeSelectionAttempts++;
          const proposed=knowledgeSelectionAttempts<=2?parseKnowledgeSelection(args,sources):null;
