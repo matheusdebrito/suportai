@@ -366,7 +366,9 @@ test('complete mode removes an unnecessary progress question by using the verifi
    {unit:3,kind:'question',refs:[]}
   ]})}
  ],[]);
- const result=await respond(actor,randomUUID(),'Me dê o passo a passo completo',[],model,async()=>[phone],{verifyEvidence:true});
+ const result=await respond(actor,randomUUID(),'Me dê o passo a passo completo',[],model,async()=>[phone],{verifyEvidence:true,
+  semantic:{route:'existing',investigationId:randomUUID(),topic:null,intent:'knowledge',mode:'adaptive',focused:false,query:'telefone',equipment:null,environment:null,observations:[]}});
+ assert.equal(result.metrics?.supportPreference,'complete');
  assert.match(result.answer,/passo a passo completo/i);
  assert.match(result.answer,/1\. Consulte o IP/);
  assert.doesNotMatch(result.answer,/Conseguiu concluir/);
@@ -387,21 +389,18 @@ test('provider transport failure after retrieval uses only deterministic authori
 });
 
 
-test('an authorized access-only note remains useful after both synthesis attempts are rejected',async()=>{
+test('an authorized access-only note is reduced before a model can expose unrelated fields',async()=>{
  const voucher:Source={...source,title:'Gerar voucher Wi-Fi',content:'IP: 192.0.2.40  login: conta-fixture  senha: valor-fixture'};
  const model=scripted([
   {role:'assistant',content:null,tool_calls:[tool('search_knowledge',{query:'gerar voucher wifi'},'q')]},
-  {role:'assistant',content:'Abra o menu de geração automática.'},
-  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'},
-  {role:'assistant',content:'Selecione o botão criar voucher.'},
-  {role:'assistant',content:'{"verdict":"unsupported","claims":[]}'}
+  {role:'assistant',content:'Use o IP 192.0.2.40, o login conta-fixture e a senha valor-fixture.'}
  ],[]);
  const result=await respond(actor,randomUUID(),'como eu gero um voucher wifi?',[],model,async()=>[voucher],{verifyEvidence:true});
- assert.equal(result.metrics?.verifierRejections,2);
+ assert.equal(result.metrics?.verifierChecks,0);
  assert.equal(result.metrics?.literalFallbacks,1);
  assert.equal(result.sources[0]?.versionId,voucher.versionId);
  assert.deepEqual(result.sources[0]?.excerpts,['IP: 192.0.2.40']);
  assert.match(result.answer,/192\.0\.2\.40/);
  assert.match(result.answer,/não descreve as etapas/);
- assert.doesNotMatch(result.answer,/geração automática|botão criar|conta-fixture|valor-fixture/);
+ assert.doesNotMatch(result.answer,/conta-fixture|valor-fixture/);
 });

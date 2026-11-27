@@ -102,6 +102,15 @@ function accessNoteFallback(question:string,source:Source,complete=false):Fallba
   sources:[{...source,excerpts:[note.quote]}]};
 }
 
+/** Detect an access-only record before a model can turn its unrelated fields
+ * into a procedure. Only the explicitly safe address is returned. */
+export function accessNoteGroundingFallback(question:string,sources:Source[],complete=false):FallbackResult|null{
+ const best=eligibleSource(question,sources);
+ if(!best)return null;
+ const access=accessNoteFallback(question,best,complete);
+ return access===undefined?null:access;
+}
+
 /** Not a synthesized answer. Return one complete retrieved passage, explicitly
  * attributed and scoped. No selection of a winner across different documents,
  * historical comparisons, unknown relevance, or suspicious instructions. */

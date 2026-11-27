@@ -64,6 +64,16 @@ test('semantic turn canonicalizes redundant routing and drops untrusted optional
   observations:[{kind:'fact',quote:'A IA confirmou o resultado.',result:null},{kind:'test',quote:'Acho que a tela mudou.',result:'funcionou'}]}),input);
  assert.deepEqual(result,semantic({equipment:null,observations:[]}));
 });
+test('semantic turn honors an explicit named resume over the currently active subject',()=>{
+ const ris=randomUUID(),erp=randomUUID();
+ const resumeInput:SemanticTurnInput={message:'Voltando ao RIS de laboratório',activeId:erp,history:[],subjects:[
+  {id:ris,topic:'RIS de laboratório'},{id:erp,topic:'ERP de laboratório'}
+ ]};
+ const result=parseSemanticTurn({...semantic(),investigationId:erp,query:'RIS de laboratório'},resumeInput);
+ assert.equal(result?.route,'existing');
+ assert.equal(result?.investigationId,ris);
+ assert.equal(result?.topic,null);
+});
 test('semantic interpreter uses strict structured outputs and charges the shared budget',async()=>{
  const calls:any[]=[];
  const budget=new AgentBudget();

@@ -8,8 +8,8 @@ import {buildConversationMemory,memoryMessage} from './conversation-memory.js';
 import {getPublishedDocument,getVisibleDocumentVersions,documentToSource,validDocumentId} from './agent-knowledge-tools.js';
 import {reviewDraftIntent} from './agent-intent.js';
 import {splitGroundingUnits,verifyGroundedAnswer,type GroundingFailure} from './agent-verifier.js';
-import {completeGroundingFallback,confirmedGuidance,focusedGroundingFallback,guidedGroundingFallback,literalGroundingFallback,semanticEvidenceFallback} from './grounding-fallback.js';
-import {isFocusedKnowledgeQuestion,lastProgressQuestion,supportPreference,supportContext,structuredSupportQuery,SUPPORT_POLICY} from './support-dialogue.js';
+import {accessNoteGroundingFallback,completeGroundingFallback,confirmedGuidance,focusedGroundingFallback,guidedGroundingFallback,literalGroundingFallback,semanticEvidenceFallback} from './grounding-fallback.js';
+import {isFocusedKnowledgeQuestion,lastProgressQuestion,requestsSupportMode,supportPreference,supportContext,structuredSupportQuery,SUPPORT_POLICY} from './support-dialogue.js';
 import {shouldForceKnowledgeLookup,groundedReply} from './llm-policy.js';
 import {unsupportedNetworkLiterals} from './answer-evidence.js';
 import {explicitlyTargetedSpace} from './space-targeting.js';
@@ -56,7 +56,8 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  const plan=new InvestigationPlan(userMessage,semantic?semantic.intent!=='social':shouldForceKnowledgeLookup(userMessage)||shouldForceKnowledgeLookup(contextualQuery),options.investigation?.hypotheses);
  const shouldVerify=Boolean(options.verifyEvidence||(provider===client&&client!==null));
  let verifierChecks=0,verifierRejections=0,recoverySearches=0,literalFallbacks=0,adaptiveRewrites=0,nonclaimsRemoved=0,unsupportedUnits=0;
- const preference=semantic?semanticPreference(semantic,options.investigation):supportPreference(userMessage,history,options.investigation?.supportPreference);
+ const localPreference=supportPreference(userMessage,history,options.investigation?.supportPreference);
+ const preference=semantic?(requestsSupportMode(userMessage)?localPreference:semanticPreference(semantic,options.investigation)):localPreference;
  const focused=semantic?semantic.focused||isFocusedKnowledgeQuestion(userMessage):isFocusedKnowledgeQuestion(userMessage);
  const focusedAnswerPolicy=focused
   ? '\nPEDIDO PONTUAL: responda apenas ao dado solicitado na mensagem mais recente, em uma ou duas frases naturais. Não recapitule o artigo ou o procedimento, não use títulos e não explique que consultou uma fonte.'
@@ -88,7 +89,8 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  let synthesisRecoveryAttempted=false;
  const olderMemory=buildConversationMemory(history);
  const tryFallback=(reason:GroundingFailure|AgentStopReason):AgentOutput|null=>{
-   const available=[...sources,...historicalSources];
+   const all=[...sources,...historicalSources];
+   const available=selection?.versionIds.length?all.filter(source=>source.historical||selection!.versionIds.includes(source.versionId)):all;
    if(semantic&&provider){
      // Never replace a semantic rejection/conflict with a lexical guess.
      const deterministicReasons=['provider_failure','model_timeout','model_interrupted','provider_error','provider_incompatible','invalid_json','schema_invalid','claim_shape'];
@@ -371,6 +373,8 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
      let verifiedAnswer=message.content;
      let replySources=sources;
      if(sources.length>0&&shouldVerify){
+       const accessOnly=accessNoteGroundingFallback(contextualQuery,selection?.versionIds.length?sources.filter(source=>selection!.versionIds.includes(source.versionId)):sources,preference==='complete');
+       if(accessOnly){literalFallbacks++;fallbackReason='model_rejected';return done({...accessOnly,pendingActions},'answered');}
        const validation=budget.startModelTurn(true);
        if(!validation)return budgetReply(budget.stopCause()??'token_budget');
        verifierChecks++;
@@ -424,6 +428,11 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
          continue;
        }
        if(review.verdict!=='supported')return fallbackReply();
+       if(selectionRequired&&selection&&selection.versionIds.length>1&&review.answer.includes('?')&&
+          !/\b(?:abra|acesse|selecione|use|ative|pressione|clique|execute|instale|altere|exclua|reinicie)\b/i.test(review.answer)){
+         plan.requestClarification();
+         return done({answer:review.answer.replace(/\s*\[\d+\]/g,'').trim(),sources:[],pendingActions},'clarified');
+       }
        if(review.clarification){
          plan.requestClarification();
          return done({answer:review.answer,sources:[],pendingActions},'clarified');
@@ -437,7 +446,8 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
         if(preference==='complete'&&selection?.sufficiency!=='partial'){
           const progress=lastProgressQuestion(reviewedAnswer);
           if(progress){
-            const complete=completeGroundingFallback(contextualQuery,[...sources,...historicalSources]);
+            const completeSources=selection?.versionIds.length?[...sources,...historicalSources].filter(source=>source.historical||selection!.versionIds.includes(source.versionId)):[...sources,...historicalSources];
+            const complete=completeGroundingFallback(contextualQuery,completeSources);
             if(complete){literalFallbacks++;fallbackReason='model_rejected';return done({...complete,pendingActions},'answered');}
             const start=reviewedAnswer.lastIndexOf(progress);
             if(start<0){recordVerifierFailure('model_rejected');return fallbackReply();}
