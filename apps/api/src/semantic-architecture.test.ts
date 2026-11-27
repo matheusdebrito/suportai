@@ -54,7 +54,7 @@ test('semantic turn rejects unknown IDs, fabricated observations, test results, 
   semantic({investigationId:randomUUID()}),
   semantic({topic:'Outro assunto'}),
   semantic({query:'token: abcdefghijklmnopqrstuvwxyz'}),
-  semantic({query:''}),
+  semantic({route:'standalone',investigationId:null,query:''}),
   semantic({route:'uncertain',investigationId:null,intent:'knowledge'}),
   {...semantic(),extra:'unexpected'}
  ])assert.equal(parseSemanticTurn(decision,input),null);

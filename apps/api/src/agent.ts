@@ -51,7 +51,7 @@ export async function respond(actor:Actor,conversationId:string,userMessage:stri
  let selectionRepairAttempted=false,recoveryReadOnly=false,dialogueRepairAttempted=false;
  const budget=options.budget??new AgentBudget();
  const semantic=options.semantic;
- const contextualQuery=semantic?semantic.query||userMessage:structuredSupportQuery(userMessage,history,options.investigation);
+ const contextualQuery=semantic?semantic.query||structuredSupportQuery(userMessage,history,options.investigation):structuredSupportQuery(userMessage,history,options.investigation);
  // Semantic intent guides the model, but cannot authorize an unsourced reply.
  const plan=new InvestigationPlan(userMessage,semantic?semantic.intent!=='social':shouldForceKnowledgeLookup(userMessage)||shouldForceKnowledgeLookup(contextualQuery),options.investigation?.hypotheses);
  const shouldVerify=Boolean(options.verifyEvidence||(provider===client&&client!==null));

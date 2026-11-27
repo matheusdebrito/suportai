@@ -52,7 +52,7 @@ export function parseSemanticTurn(value:unknown,input:SemanticTurnInput):Semanti
  if(value.route==='new'){if(!safeText(topic,160))return null;}
  else if(topic!==null)return null;
  if(value.route==='uncertain'&&value.intent!=='clarify')return null;
- if(value.intent==='knowledge'&&!safeText(value.query,500))return null;
+ if(value.intent==='knowledge'&&!safeText(value.query,500)&&!(value.route==='existing'&&value.query===''))return null;
  for(const item of value.observations){
   if(!exact(item,['kind','quote','result'])||!['fact','hypothesis','question','test'].includes(item.kind as string)||typeof item.quote!=='string'||(item.result!==null&&typeof item.result!=='string'))return null;
  }
